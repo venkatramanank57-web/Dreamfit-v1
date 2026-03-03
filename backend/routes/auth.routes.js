@@ -1,0 +1,14 @@
+// backend/routes/auth.routes.js
+import express from "express";
+import { loginUser } from "../controllers/auth.controller.js";
+
+const router = express.Router();
+
+/**
+ * @route   POST /api/auth/login
+ * @desc    Login user (Admin, Cutting Master, Store Keeper, Tailor)
+ * @access  Public
+ */
+router.post("/login", loginUser);
+
+export default router;

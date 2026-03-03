@@ -1,0 +1,391 @@
+// features/order/orderSlice.js
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import * as orderApi from "./orderApi";
+
+// ===== ASYNC THUNKS =====
+
+// ✅ FETCH ORDER STATS
+export const fetchOrderStats = createAsyncThunk(
+  "order/fetchStats",
+  async (_, { rejectWithValue }) => {
+    try {
+      console.log("📊 Fetching order statistics...");
+      const response = await orderApi.getOrderStatsApi();
+      return response.stats;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch stats");
+    }
+  }
+);
+
+export const fetchAllOrders = createAsyncThunk(
+  "order/fetchAll",
+  async (params, { rejectWithValue }) => {
+    try {
+      console.log("📡 Fetching orders with params:", params);
+      const response = await orderApi.getAllOrdersApi(params);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch orders");
+    }
+  }
+);
+
+// ✅ UPDATED: Fetch order by ID (now includes payments & works)
+export const fetchOrderById = createAsyncThunk(
+  "order/fetchById",
+  async (id, { rejectWithValue }) => {
+    try {
+      console.log(`📡 Fetching order by ID: ${id}`);
+      const response = await orderApi.getOrderByIdApi(id);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch order");
+    }
+  }
+);
+
+// ✅ UPDATED: Create order (with payments)
+export const createOrder = createAsyncThunk(
+  "order/create",
+  async (orderData, { rejectWithValue }) => {
+    try {
+      console.log("📝 Creating order with payments:", orderData);
+      const response = await orderApi.createOrderApi(orderData);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to create order");
+    }
+  }
+);
+
+// ✅ UPDATED: Update order
+export const updateOrder = createAsyncThunk(
+  "order/update",
+  async ({ id, orderData }, { rejectWithValue }) => {
+    try {
+      console.log(`📝 Updating order ${id}:`, orderData);
+      const response = await orderApi.updateOrderApi(id, orderData);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to update order");
+    }
+  }
+);
+
+export const updateOrderStatus = createAsyncThunk(
+  "order/updateStatus",
+  async ({ id, status }, { rejectWithValue }) => {
+    try {
+      console.log(`🔄 Updating order ${id} status to:`, status);
+      const response = await orderApi.updateOrderStatusApi(id, status);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to update order status");
+    }
+  }
+);
+
+export const deleteOrder = createAsyncThunk(
+  "order/delete",
+  async (id, { rejectWithValue }) => {
+    try {
+      console.log(`🗑️ Deleting order: ${id}`);
+      await orderApi.deleteOrderApi(id);
+      return id;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to delete order");
+    }
+  }
+);
+
+// ✅ NEW: Add payment to order
+export const addPaymentToOrder = createAsyncThunk(
+  "order/addPayment",
+  async ({ orderId, paymentData }, { rejectWithValue }) => {
+    try {
+      console.log(`💰 Adding payment to order ${orderId}:`, paymentData);
+      const response = await orderApi.addPaymentToOrderApi(orderId, paymentData);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to add payment");
+    }
+  }
+);
+
+// ✅ NEW: Get order payments
+export const fetchOrderPayments = createAsyncThunk(
+  "order/fetchPayments",
+  async (orderId, { rejectWithValue }) => {
+    try {
+      console.log(`💰 Fetching payments for order ${orderId}`);
+      const response = await orderApi.getOrderPaymentsApi(orderId);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch payments");
+    }
+  }
+);
+
+const orderSlice = createSlice({
+  name: "order",
+  initialState: {
+    orders: [],
+    currentOrder: null,
+    currentOrderPayments: [], // ✅ NEW: Store payments for current order
+    currentOrderWorks: [], // ✅ NEW: Store works for current order
+    stats: {
+      today: 0,
+      thisWeek: 0,
+      thisMonth: 0,
+      total: 0,
+      statusBreakdown: []
+    },
+    pagination: {
+      page: 1,
+      limit: 10,
+      total: 0,
+      pages: 1
+    },
+    loading: false,
+    error: null,
+  },
+  reducers: {
+    clearCurrentOrder: (state) => {
+      state.currentOrder = null;
+      state.currentOrderPayments = []; // ✅ Clear payments
+      state.currentOrderWorks = []; // ✅ Clear works
+    },
+    clearError: (state) => {
+      state.error = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      // ===== FETCH ORDER STATS =====
+      .addCase(fetchOrderStats.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchOrderStats.fulfilled, (state, action) => {
+        state.loading = false;
+        state.stats = action.payload;
+        console.log("📊 Stats updated in store:", action.payload);
+      })
+      .addCase(fetchOrderStats.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== FETCH ALL ORDERS =====
+      .addCase(fetchAllOrders.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchAllOrders.fulfilled, (state, action) => {
+        state.loading = false;
+        state.orders = action.payload.orders;
+        state.pagination = action.payload.pagination;
+        console.log("✅ Orders loaded:", action.payload.orders?.length);
+      })
+      .addCase(fetchAllOrders.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== FETCH ORDER BY ID (UPDATED) =====
+      .addCase(fetchOrderById.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.currentOrder = null;
+        state.currentOrderPayments = [];
+        state.currentOrderWorks = [];
+      })
+      .addCase(fetchOrderById.fulfilled, (state, action) => {
+        state.loading = false;
+        // ✅ Store order, payments, and works separately
+        state.currentOrder = action.payload.order || action.payload;
+        state.currentOrderPayments = action.payload.payments || [];
+        state.currentOrderWorks = action.payload.works || [];
+        
+        console.log("✅ Order loaded:", state.currentOrder?.orderId);
+        console.log(`💰 Payments loaded: ${state.currentOrderPayments.length}`);
+        console.log(`⚙️ Works loaded: ${state.currentOrderWorks.length}`);
+      })
+      .addCase(fetchOrderById.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.currentOrder = null;
+        state.currentOrderPayments = [];
+        state.currentOrderWorks = [];
+      })
+
+      // ===== CREATE ORDER (UPDATED) =====
+      .addCase(createOrder.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createOrder.fulfilled, (state, action) => {
+        state.loading = false;
+        const newOrder = action.payload.order || action.payload;
+        if (newOrder && newOrder._id) {
+          state.orders = [newOrder, ...state.orders];
+          state.pagination.total += 1;
+          
+          if (state.stats) {
+            state.stats.total += 1;
+            state.stats.today += 1;
+            state.stats.thisWeek += 1;
+            state.stats.thisMonth += 1;
+          }
+          
+          console.log("✅ Order created:", newOrder.orderId);
+        }
+      })
+      .addCase(createOrder.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== UPDATE ORDER =====
+      .addCase(updateOrder.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateOrder.fulfilled, (state, action) => {
+        state.loading = false;
+        const updatedOrder = action.payload.order || action.payload;
+        if (updatedOrder && updatedOrder._id) {
+          // Update in orders list
+          const index = state.orders.findIndex(o => o._id === updatedOrder._id);
+          if (index !== -1) {
+            state.orders[index] = updatedOrder;
+          }
+          
+          // Update current order if it's the same one
+          if (state.currentOrder?._id === updatedOrder._id) {
+            state.currentOrder = updatedOrder;
+          }
+          
+          console.log("✅ Order updated:", updatedOrder.orderId);
+        }
+      })
+      .addCase(updateOrder.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== UPDATE ORDER STATUS =====
+      .addCase(updateOrderStatus.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateOrderStatus.fulfilled, (state, action) => {
+        state.loading = false;
+        const updatedOrder = action.payload.order || action.payload;
+        if (updatedOrder && updatedOrder._id) {
+          const index = state.orders.findIndex(o => o._id === updatedOrder._id);
+          if (index !== -1) {
+            state.orders[index] = updatedOrder;
+          }
+          if (state.currentOrder?._id === updatedOrder._id) {
+            state.currentOrder = updatedOrder;
+          }
+          console.log("✅ Order status updated:", updatedOrder.status);
+        }
+      })
+      .addCase(updateOrderStatus.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== DELETE ORDER =====
+      .addCase(deleteOrder.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteOrder.fulfilled, (state, action) => {
+        state.loading = false;
+        const deletedId = action.payload;
+        state.orders = state.orders.filter(o => o._id !== deletedId);
+        if (state.currentOrder?._id === deletedId) {
+          state.currentOrder = null;
+          state.currentOrderPayments = [];
+          state.currentOrderWorks = [];
+        }
+        state.pagination.total -= 1;
+        
+        if (state.stats && state.stats.total > 0) {
+          state.stats.total -= 1;
+        }
+        
+        console.log("✅ Order deleted:", deletedId);
+      })
+      .addCase(deleteOrder.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== ADD PAYMENT TO ORDER (NEW) =====
+      .addCase(addPaymentToOrder.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(addPaymentToOrder.fulfilled, (state, action) => {
+        state.loading = false;
+        const payment = action.payload.payment || action.payload;
+        
+        // Add payment to current order's payments list
+        if (payment) {
+          state.currentOrderPayments = [payment, ...state.currentOrderPayments];
+          
+          // Update current order's payment summary if available
+          if (state.currentOrder) {
+            if (!state.currentOrder.paymentSummary) {
+              state.currentOrder.paymentSummary = { totalPaid: 0, paymentCount: 0 };
+            }
+            state.currentOrder.paymentSummary.totalPaid = 
+              (state.currentOrder.paymentSummary.totalPaid || 0) + payment.amount;
+            state.currentOrder.paymentSummary.paymentCount = 
+              (state.currentOrder.paymentSummary.paymentCount || 0) + 1;
+            state.currentOrder.paymentSummary.lastPaymentDate = payment.paymentDate;
+            state.currentOrder.paymentSummary.lastPaymentAmount = payment.amount;
+          }
+        }
+        
+        console.log("✅ Payment added to order");
+      })
+      .addCase(addPaymentToOrder.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== FETCH ORDER PAYMENTS (NEW) =====
+      .addCase(fetchOrderPayments.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchOrderPayments.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentOrderPayments = action.payload.payments || action.payload;
+        console.log(`💰 Payments loaded: ${state.currentOrderPayments.length}`);
+      })
+      .addCase(fetchOrderPayments.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
+  },
+});
+
+// ===== SELECTORS =====
+export const selectOrders = (state) => state.order.orders;
+export const selectCurrentOrder = (state) => state.order.currentOrder;
+export const selectCurrentOrderPayments = (state) => state.order.currentOrderPayments; // ✅ NEW
+export const selectCurrentOrderWorks = (state) => state.order.currentOrderWorks; // ✅ NEW
+export const selectOrderStats = (state) => state.order.stats;
+export const selectOrderLoading = (state) => state.order.loading;
+export const selectOrderError = (state) => state.order.error;
+export const selectOrderPagination = (state) => state.order.pagination;
+
+export const { clearCurrentOrder, clearError } = orderSlice.actions;
+export default orderSlice.reducer;
