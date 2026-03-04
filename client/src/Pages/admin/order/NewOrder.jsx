@@ -75,7 +75,6 @@ export default function NewOrder() {
       console.log('🔍 Status Text:', error.response.statusText);
       console.log('🔍 Headers:', error.response.headers);
       
-      // Log specific validation errors
       if (error.response.data?.errors) {
         console.log('📋 Validation Errors:', error.response.data.errors);
       }
@@ -155,7 +154,7 @@ export default function NewOrder() {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedCustomerDisplay, setSelectedCustomerDisplay] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [serverErrors, setServerErrors] = useState(null); // Track server errors
+  const [serverErrors, setServerErrors] = useState(null);
 
   // Get user ID
   const userId = user?.id || user?._id;
@@ -362,11 +361,17 @@ export default function NewOrder() {
     setEditingPayment(null);
   }, [payments, editingPayment]);
 
-  // Garment handlers
+  // ✅ UPDATED: Garment handlers with customer validation
   const handleAddGarment = useCallback(() => {
+    // Validate customer selected first
+    if (!formData.customer) {
+      showToast.error("Please select a customer first before adding garments");
+      return;
+    }
+    
     setEditingGarment(null);
     setShowGarmentModal(true);
-  }, []);
+  }, [formData.customer]);
 
   const handleEditGarment = useCallback((garment) => {
     setEditingGarment(garment);
@@ -500,7 +505,7 @@ export default function NewOrder() {
     e.preventDefault();
     
     logDebug('normal', 'SUBMIT', 'Form submission started');
-    setServerErrors(null); // Clear previous errors
+    setServerErrors(null);
 
     // Validation
     if (!formData.customer) {
@@ -541,29 +546,25 @@ export default function NewOrder() {
     setIsSubmitting(true);
 
     try {
-      // ✅ CRITICAL: Map payment types to match model enum EXACTLY
+      // Map payment types to match model enum EXACTLY
       const mappedPayments = payments.map(payment => {
         let modelType = payment.type || 'advance';
         
-        // Map frontend display types to backend enum values
         if (modelType === 'partial') {
           modelType = 'part-payment';
         } else if (modelType === 'full') {
           modelType = 'final-settlement';
         }
-        // 'advance' stays as 'advance'
-        // 'extra' stays as 'extra'
         
-        // Validate the mapped type
         const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
         if (!validTypes.includes(modelType)) {
           console.error(`Invalid payment type after mapping: ${modelType}`);
-          modelType = 'advance'; // Fallback to advance
+          modelType = 'advance';
         }
         
         return {
           amount: Number(payment.amount),
-          type: modelType,  // ✅ Now matches: advance, part-payment, final-settlement, extra
+          type: modelType,
           method: payment.method || 'cash',
           referenceNumber: payment.referenceNumber || '',
           date: payment.date || new Date().toISOString().split('T')[0],
@@ -571,10 +572,8 @@ export default function NewOrder() {
         };
       });
 
-      // Log mapped payments for debugging
       console.log("💰 Mapped Payments:", JSON.stringify(mappedPayments, null, 2));
 
-      // ✅ Validate each payment
       const validMethods = ['cash', 'upi', 'bank-transfer', 'card'];
       const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
       
@@ -590,41 +589,27 @@ export default function NewOrder() {
         }
       }
 
-      // ✅ Prepare order data with EXACT structure matching backend
       const orderData = {
         customer: formData.customer,
         deliveryDate: formData.deliveryDate,
         specialNotes: formData.specialNotes || "",
-        
-        // Payments array with correct fields
         payments: mappedPayments,
-        
-        // Backward compatibility
         advancePayment: {
           amount: mappedPayments.length > 0 ? mappedPayments[0]?.amount || 0 : 0,
           method: mappedPayments.length > 0 ? mappedPayments[0]?.method || "cash" : "cash",
           date: new Date().toISOString()
         },
-        
-        // Price summary
         priceSummary: {
           totalMin: Number(priceSummary.totalMin),
           totalMax: Number(priceSummary.totalMax)
         },
-        
-        // Balance amount
         balanceAmount: Number(balanceAmount.min),
-        
-        // Required fields
         createdBy: finalUserId,
         status: "draft",
         orderDate: new Date().toISOString(),
-        
-        // Empty garments array
         garments: []
       };
 
-      // ✅ Validate required fields
       const requiredFields = ['customer', 'deliveryDate', 'createdBy', 'priceSummary', 'balanceAmount', 'status', 'orderDate'];
       const missingFields = requiredFields.filter(field => !orderData[field]);
       
@@ -632,11 +617,8 @@ export default function NewOrder() {
         throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
       }
 
-      // ✅ FINAL DEBUG: Log complete order data
       console.log("🔍 FINAL ORDER DATA BEING SENT:", JSON.stringify(orderData, null, 2));
-      console.log("🔍 Payment Types Check:", orderData.payments.map(p => p.type));
 
-      // Create order
       const result = await dispatch(createNewOrder(orderData)).unwrap();
       logDebug('normal', 'SUBMIT', 'Order created', result);
       
@@ -646,7 +628,6 @@ export default function NewOrder() {
         throw new Error("Order created but no ID returned");
       }
 
-      // Create garments
       for (const garment of garments) {
         const garmentFormData = new FormData();
         
@@ -666,7 +647,6 @@ export default function NewOrder() {
         garmentFormData.append("orderId", orderId);
         garmentFormData.append("createdBy", finalUserId);
 
-        // Add images
         if (garment.referenceImages?.length > 0) {
           garment.referenceImages.forEach(img => {
             if (img instanceof File) {
@@ -703,12 +683,10 @@ export default function NewOrder() {
         paymentsCount: payments.length 
       });
       
-      // Store server errors for display
       if (error.response?.data) {
         setServerErrors(error.response.data);
       }
       
-      // Better error handling
       let errorMessage = "Failed to create order";
       
       if (error.response?.data?.message) {
@@ -753,7 +731,6 @@ export default function NewOrder() {
           </div>
         </div>
         
-        {/* State Overview */}
         <div className="space-y-2 mb-3">
           <div className="font-bold text-yellow-400 flex items-center gap-1">
             <Info size={14} /> STATE OVERVIEW
@@ -785,7 +762,6 @@ export default function NewOrder() {
           </div>
         </div>
 
-        {/* User Info */}
         <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
           <div className="font-bold text-yellow-400 flex items-center gap-1">
             <User size={14} /> USER INFO
@@ -807,14 +783,33 @@ export default function NewOrder() {
           </div>
         </div>
 
-        {/* Payment Details with Type Validation */}
+        {/* ✅ NEW: Garment Form Props Debug */}
+        <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
+          <div className="font-bold text-yellow-400 flex items-center gap-1">
+            <Package size={14} /> GARMENT FORM PROPS
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="text-gray-400">Customer ID passed:</div>
+            <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
+              {formData.customer ? '✅ Yes' : '❌ No'}
+            </div>
+            <div className="text-gray-400">Customer ID:</div>
+            <div className="font-mono text-xs">
+              {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
+            </div>
+            <div className="text-gray-400">Can add garments:</div>
+            <div className={formData.customer ? 'text-green-400' : 'text-red-400'}>
+              {formData.customer ? '✅ Yes' : '❌ Select customer first'}
+            </div>
+          </div>
+        </div>
+
         {payments.length > 0 && (
           <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
             <div className="font-bold text-yellow-400 flex items-center gap-1">
-              <Wallet size={14} /> PAYMENT DETAILS (with validation)
+              <Wallet size={14} /> PAYMENT DETAILS
             </div>
             {payments.map((p, idx) => {
-              // Check if type is valid for backend
               const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
               const typeValid = validTypes.includes(p.type);
               
@@ -854,7 +849,6 @@ export default function NewOrder() {
           </div>
         )}
 
-        {/* Price Summary */}
         <div className="space-y-2 border-t border-gray-700 pt-2">
           <div className="font-bold text-yellow-400 flex items-center gap-1">
             <IndianRupee size={14} /> PRICE SUMMARY
@@ -871,7 +865,6 @@ export default function NewOrder() {
           </div>
         </div>
 
-        {/* Validation Status */}
         <div className="space-y-2 border-t border-gray-700 pt-2 mt-2">
           <div className="font-bold text-yellow-400 flex items-center gap-1">
             <CheckCircle size={14} /> VALIDATION STATUS
@@ -910,7 +903,6 @@ export default function NewOrder() {
           </div>
         </div>
 
-        {/* Server Errors Display */}
         {serverErrors && (
           <div className="space-y-2 border-t border-red-700 pt-2 mt-2">
             <div className="font-bold text-red-400 flex items-center gap-1">
@@ -1355,12 +1347,13 @@ export default function NewOrder() {
         </div>
       </form>
 
-      {/* Garment Form Modal */}
+      {/* ✅ UPDATED: Garment Form Modal with customerId prop */}
       {showGarmentModal && (
         <GarmentForm
           onClose={() => setShowGarmentModal(false)}
           onSave={handleSaveGarment}
           editingGarment={editingGarment}
+          customerId={formData.customer} // ✅ Pass selected customer ID
         />
       )}
     </div>

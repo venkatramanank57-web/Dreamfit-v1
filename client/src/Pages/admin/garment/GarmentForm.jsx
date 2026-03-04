@@ -11,12 +11,18 @@
 //   User,
 //   Camera,
 //   Scissors,
+//   Save,
+//   BookmarkPlus
 // } from "lucide-react";
 // import { fetchAllCategories } from "../../../features/category/categorySlice";
 // import { fetchItems } from "../../../features/item/itemSlice";
 // import { fetchAllSizeFields } from "../../../features/sizeField/sizeFieldSlice";
 // import { fetchAllTemplates } from "../../../features/sizeTemplate/sizeTemplateSlice";
-// import { fetchAllFabrics } from "../../../features/fabric/fabricSlice"; // ✅ Import fabric slice
+// import { fetchAllFabrics } from "../../../features/fabric/fabricSlice";
+// import { 
+//   saveMeasurementTemplate,
+//   fetchCustomerTemplates 
+// } from "../../../features/customer/customerSlice";
 // import showToast from "../../../utils/toast";
 
 // export default function GarmentForm({ onClose, onSave, editingGarment }) {
@@ -26,11 +32,11 @@
 //   const { items } = useSelector((state) => state.item);
 //   const { fields } = useSelector((state) => state.sizeField);
 //   const { templates } = useSelector((state) => state.sizeTemplate);
-//   const { fabrics } = useSelector((state) => state.fabric); // ✅ Get fabrics from Redux
+//   const { fabrics } = useSelector((state) => state.fabric);
 //   const { user } = useSelector((state) => state.auth);
-//   const { currentCustomer } = useSelector((state) => state.customer);
+//   const { currentCustomer, customerTemplates, templatesLoading } = useSelector((state) => state.customer);
 
-//   // ✅ Get user role for any future permissions
+//   // ✅ Get user role for permissions
 //   const userRole = user?.role;
 //   const isAdmin = userRole === "ADMIN";
 //   const isStoreKeeper = userRole === "STORE_KEEPER";
@@ -43,9 +49,9 @@
 //     measurementTemplate: "",
 //     measurementSource: "template",
 //     measurements: [],
-//     studioImages: [], // Will be sent as "referenceImages"
-//     customerProvidedImages: [], // Will be sent as "customerImages"
-//     customerClothImages: [], // Will be sent as "customerClothImages"
+//     studioImages: [],
+//     customerProvidedImages: [],
+//     customerClothImages: [],
 //     additionalInfo: "",
 //     estimatedDelivery: "",
 //     priority: "normal",
@@ -53,11 +59,10 @@
 //       min: "",
 //       max: "",
 //     },
-//     // ✅ NEW: Fabric related fields
-//     fabricSource: "customer", // "customer" or "shop"
+//     fabricSource: "customer",
 //     selectedFabric: "",
 //     fabricMeters: "",
-//     fabricPrice: 0, // Calculated automatically
+//     fabricPrice: 0,
 //   });
 
 //   const [selectedFields, setSelectedFields] = useState({});
@@ -68,14 +73,26 @@
 //     customerCloth: [],
 //   });
 //   const [loading, setLoading] = useState(false);
+  
+//   // State for save template modal
+//   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+//   const [templateName, setTemplateName] = useState("");
+//   const [selectedCustomerTemplate, setSelectedCustomerTemplate] = useState("");
 
-//   // Load data on mount
+//   // ==================== LOAD DATA ON MOUNT ====================
 //   useEffect(() => {
 //     dispatch(fetchAllCategories());
 //     dispatch(fetchAllSizeFields());
 //     dispatch(fetchAllTemplates({ page: 1, search: "" }));
-//     dispatch(fetchAllFabrics()); // ✅ Load fabrics
+//     dispatch(fetchAllFabrics());
 //   }, [dispatch]);
+
+//   // ✅ Load customer templates when customer changes
+//   useEffect(() => {
+//     if (currentCustomer?._id) {
+//       dispatch(fetchCustomerTemplates(currentCustomer._id));
+//     }
+//   }, [dispatch, currentCustomer?._id]);
 
 //   // Load items when category changes
 //   useEffect(() => {
@@ -84,7 +101,7 @@
 //     }
 //   }, [dispatch, formData.category]);
 
-//   // ✅ NEW: Auto-fill price range when item is selected
+//   // Auto-fill price range when item is selected
 //   useEffect(() => {
 //     if (formData.item) {
 //       const selectedItem = items?.find(item => item._id === formData.item);
@@ -96,12 +113,11 @@
 //             max: selectedItem.priceRange.max || "",
 //           }
 //         }));
-//         console.log("💰 Auto-filled price from item:", selectedItem.priceRange);
 //       }
 //     }
 //   }, [formData.item, items]);
 
-//   // ✅ NEW: Calculate fabric price when fabric or meters change
+//   // Calculate fabric price
 //   useEffect(() => {
 //     if (formData.fabricSource === "shop" && formData.selectedFabric && formData.fabricMeters) {
 //       const selectedFabric = fabrics?.find(f => f._id === formData.selectedFabric);
@@ -114,8 +130,6 @@
 //           ...prev,
 //           fabricPrice: fabricPrice
 //         }));
-        
-//         console.log(`💰 Fabric price calculated: ${meters}m × ₹${pricePerMeter} = ₹${fabricPrice}`);
 //       }
 //     } else if (formData.fabricSource === "customer") {
 //       setFormData(prev => ({
@@ -127,7 +141,7 @@
 //     }
 //   }, [formData.fabricSource, formData.selectedFabric, formData.fabricMeters, fabrics]);
 
-//   // Load template measurements when template changes
+//   // Load template measurements
 //   useEffect(() => {
 //     if (formData.measurementTemplate && formData.measurementSource === "template") {
 //       const template = templates?.find(t => t._id === formData.measurementTemplate);
@@ -148,12 +162,47 @@
 //     }
 //   }, [formData.measurementTemplate, templates]);
 
-//   // Load customer measurements if available
+//   // ✅ Load customer saved template when selected
 //   useEffect(() => {
-//     if (currentCustomer?.measurements && formData.measurementSource === "customer") {
-//       setManualMeasurements(currentCustomer.measurements);
+//     if (formData.measurementSource === "customer" && selectedCustomerTemplate) {
+//       const template = customerTemplates?.find(t => t._id === selectedCustomerTemplate);
+//       if (template) {
+//         const measurements = [];
+//         const manual = {};
+        
+//         // Handle both Map object and regular object
+//         if (template.measurements instanceof Map) {
+//           template.measurements.forEach((value, key) => {
+//             measurements.push({
+//               name: key,
+//               value: value,
+//               unit: "inches"
+//             });
+//             manual[key] = value;
+//           });
+//         } else {
+//           // Regular object
+//           Object.entries(template.measurements).forEach(([key, value]) => {
+//             measurements.push({
+//               name: key,
+//               value: value,
+//               unit: "inches"
+//             });
+//             manual[key] = value;
+//           });
+//         }
+        
+//         setFormData(prev => ({
+//           ...prev,
+//           measurements: measurements
+//         }));
+        
+//         setManualMeasurements(manual);
+        
+//         showToast.success(`✅ Loaded template: ${template.name}`);
+//       }
 //     }
-//   }, [currentCustomer, formData.measurementSource]);
+//   }, [selectedCustomerTemplate, customerTemplates]);
 
 //   // Load editing data
 //   useEffect(() => {
@@ -172,7 +221,6 @@
 //         estimatedDelivery: editingGarment.estimatedDelivery?.split("T")[0] || "",
 //         priority: editingGarment.priority || "normal",
 //         priceRange: editingGarment.priceRange || { min: "", max: "" },
-//         // ✅ Load fabric data if exists
 //         fabricSource: editingGarment.fabricSource || "customer",
 //         selectedFabric: editingGarment.selectedFabric || "",
 //         fabricMeters: editingGarment.fabricMeters || "",
@@ -230,6 +278,7 @@
 //     }
 //   }, [editingGarment]);
 
+//   // ==================== IMAGE HANDLERS ====================
 //   const handleImageChange = (e, type) => {
 //     const files = Array.from(e.target.files);
     
@@ -248,9 +297,9 @@
 //       return;
 //     }
 
-//     // Create preview URLs and store actual File objects
+//     // Create preview URLs
 //     const newPreviews = files.map(file => ({
-//       file, // Store the actual File object
+//       file,
 //       preview: URL.createObjectURL(file),
 //       name: file.name,
 //       size: file.size,
@@ -285,11 +334,9 @@
 //       ...prev,
 //       [imageField]: [
 //         ...existingFiles,
-//         ...files, // Store the actual File objects
+//         ...files,
 //       ],
 //     }));
-
-//     console.log(`✅ Added ${files.length} images to ${imageField}`);
 //   };
 
 //   const removeImage = (index, type) => {
@@ -323,10 +370,9 @@
 //       ...prev,
 //       [imageField]: prev[imageField].filter((_, i) => i !== index),
 //     }));
-
-//     console.log(`🗑️ Removed image from ${imageField}`);
 //   };
 
+//   // ==================== MEASUREMENT HANDLERS ====================
 //   const handleMeasurementToggle = (field) => {
 //     setSelectedFields(prev => ({
 //       ...prev,
@@ -334,7 +380,6 @@
 //     }));
 
 //     if (!selectedFields[field.name]) {
-//       // Add measurement
 //       setFormData(prev => ({
 //         ...prev,
 //         measurements: [
@@ -343,7 +388,6 @@
 //         ],
 //       }));
 //     } else {
-//       // Remove measurement
 //       setFormData(prev => ({
 //         ...prev,
 //         measurements: prev.measurements.filter(m => m.name !== field.name),
@@ -367,7 +411,88 @@
 //     }));
 //   };
 
-//   // ✅ Calculate total prices for display
+//   // ==================== TEMPLATE HANDLERS ====================
+//   const handleSaveAsTemplate = () => {
+//     if (!currentCustomer) {
+//       showToast.error("No customer selected to save template");
+//       return;
+//     }
+
+//     // Get current measurements based on source
+//     let currentMeasurements = {};
+    
+//     if (formData.measurementSource === "template") {
+//       formData.measurements.forEach(m => {
+//         if (m.value) {
+//           currentMeasurements[m.name] = parseFloat(m.value);
+//         }
+//       });
+//     } else {
+//       currentMeasurements = manualMeasurements;
+//     }
+
+//     // Filter out empty values
+//     currentMeasurements = Object.fromEntries(
+//       Object.entries(currentMeasurements).filter(([_, value]) => value && value > 0)
+//     );
+
+//     if (Object.keys(currentMeasurements).length === 0) {
+//       showToast.error("No measurements entered to save");
+//       return;
+//     }
+
+//     setShowSaveTemplateModal(true);
+//   };
+
+//   const confirmSaveTemplate = async () => {
+//     if (!templateName.trim()) {
+//       showToast.error("Please enter a template name");
+//       return;
+//     }
+
+//     // Get current measurements
+//     let currentMeasurements = {};
+    
+//     if (formData.measurementSource === "template") {
+//       formData.measurements.forEach(m => {
+//         if (m.value) {
+//           currentMeasurements[m.name] = parseFloat(m.value);
+//         }
+//       });
+//     } else {
+//       currentMeasurements = manualMeasurements;
+//     }
+
+//     // Filter out empty values
+//     currentMeasurements = Object.fromEntries(
+//       Object.entries(currentMeasurements).filter(([_, value]) => value && value > 0)
+//     );
+
+//     const templateData = {
+//       templateName: templateName.trim(),
+//       measurements: currentMeasurements,
+//       garmentReference: editingGarment?._id || null,
+//       notes: `Saved from ${formData.name} garment`
+//     };
+
+//     try {
+//       await dispatch(saveMeasurementTemplate({
+//         customerId: currentCustomer._id,
+//         templateData
+//       })).unwrap();
+      
+//       setShowSaveTemplateModal(false);
+//       setTemplateName("");
+//       showToast.success(`✅ Template "${templateName}" saved successfully!`);
+      
+//       // Refresh templates list
+//       dispatch(fetchCustomerTemplates(currentCustomer._id));
+//     } catch (error) {
+//       console.error("❌ Error saving template:", error);
+//     }
+//   };
+
+//   // ==================== PRICE CALCULATION ====================
 //   const getTotalPrices = () => {
 //     const itemMin = parseFloat(formData.priceRange.min) || 0;
 //     const itemMax = parseFloat(formData.priceRange.max) || 0;
@@ -379,6 +504,7 @@
 //     };
 //   };
 
+//   // ==================== SUBMIT HANDLER ====================
 //   const handleSubmit = async (e) => {
 //     e.preventDefault();
 //     setLoading(true);
@@ -420,7 +546,6 @@
 //       return;
 //     }
 
-//     // ✅ Validate fabric fields if shop provided
 //     if (formData.fabricSource === "shop") {
 //       if (!formData.selectedFabric) {
 //         showToast.error("Please select a fabric");
@@ -434,7 +559,6 @@
 //       }
 //     }
 
-//     // Validate measurements based on source
 //     if (formData.measurementSource === "template" && formData.measurements.length === 0) {
 //       showToast.error("Please select at least one measurement");
 //       setLoading(false);
@@ -454,7 +578,7 @@
 //           }));
 //       }
 
-//       // ✅ CREATE FORM DATA FOR FILE UPLOAD
+//       // Create FormData
 //       const formDataToSend = new FormData();
 
 //       // Add text fields
@@ -467,11 +591,9 @@
 //       formDataToSend.append("additionalInfo", formData.additionalInfo || "");
 //       formDataToSend.append("estimatedDelivery", formData.estimatedDelivery);
 //       formDataToSend.append("priority", formData.priority);
-      
-//       // Add price range as JSON string
 //       formDataToSend.append("priceRange", JSON.stringify(formData.priceRange));
 
-//       // ✅ ADD FABRIC DATA
+//       // Add fabric data
 //       formDataToSend.append("fabricSource", formData.fabricSource);
 //       if (formData.fabricSource === "shop") {
 //         formDataToSend.append("selectedFabric", formData.selectedFabric);
@@ -481,43 +603,28 @@
 //         formDataToSend.append("fabricPrice", "0");
 //       }
 
-//       // ✅ ADD STUDIO IMAGES AS "referenceImages" (matches backend)
+//       // Add images
 //       if (formData.studioImages && formData.studioImages.length > 0) {
 //         for (const file of formData.studioImages) {
 //           if (file instanceof File) {
 //             formDataToSend.append("referenceImages", file);
-//             console.log("📸 Added reference image:", file.name);
 //           }
 //         }
 //       }
 
-//       // ✅ ADD CUSTOMER DIGITAL IMAGES AS "customerImages" (matches backend)
 //       if (formData.customerProvidedImages && formData.customerProvidedImages.length > 0) {
 //         for (const file of formData.customerProvidedImages) {
 //           if (file instanceof File) {
 //             formDataToSend.append("customerImages", file);
-//             console.log("📸 Added customer image:", file.name);
 //           }
 //         }
 //       }
 
-//       // ✅ ADD CUSTOMER CLOTH IMAGES AS "customerClothImages" (matches backend)
 //       if (formData.customerClothImages && formData.customerClothImages.length > 0) {
 //         for (const file of formData.customerClothImages) {
 //           if (file instanceof File) {
 //             formDataToSend.append("customerClothImages", file);
-//             console.log("📸 Added cloth image:", file.name);
 //           }
-//         }
-//       }
-
-//       // ✅ DEBUG: Log all FormData entries
-//       console.log("🔍 FormData contents:");
-//       for (let [key, value] of formDataToSend.entries()) {
-//         if (value instanceof File) {
-//           console.log(`   📸 ${key}: File - ${value.name} (${value.size} bytes)`);
-//         } else {
-//           console.log(`   📝 ${key}: ${value}`);
 //         }
 //       }
 
@@ -528,7 +635,7 @@
 //         }
 //       });
 
-//       // ✅ Call onSave with FormData
+//       // Call onSave with FormData
 //       onSave(formDataToSend);
 
 //     } catch (error) {
@@ -604,7 +711,7 @@
 //                     onChange={(e) => setFormData({ 
 //                       ...formData, 
 //                       category: e.target.value,
-//                       item: "" // Reset item when category changes
+//                       item: ""
 //                     })}
 //                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
 //                     required
@@ -673,14 +780,13 @@
 //               </div>
 //             </div>
 
-//             {/* ✅ NEW: Fabric Section */}
+//             {/* Fabric Section */}
 //             <div className="bg-slate-50 rounded-xl p-4 border-l-4 border-l-blue-500">
 //               <h3 className="font-black text-slate-800 mb-4 flex items-center gap-2">
 //                 <Scissors size={20} className="text-blue-600" />
 //                 Fabric Details
 //               </h3>
 
-//               {/* Fabric Source Selection */}
 //               <div className="flex gap-4 mb-4">
 //                 <label className="flex items-center gap-2 cursor-pointer">
 //                   <input
@@ -717,7 +823,6 @@
 
 //               {formData.fabricSource === "shop" && (
 //                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-//                   {/* Fabric Selection */}
 //                   <div>
 //                     <label className="block text-xs font-black uppercase text-slate-500 mb-2">
 //                       Select Fabric <span className="text-red-500">*</span>
@@ -736,7 +841,6 @@
 //                     </select>
 //                   </div>
 
-//                   {/* Meters Input */}
 //                   <div>
 //                     <label className="block text-xs font-black uppercase text-slate-500 mb-2">
 //                       Meters Required <span className="text-red-500">*</span>
@@ -752,7 +856,6 @@
 //                     />
 //                   </div>
 
-//                   {/* Calculated Price */}
 //                   <div>
 //                     <label className="block text-xs font-black uppercase text-slate-500 mb-2">
 //                       Fabric Price
@@ -769,7 +872,6 @@
 //             <div className="bg-slate-50 rounded-xl p-4">
 //               <h3 className="font-black text-slate-800 mb-4">Pricing</h3>
               
-//               {/* Item Price (Auto-filled) */}
 //               <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
 //                 <p className="text-xs text-blue-600 font-bold mb-1">Item Price (Auto-filled from selected item)</p>
 //                 <div className="grid grid-cols-2 gap-4">
@@ -784,7 +886,6 @@
 //                 </div>
 //               </div>
 
-//               {/* Fabric Price Display */}
 //               {formData.fabricSource === "shop" && formData.fabricPrice > 0 && (
 //                 <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
 //                   <p className="text-xs text-green-600 font-bold mb-1">Fabric Price</p>
@@ -795,7 +896,6 @@
 //                 </div>
 //               )}
 
-//               {/* Total Price Display */}
 //               <div className="p-4 bg-purple-50 rounded-xl border-2 border-purple-300">
 //                 <p className="text-xs text-purple-600 font-bold mb-2">TOTAL GARMENT PRICE</p>
 //                 <div className="grid grid-cols-2 gap-4">
@@ -814,7 +914,7 @@
 //                 </p>
 //               </div>
 
-//               {/* Price Range Inputs (Hidden but kept for form submission) */}
+//               {/* Hidden price inputs */}
 //               <div className="hidden">
 //                 <div className="grid grid-cols-2 gap-4">
 //                   <div>
@@ -855,48 +955,101 @@
 
 //             {/* Measurement Section */}
 //             <div className="bg-slate-50 rounded-xl p-4">
-//               <h3 className="font-black text-slate-800 mb-4">Measurements</h3>
+//               <div className="flex items-center justify-between mb-4">
+//                 <h3 className="font-black text-slate-800">Measurements</h3>
+                
+//                 {currentCustomer && (
+//                   <button
+//                     type="button"
+//                     onClick={handleSaveAsTemplate}
+//                     className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-sm transition-all"
+//                   >
+//                     <BookmarkPlus size={16} />
+//                     Save as Template
+//                   </button>
+//                 )}
+//               </div>
 
-//               {/* Measurement Source Selection */}
-//               <div className="flex gap-4 mb-4">
+//               <div className="flex gap-4 mb-4 flex-wrap">
 //                 <label className="flex items-center gap-2 cursor-pointer">
 //                   <input
 //                     type="radio"
 //                     name="measurementSource"
 //                     value="template"
 //                     checked={formData.measurementSource === "template"}
-//                     onChange={(e) => setFormData({ ...formData, measurementSource: e.target.value })}
+//                     onChange={(e) => {
+//                       setFormData({ ...formData, measurementSource: e.target.value });
+//                       setSelectedCustomerTemplate("");
+//                     }}
 //                     className="w-4 h-4 text-blue-600"
 //                   />
 //                   <span className="text-sm font-medium">Use Template</span>
 //                 </label>
+                
 //                 <label className="flex items-center gap-2 cursor-pointer">
 //                   <input
 //                     type="radio"
 //                     name="measurementSource"
 //                     value="customer"
 //                     checked={formData.measurementSource === "customer"}
-//                     onChange={(e) => setFormData({ ...formData, measurementSource: e.target.value })}
+//                     onChange={(e) => {
+//                       setFormData({ ...formData, measurementSource: e.target.value });
+//                     }}
 //                     className="w-4 h-4 text-blue-600"
 //                   />
-//                   <span className="text-sm font-medium">Use Customer Measurements</span>
+//                   <span className="text-sm font-medium">Customer Saved Templates</span>
 //                 </label>
+                
 //                 <label className="flex items-center gap-2 cursor-pointer">
 //                   <input
 //                     type="radio"
 //                     name="measurementSource"
 //                     value="manual"
 //                     checked={formData.measurementSource === "manual"}
-//                     onChange={(e) => setFormData({ ...formData, measurementSource: e.target.value })}
+//                     onChange={(e) => {
+//                       setFormData({ ...formData, measurementSource: e.target.value });
+//                       setSelectedCustomerTemplate("");
+//                     }}
 //                     className="w-4 h-4 text-blue-600"
 //                   />
 //                   <span className="text-sm font-medium">Manual Entry</span>
 //                 </label>
 //               </div>
 
+//               {/* Customer Templates Dropdown */}
+//               {formData.measurementSource === "customer" && (
+//                 <div className="mb-4">
+//                   <label className="block text-xs font-black uppercase text-slate-500 mb-2">
+//                     Select Saved Template
+//                   </label>
+//                   {templatesLoading ? (
+//                     <div className="flex items-center gap-2 p-3 bg-slate-100 rounded-lg">
+//                       <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+//                       <span className="text-sm text-slate-600">Loading templates...</span>
+//                     </div>
+//                   ) : customerTemplates?.length > 0 ? (
+//                     <select
+//                       value={selectedCustomerTemplate}
+//                       onChange={(e) => setSelectedCustomerTemplate(e.target.value)}
+//                       className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+//                     >
+//                       <option value="">-- Select a template --</option>
+//                       {customerTemplates.map((template) => (
+//                         <option key={template._id} value={template._id}>
+//                           {template.name} (Used {template.usageCount || 1} times)
+//                         </option>
+//                       ))}
+//                     </select>
+//                   ) : (
+//                     <p className="text-sm text-slate-500 italic p-3 bg-slate-100 rounded-lg">
+//                       No saved templates yet. Create one using "Save as Template" button above.
+//                     </p>
+//                   )}
+//                 </div>
+//               )}
+
 //               {formData.measurementSource === "template" && (
 //                 <>
-//                   {/* Template Selection */}
 //                   <div className="mb-4">
 //                     <label className="block text-xs font-black uppercase text-slate-500 mb-2">
 //                       Measurement Template
@@ -913,7 +1066,6 @@
 //                     </select>
 //                   </div>
 
-//                   {/* Template Measurements */}
 //                   {formData.measurementTemplate && (
 //                     <div className="space-y-4">
 //                       {Object.entries(groupedFields || {}).map(([category, categoryFields]) => (
@@ -944,7 +1096,6 @@
 //                         </div>
 //                       ))}
 
-//                       {/* Measurement Inputs */}
 //                       {formData.measurements.length > 0 && (
 //                         <div className="mt-4 space-y-3">
 //                           <h4 className="font-bold text-slate-700">Enter Values</h4>
@@ -972,20 +1123,30 @@
 //                 </>
 //               )}
 
-//               {formData.measurementSource === "customer" && currentCustomer?.measurements && (
+//               {formData.measurementSource === "customer" && !selectedCustomerTemplate && (
 //                 <div className="space-y-3">
-//                   <p className="text-sm text-slate-600">Using measurements from customer profile</p>
+//                   <p className="text-sm text-slate-600">Select a template from the dropdown above</p>
+//                 </div>
+//               )}
+
+//               {formData.measurementSource === "customer" && selectedCustomerTemplate && (
+//                 <div className="space-y-3">
+//                   <p className="text-sm text-green-600 font-medium flex items-center gap-2">
+//                     <span className="w-2 h-2 bg-green-600 rounded-full"></span>
+//                     Template loaded - you can edit values if needed
+//                   </p>
 //                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-//                     {Object.entries(currentCustomer.measurements).map(([key, value]) => (
-//                       <div key={key}>
+//                     {formData.measurements.map((measurement) => (
+//                       <div key={measurement.name}>
 //                         <label className="block text-xs font-medium text-slate-600 mb-1 capitalize">
-//                           {key}
+//                           {measurement.name}
 //                         </label>
 //                         <input
 //                           type="number"
-//                           value={value}
-//                           readOnly
-//                           className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-600"
+//                           value={measurement.value}
+//                           onChange={(e) => handleMeasurementChange(measurement.name, e.target.value)}
+//                           step="0.1"
+//                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
 //                         />
 //                       </div>
 //                     ))}
@@ -1208,10 +1369,55 @@
 //           </form>
 //         </div>
 //       </div>
+
+//       {/* Save Template Modal */}
+//       {showSaveTemplateModal && (
+//         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+//           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+//             <div className="p-6">
+//               <h3 className="text-xl font-black text-slate-800 mb-2">Save as Template</h3>
+//               <p className="text-sm text-slate-500 mb-4">
+//                 Save these measurements as a template for future use
+//               </p>
+
+//               <div className="mb-4">
+//                 <label className="block text-xs font-black uppercase text-slate-500 mb-2">
+//                   Template Name <span className="text-red-500">*</span>
+//                 </label>
+//                 <input
+//                   type="text"
+//                   value={templateName}
+//                   onChange={(e) => setTemplateName(e.target.value)}
+//                   placeholder="e.g., Father Shirt Size, Brother Kurta"
+//                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+//                   autoFocus
+//                 />
+//               </div>
+
+//               <div className="flex gap-3">
+//                 <button
+//                   onClick={confirmSaveTemplate}
+//                   className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black transition-all"
+//                 >
+//                   Save Template
+//                 </button>
+//                 <button
+//                   onClick={() => {
+//                     setShowSaveTemplateModal(false);
+//                     setTemplateName("");
+//                   }}
+//                   className="flex-1 px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-black transition-all"
+//                 >
+//                   Cancel
+//                 </button>
+//               </div>
+//             </div>
+//           </div>
+//         </div>
+//       )}
 //     </div>
 //   );
 // }
-
 
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -1227,7 +1433,8 @@ import {
   Camera,
   Scissors,
   Save,
-  BookmarkPlus
+  BookmarkPlus,
+  Eye
 } from "lucide-react";
 import { fetchAllCategories } from "../../../features/category/categorySlice";
 import { fetchItems } from "../../../features/item/itemSlice";
@@ -1240,7 +1447,7 @@ import {
 } from "../../../features/customer/customerSlice";
 import showToast from "../../../utils/toast";
 
-export default function GarmentForm({ onClose, onSave, editingGarment }) {
+export default function GarmentForm({ onClose, onSave, editingGarment, customerId }) {
   const dispatch = useDispatch();
   
   const { categories } = useSelector((state) => state.category);
@@ -1256,6 +1463,9 @@ export default function GarmentForm({ onClose, onSave, editingGarment }) {
   const isAdmin = userRole === "ADMIN";
   const isStoreKeeper = userRole === "STORE_KEEPER";
   const canEdit = isAdmin || isStoreKeeper;
+
+  // ✅ Determine which customer ID to use (prop takes priority)
+  const effectiveCustomerId = customerId || currentCustomer?._id;
 
   const [formData, setFormData] = useState({
     name: "",
@@ -1302,12 +1512,13 @@ export default function GarmentForm({ onClose, onSave, editingGarment }) {
     dispatch(fetchAllFabrics());
   }, [dispatch]);
 
-  // ✅ Load customer templates when customer changes
+  // ✅ Load customer templates when effectiveCustomerId changes
   useEffect(() => {
-    if (currentCustomer?._id) {
-      dispatch(fetchCustomerTemplates(currentCustomer._id));
+    if (effectiveCustomerId) {
+      console.log(`📋 Fetching templates for customer: ${effectiveCustomerId}`);
+      dispatch(fetchCustomerTemplates(effectiveCustomerId));
     }
-  }, [dispatch, currentCustomer?._id]);
+  }, [dispatch, effectiveCustomerId]);
 
   // Load items when category changes
   useEffect(() => {
@@ -1628,7 +1839,7 @@ export default function GarmentForm({ onClose, onSave, editingGarment }) {
 
   // ==================== TEMPLATE HANDLERS ====================
   const handleSaveAsTemplate = () => {
-    if (!currentCustomer) {
+    if (!effectiveCustomerId) {
       showToast.error("No customer selected to save template");
       return;
     }
@@ -1665,6 +1876,12 @@ export default function GarmentForm({ onClose, onSave, editingGarment }) {
       return;
     }
 
+    if (!effectiveCustomerId) {
+      showToast.error("Customer ID missing");
+      setShowSaveTemplateModal(false);
+      return;
+    }
+
     // Get current measurements
     let currentMeasurements = {};
     
@@ -1692,7 +1909,7 @@ export default function GarmentForm({ onClose, onSave, editingGarment }) {
 
     try {
       await dispatch(saveMeasurementTemplate({
-        customerId: currentCustomer._id,
+        customerId: effectiveCustomerId,
         templateData
       })).unwrap();
       
@@ -1701,7 +1918,7 @@ export default function GarmentForm({ onClose, onSave, editingGarment }) {
       showToast.success(`✅ Template "${templateName}" saved successfully!`);
       
       // Refresh templates list
-      dispatch(fetchCustomerTemplates(currentCustomer._id));
+      dispatch(fetchCustomerTemplates(effectiveCustomerId));
     } catch (error) {
       console.error("❌ Error saving template:", error);
     }
@@ -2173,7 +2390,7 @@ export default function GarmentForm({ onClose, onSave, editingGarment }) {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-black text-slate-800">Measurements</h3>
                 
-                {currentCustomer && (
+                {effectiveCustomerId && (
                   <button
                     type="button"
                     onClick={handleSaveAsTemplate}
@@ -2237,7 +2454,11 @@ export default function GarmentForm({ onClose, onSave, editingGarment }) {
                   <label className="block text-xs font-black uppercase text-slate-500 mb-2">
                     Select Saved Template
                   </label>
-                  {templatesLoading ? (
+                  {!effectiveCustomerId ? (
+                    <p className="text-sm text-amber-600 italic p-3 bg-amber-50 rounded-lg">
+                      Please select a customer first to view saved templates
+                    </p>
+                  ) : templatesLoading ? (
                     <div className="flex items-center gap-2 p-3 bg-slate-100 rounded-lg">
                       <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
                       <span className="text-sm text-slate-600">Loading templates...</span>
