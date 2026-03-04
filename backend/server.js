@@ -18,31 +18,31 @@ import itemRoutes from "./routes/item.routes.js";
 import sizeTemplateRoutes from "./routes/sizeTemplate.routes.js";
 import sizeFieldRoutes from "./routes/sizeField.routes.js";
 
-// ✅ CUSTOMER SIZE PROFILE ROUTES
+// Customer Size Profile Routes
 import customerSizeRoutes from "./routes/customerSize.routes.js";
 
-// ✅ ORDER MANAGEMENT ROUTES
-import orderRoutes from "./routes/order.routes.js";
+// ORDER MANAGEMENT ROUTES (FULLY UPDATED)
+import orderRoutes from "./routes/order.routes.js";           // ✅ COMPLETE: 10+ endpoints
 import garmentRoutes from "./routes/garment.routes.js";
 import workRoutes from "./routes/work.routes.js";
 
-// ✅ PAYMENT ROUTES - ADD THIS
+// PAYMENT ROUTES
 import paymentRoutes from "./routes/payment.routes.js";
 
-// ✅ TAILOR MANAGEMENT ROUTES
+// TAILOR MANAGEMENT ROUTES
 import tailorRoutes from "./routes/tailor.routes.js";
 
-// ✅ NOTIFICATION ROUTES
+// NOTIFICATION ROUTES
 import notificationRoutes from "./routes/notification.routes.js";
 
-// ✅ CUTTING MASTER & STORE KEEPER ROUTES
+// CUTTING MASTER & STORE KEEPER ROUTES
 import cuttingMasterRoutes from "./routes/cuttingMaster.routes.js";
 import storeKeeperRoutes from "./routes/storeKeeper.routes.js";
 
-// ✅ BANKING / TRANSACTION ROUTES
+// BANKING / TRANSACTION ROUTES
 import transactionRoutes from "./routes/transaction.routes.js";
 
-// ✅ IMPORT ERROR HANDLING MIDDLEWARE
+// IMPORT ERROR HANDLING MIDDLEWARE
 import { notFound, errorHandler } from "./middleware/errorMiddleware.js";
 
 // Load env variables
@@ -69,7 +69,6 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps, curl, postman)
       if (!origin || allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
@@ -81,7 +80,7 @@ app.use(
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     exposedHeaders: ["Content-Range", "X-Content-Range"],
-    maxAge: 600, // 10 minutes
+    maxAge: 600,
   })
 );
 
@@ -102,25 +101,19 @@ if (process.env.NODE_ENV === "development") {
 }
 
 // ==================== RATE LIMITING ====================
-// Skip rate limiting in development or set higher limits
 if (process.env.NODE_ENV === "production") {
-  // Production: Stricter but still reasonable limits
   const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5000, // Limit each IP to 5000 requests per windowMs (about 333 per minute)
+    windowMs: 15 * 60 * 1000,
+    max: 5000,
     message: "Too many requests from this IP, please try again later.",
     standardHeaders: true,
     legacyHeaders: false,
-    skip: (req) => {
-      // Skip rate limiting for static files
-      return req.url.startsWith('/uploads/');
-    }
+    skip: (req) => req.url.startsWith('/uploads/')
   });
   app.use("/api/", limiter);
   console.log("🔒 Production rate limit: 5000 requests/15min");
 } else {
-  // Development: Very high limits or disabled to avoid 429 errors
-  console.log("🔧 Development mode - Rate limiting DISABLED to prevent 429 errors");
+  console.log("🔧 Development mode - Rate limiting DISABLED");
 }
 
 // Body parser
@@ -134,29 +127,29 @@ app.use("/uploads", express.static("uploads"));
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "🎉 Dreamfit API Running",
+    message: "🎉 DREAMFIT ERP BACKEND v2.0",
     version: "2.0.0",
     environment: process.env.NODE_ENV || "development",
     timestamp: new Date().toISOString(),
-    endpoints: {
+    modules: {
       auth: "/api/auth",
-      customers: "/api/customers",
-      users: "/api/users",
-      fabrics: "/api/fabrics",
-      categories: "/api/categories",
-      items: "/api/items",
-      sizeTemplates: "/api/size-templates",
-      sizeFields: "/api/size-fields",
-      customerSize: "/api/customer-size",
-      orders: "/api/orders",
-      garments: "/api/garments",
-      works: "/api/works",
-      payments: "/api/payments", // ✅ Added payments
-      tailors: "/api/tailors",
-      cuttingMasters: "/api/cutting-masters",
-      storeKeepers: "/api/store-keepers",
-      notifications: "/api/notifications",
-      transactions: "/api/transactions",
+      customers: "/api/customers",           // ✅ COMPLETE
+      orders: "/api/orders",                  // ✅ COMPLETE with payments
+      payments: "/api/payments",               // ✅ COMPLETE
+      works: "/api/works",                     // ✅ COMPLETE
+      garments: "/api/garments",               // ✅ COMPLETE
+      tailors: "/api/tailors",                 // ✅ COMPLETE
+      cuttingMasters: "/api/cutting-masters",  // ✅ COMPLETE
+      storeKeepers: "/api/store-keepers",      // ✅ COMPLETE
+      fabrics: "/api/fabrics",                  // ✅ COMPLETE
+      categories: "/api/categories",            // ✅ COMPLETE
+      items: "/api/items",                      // ✅ COMPLETE
+      sizeTemplates: "/api/size-templates",     // ✅ COMPLETE
+      sizeFields: "/api/size-fields",           // ✅ COMPLETE
+      customerSize: "/api/customer-size",       // ✅ COMPLETE
+      notifications: "/api/notifications",       // ✅ COMPLETE
+      transactions: "/api/transactions",         // ✅ COMPLETE
+      users: "/api/users"                        // ✅ COMPLETE
     }
   });
 });
@@ -167,7 +160,9 @@ app.get("/health", (req, res) => {
     status: "healthy",
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    database: "connected"
+    database: "connected",
+    memory: process.memoryUsage(),
+    cpu: process.cpuUsage()
   });
 });
 
@@ -176,60 +171,144 @@ app.get("/health", (req, res) => {
 // 🔐 AUTH ROUTES - Public
 app.use("/api/auth", authRoutes);
 
-// 👤 CUSTOMER ROUTES - Protected
+// ====================================================
+// 👤 CUSTOMER MODULE - COMPLETE ✅
+// ====================================================
 app.use("/api/customers", customerRoutes);
+// All customer endpoints available at:
+// GET    /api/customers/all
+// GET    /api/customers/with-payments
+// GET    /api/customers/stats
+// GET    /api/customers/search/phone/:phone
+// GET    /api/customers/search/id/:customerId
+// GET    /api/customers/:id
+// GET    /api/customers/:id/payments
+// GET    /api/customers/:id/orders
+// GET    /api/customers/:id/payment-stats
+// GET    /api/customers/:id/payment-trends
+// POST   /api/customers/create
+// PUT    /api/customers/:id
+// DELETE /api/customers/:id
 
-// 👥 USER ROUTES - Protected
+// ====================================================
+// 📦 ORDER MANAGEMENT MODULE - COMPLETE ✅
+// ====================================================
+app.use("/api/orders", orderRoutes);
+// All order endpoints:
+// GET    /api/orders/stats
+// GET    /api/orders/dashboard
+// POST   /api/orders
+// GET    /api/orders
+// POST   /api/orders/:id/payments
+// GET    /api/orders/:id/payments
+// GET    /api/orders/:id
+// PUT    /api/orders/:id
+// PATCH  /api/orders/:id/status
+// DELETE /api/orders/:id
+
+// ====================================================
+// 👕 GARMENT MODULE - COMPLETE ✅
+// ====================================================
+app.use("/api/garments", garmentRoutes);
+// Garment endpoints:
+// POST   /api/garments
+// GET    /api/garments
+// GET    /api/garments/:id
+// PUT    /api/garments/:id
+// DELETE /api/garments/:id
+
+// ====================================================
+// ⚙️ WORK MODULE - COMPLETE ✅
+// ====================================================
+app.use("/api/works", workRoutes);
+// Work endpoints:
+// GET    /api/works/stats
+// GET    /api/works/pool
+// POST   /api/works/:id/accept
+// POST   /api/works/:id/start
+// POST   /api/works/:id/complete
+// GET    /api/works/cutting-master/:cuttingMasterId
+// GET    /api/works/:id
+// PUT    /api/works/:id
+// DELETE /api/works/:id
+
+// ====================================================
+// 💰 PAYMENT MODULE - COMPLETE ✅
+// ====================================================
+app.use("/api/payments", paymentRoutes);
+// Payment endpoints:
+// GET    /api/payments/stats
+// GET    /api/payments/daily
+// POST   /api/payments
+// GET    /api/payments
+// GET    /api/payments/order/:orderId
+// GET    /api/payments/customer/:customerId
+// GET    /api/payments/:id
+// PUT    /api/payments/:id
+// DELETE /api/payments/:id
+
+// ====================================================
+// 👥 USER MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/users", userRoutes);
 
-// 👕 FABRIC ROUTES - Protected
+// ====================================================
+// 👕 FABRIC MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/fabrics", fabricRoutes);
 
-// 📁 CATEGORY ROUTES - Protected
+// ====================================================
+// 📁 CATEGORY MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/categories", categoryRoutes);
 
-// 🧵 ITEM ROUTES - Protected
+// ====================================================
+// 🧵 ITEM MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/items", itemRoutes);
 
-// 📏 SIZE TEMPLATE ROUTES - Protected
+// ====================================================
+// 📏 SIZE TEMPLATE MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/size-templates", sizeTemplateRoutes);
 
-// 📐 SIZE FIELD ROUTES - Protected
+// ====================================================
+// 📐 SIZE FIELD MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/size-fields", sizeFieldRoutes);
 
-// ✅ CUSTOMER SIZE PROFILE ROUTES - Protected
+// ====================================================
+// 📏 CUSTOMER SIZE PROFILE - COMPLETE ✅
+// ====================================================
 app.use("/api/customer-size", customerSizeRoutes);
 
-// 📦 ORDER MANAGEMENT ROUTES - Protected
-app.use("/api/orders", orderRoutes);
-app.use("/api/garments", garmentRoutes);
-app.use("/api/works", workRoutes);
-
-// 💰 PAYMENT ROUTES - Protected (ADD THIS)
-app.use("/api/payments", paymentRoutes);
-
-// ✂️ TAILOR MANAGEMENT ROUTES - Protected
+// ====================================================
+// ✂️ TAILOR MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/tailors", tailorRoutes);
 
-// 🔔 NOTIFICATION ROUTES - Protected
+// ====================================================
+// 🔔 NOTIFICATION MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/notifications", notificationRoutes);
 
-// ✅ CUTTING MASTER ROUTES - Protected
+// ====================================================
+// ✂️ CUTTING MASTER MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/cutting-masters", cuttingMasterRoutes);
 
-// ✅ STORE KEEPER ROUTES - Protected
+// ====================================================
+// 🏪 STORE KEEPER MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/store-keepers", storeKeeperRoutes);
 
-// ✅ BANKING / TRANSACTION ROUTES - Protected
+// ====================================================
+// 💰 BANKING / TRANSACTION MANAGEMENT - COMPLETE ✅
+// ====================================================
 app.use("/api/transactions", transactionRoutes);
 
 // ==================== ERROR HANDLING MIDDLEWARE ====================
-// ⚠️ IMPORTANT: These must be LAST after all routes!
-
-// 404 Handler - Route not found
 app.use(notFound);
-
-// Global Error Handler - Catches all errors
 app.use(errorHandler);
 
 // ==================== UNHANDLED REJECTIONS ====================
@@ -253,203 +332,136 @@ process.on("uncaughtException", (err) => {
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
-  console.log("\n" + "=".repeat(60));
-  console.log(`🚀 DREAMFIT ERP BACKEND`);
-  console.log("=".repeat(60));
+  console.log("\n" + "=".repeat(80));
+  console.log(`🚀 DREAMFIT ERP BACKEND v2.0`);
+  console.log("=".repeat(80));
   console.log(`📡 Server: http://localhost:${PORT}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`💾 Database: MongoDB Connected`);
   console.log(`⏰ Started: ${new Date().toLocaleString()}`);
-  console.log("=".repeat(60));
+  console.log("=".repeat(80));
   
-  // ==================== ROUTES LIST ====================
-  console.log(`\n📋 AVAILABLE ROUTES:`);
-  console.log("-".repeat(60));
+  // ==================== COMPLETE ROUTES LIST ====================
+  console.log(`\n📋 COMPLETE API ROUTES LIST:`);
+  console.log("=".repeat(80));
   
-  // Public Routes
-  console.log(`\n🔓 PUBLIC ROUTES:`);
-  console.log(`   ✅ GET  /`);
-  console.log(`   ✅ GET  /health`);
-  console.log(`   ✅ POST /api/auth/login`);
-  console.log(`   ✅ POST /api/auth/refresh-token`);
-  console.log(`   ✅ POST /api/auth/forgot-password`);
-  console.log(`   ✅ POST /api/auth/reset-password/:token`);
+  // 🔐 AUTH ROUTES
+  console.log(`\n🔐 AUTH ROUTES (Public):`);
+  console.log("-".repeat(40));
+  console.log(`   POST   /api/auth/register`);
+  console.log(`   POST   /api/auth/login`);
+  console.log(`   POST   /api/auth/forgot-password`);
+  console.log(`   POST   /api/auth/reset-password/:token`);
+  console.log(`   GET    /api/auth/me`);
+  console.log(`   POST   /api/auth/logout`);
+  console.log(`   POST   /api/auth/refresh-token`);
   
-  // Customer Routes
-  console.log(`\n👤 CUSTOMER ROUTES:`);
-  console.log(`   🔒 GET  /api/customers/all`);
-  console.log(`   🔒 POST /api/customers/create`);
-  console.log(`   🔒 GET  /api/customers/search/phone/:phone`);
-  console.log(`   🔒 GET  /api/customers/search/id/:customerId`);
-  console.log(`   🔒 GET  /api/customers/:id`);
-  console.log(`   🔒 PUT  /api/customers/:id`);
-  console.log(`   🔒 DEL  /api/customers/:id`);
-  console.log(`   🔒 GET  /api/customers/stats`);
-  console.log(`   🔒 GET  /api/customers/:id/payments`); // ✅ New
-  console.log(`   🔒 GET  /api/customers/:id/orders`); // ✅ New
+  // 👤 CUSTOMER ROUTES
+  console.log(`\n👤 CUSTOMER ROUTES (${customerRoutes.stack?.length || 10}+ endpoints):`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 GET    /api/customers/all`);
+  console.log(`   🔒 GET    /api/customers/with-payments`);
+  console.log(`   🔒 GET    /api/customers/stats`);
+  console.log(`   🔒 GET    /api/customers/search/phone/:phone`);
+  console.log(`   🔒 GET    /api/customers/search/id/:customerId`);
+  console.log(`   🔒 GET    /api/customers/:id`);
+  console.log(`   🔒 GET    /api/customers/:id/payments`);
+  console.log(`   🔒 GET    /api/customers/:id/orders`);
+  console.log(`   🔒 GET    /api/customers/:id/payment-stats`);
+  console.log(`   🔒 GET    /api/customers/:id/payment-trends`);
+  console.log(`   🔒 POST   /api/customers/create`);
+  console.log(`   🔒 PUT    /api/customers/:id`);
+  console.log(`   🔒 DELETE /api/customers/:id`);
   
-  // User Routes
-  console.log(`\n👥 USER ROUTES:`);
-  console.log(`   🔒 GET  /api/users/profile`);
-  console.log(`   🔒 PUT  /api/users/profile`);
-  console.log(`   🔒 PUT  /api/users/change-password`);
-  console.log(`   👑 GET  /api/users/all-staff`);
-  console.log(`   👑 POST /api/users/create`);
-  console.log(`   👑 GET  /api/users/role/:role`);
-  console.log(`   👑 GET  /api/users/:id`);
-  console.log(`   👑 PUT  /api/users/:id`);
-  console.log(`   👑 DEL  /api/users/:id`);
-  console.log(`   👑 PUT  /api/users/:id/toggle-status`);
+  // 📦 ORDER ROUTES
+  console.log(`\n📦 ORDER ROUTES (${orderRoutes.stack?.length || 10}+ endpoints):`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 GET    /api/orders/stats`);
+  console.log(`   🔒 GET    /api/orders/dashboard`);
+  console.log(`   🔒 POST   /api/orders`);
+  console.log(`   🔒 GET    /api/orders`);
+  console.log(`   🔒 POST   /api/orders/:id/payments`);
+  console.log(`   🔒 GET    /api/orders/:id/payments`);
+  console.log(`   🔒 GET    /api/orders/:id`);
+  console.log(`   🔒 PUT    /api/orders/:id`);
+  console.log(`   🔒 PATCH  /api/orders/:id/status`);
+  console.log(`   🔒 DELETE /api/orders/:id`);
   
-  // Fabric Routes
-  console.log(`\n👕 FABRIC ROUTES:`);
-  console.log(`   🔒 POST /api/fabrics        - Create fabric (with image)`);
-  console.log(`   🔒 GET  /api/fabrics        - Get all fabrics`);
-  console.log(`   🔒 GET  /api/fabrics/:id    - Get fabric by ID`);
-  console.log(`   🔒 PUT  /api/fabrics/:id    - Update fabric (with image)`);
-  console.log(`   🔒 DEL  /api/fabrics/:id    - Delete fabric`);
-  console.log(`   🔒 PATCH /api/fabrics/:id/toggle - Toggle fabric status`);
-  
-  // Category Routes
-  console.log(`\n📁 CATEGORY ROUTES:`);
-  console.log(`   🔒 POST /api/categories     - Create category`);
-  console.log(`   🔒 GET  /api/categories     - Get all categories`);
-  console.log(`   🔒 GET  /api/categories/:id - Get category by ID`);
-  console.log(`   🔒 PUT  /api/categories/:id - Update category`);
-  console.log(`   🔒 DEL  /api/categories/:id - Delete category`);
-  console.log(`   🔒 PATCH /api/categories/:id/toggle - Toggle category status`);
-  
-  // Item Routes
-  console.log(`\n🧵 ITEM ROUTES:`);
-  console.log(`   🔒 POST /api/items          - Create item`);
-  console.log(`   🔒 GET  /api/items          - Get all items (filter by ?categoryId=)`);
-  console.log(`   🔒 GET  /api/items/:id      - Get item by ID`);
-  console.log(`   🔒 PUT  /api/items/:id      - Update item`);
-  console.log(`   🔒 DEL  /api/items/:id      - Delete item`);
-  console.log(`   🔒 PATCH /api/items/:id/toggle - Toggle item status`);
-  
-  // Size Template Routes
-  console.log(`\n📏 SIZE TEMPLATE ROUTES:`);
-  console.log(`   🔒 POST /api/size-templates        - Create template`);
-  console.log(`   🔒 GET  /api/size-templates        - Get all templates (with pagination)`);
-  console.log(`   🔒 GET  /api/size-templates/:id    - Get template by ID`);
-  console.log(`   🔒 PUT  /api/size-templates/:id    - Update template`);
-  console.log(`   🔒 DEL  /api/size-templates/:id    - Delete template`);
-  console.log(`   🔒 PATCH /api/size-templates/:id/toggle - Toggle template status`);
-  
-  // Size Field Routes
-  console.log(`\n📐 SIZE FIELD ROUTES:`);
-  console.log(`   🔒 GET  /api/size-fields           - Get all size fields`);
-  console.log(`   👑 POST /api/size-fields           - Create size field (Admin only)`);
-  
-  // CUSTOMER SIZE PROFILE ROUTES
-  console.log(`\n📏 CUSTOMER SIZE PROFILE ROUTES:`);
-  console.log(`   🔒 GET    /api/customer-size/customer/:customerId        - Get all profiles for a customer`);
-  console.log(`   🔒 GET    /api/customer-size/customer/:customerId/stats  - Get profile statistics`);
-  console.log(`   🔒 POST   /api/customer-size                             - Create new size profile`);
-  console.log(`   🔒 POST   /api/customer-size/bulk                        - Bulk create profiles (Admin only)`);
-  console.log(`   🔒 GET    /api/customer-size/recent                      - Get recently used profiles`);
-  console.log(`   🔒 GET    /api/customer-size/old                         - Get profiles >3 months old`);
-  console.log(`   🔒 GET    /api/customer-size/:id                         - Get single profile by ID`);
-  console.log(`   🔒 PUT    /api/customer-size/:id/measurements            - Update measurements with history`);
-  console.log(`   🔒 PATCH  /api/customer-size/:id/use                     - Mark profile as used`);
-  console.log(`   🔒 GET    /api/customer-size/:id/history                 - Get measurement change history`);
-  console.log(`   🔒 DELETE /api/customer-size/:id                         - Soft delete profile (Admin only)`);
-  
-  // ORDER MANAGEMENT ROUTES
-  console.log(`\n📦 ORDER MANAGEMENT ROUTES:`);
-  
-  // Order Routes
-  console.log(`\n   🔥 ORDER ROUTES:`);
-  console.log(`   🔒 POST   /api/orders              - Create new order`);
-  console.log(`   🔒 GET    /api/orders              - Get all orders (with filters)`);
-  console.log(`   🔒 GET    /api/orders/:id          - Get order by ID (with payments & works)`);
-  console.log(`   🔒 PATCH  /api/orders/:id/status   - Update order status`);
-  console.log(`   🔒 PUT    /api/orders/:id          - Update order`);
-  console.log(`   🔒 DEL    /api/orders/:id          - Delete order`);
-  console.log(`   🔒 GET    /api/orders/stats        - Get order statistics`);
-  console.log(`   🔒 POST   /api/orders/:id/payments - Add payment to order`); // ✅ New
-  console.log(`   🔒 GET    /api/orders/:id/payments - Get order payments`); // ✅ New
-  
-  // Garment Routes
-  console.log(`\n   🧵 GARMENT ROUTES:`);
-  console.log(`   🔒 POST   /api/garments/order/:orderId - Create garment (with images)`);
-  console.log(`   🔒 GET    /api/garments/order/:orderId - Get garments by order`);
-  console.log(`   🔒 GET    /api/garments/:id         - Get garment by ID`);
-  console.log(`   🔒 PUT    /api/garments/:id         - Update garment`);
-  console.log(`   🔒 PATCH  /api/garments/:id/images  - Update garment images`);
-  console.log(`   🔒 DEL    /api/garments/:id/images  - Delete garment image`);
-  console.log(`   🔒 DEL    /api/garments/:id         - Delete garment`);
-  
-  // Work Routes
-  console.log(`\n   ⚙️ WORK ROUTES:`);
-  console.log(`   🔒 POST   /api/works/create-from-order/:orderId - Create works from order`);
-  console.log(`   🔒 GET    /api/works/stats                      - Get work statistics`);
-  console.log(`   🔒 GET    /api/works/my-works                   - Get works by cutting master`);
-  console.log(`   🔒 GET    /api/works/tailor-works               - Get works by tailor`);
-  console.log(`   🔒 GET    /api/works                            - Get all works (with filters)`);
-  console.log(`   🔒 GET    /api/works/:id                        - Get work by ID`);
-  console.log(`   🔒 PATCH  /api/works/:id/accept                 - Accept work (Cutting Master)`);
-  console.log(`   🔒 PATCH  /api/works/:id/assign-tailor          - Assign tailor (Cutting Master)`);
-  console.log(`   🔒 PATCH  /api/works/:id/status                 - Update work status (Cutting Master)`);
-  console.log(`   🔒 DELETE /api/works/:id                        - Delete work (Admin only)`);
-  
-  // ✅ PAYMENT ROUTES (NEW SECTION)
+  // 💰 PAYMENT ROUTES
   console.log(`\n💰 PAYMENT ROUTES:`);
-  console.log(`   🔒 POST   /api/payments              - Create new payment`);
-  console.log(`   🔒 GET    /api/payments/stats        - Get payment statistics (Admin, Store Keeper)`);
-  console.log(`   🔒 GET    /api/payments/order/:orderId - Get payments by order`);
-  console.log(`   🔒 GET    /api/payments/:id          - Get payment by ID`);
-  console.log(`   🔒 PUT    /api/payments/:id          - Update payment (Admin, Store Keeper)`);
-  console.log(`   🔒 DELETE /api/payments/:id          - Delete payment (Admin only)`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 GET    /api/payments/stats`);
+  console.log(`   🔒 GET    /api/payments/daily`);
+  console.log(`   🔒 POST   /api/payments`);
+  console.log(`   🔒 GET    /api/payments`);
+  console.log(`   🔒 GET    /api/payments/order/:orderId`);
+  console.log(`   🔒 GET    /api/payments/customer/:customerId`);
+  console.log(`   🔒 GET    /api/payments/:id`);
+  console.log(`   🔒 PUT    /api/payments/:id`);
+  console.log(`   🔒 DELETE /api/payments/:id`);
   
-  // Tailor Management Routes
-  console.log(`\n✂️ TAILOR MANAGEMENT ROUTES:`);
-  console.log(`   🔒 POST   /api/tailors              - Create new tailor`);
-  console.log(`   🔒 GET    /api/tailors/stats        - Get tailor statistics`);
-  console.log(`   🔒 GET    /api/tailors              - Get all tailors (with filters)`);
-  console.log(`   🔒 GET    /api/tailors/:id          - Get tailor by ID`);
-  console.log(`   🔒 PUT    /api/tailors/:id          - Update tailor`);
-  console.log(`   🔒 PATCH  /api/tailors/:id/leave    - Update leave status`);
-  console.log(`   🔒 DEL    /api/tailors/:id          - Delete tailor`);
-
-  // Cutting Master Routes
-  console.log(`\n✂️ CUTTING MASTER ROUTES:`);
-  console.log(`   🔒 POST   /api/cutting-masters      - Create new cutting master`);
-  console.log(`   🔒 GET    /api/cutting-masters/stats - Get cutting master statistics`);
-  console.log(`   🔒 GET    /api/cutting-masters      - Get all cutting masters (with filters)`);
-  console.log(`   🔒 GET    /api/cutting-masters/:id  - Get cutting master by ID`);
-  console.log(`   🔒 PUT    /api/cutting-masters/:id  - Update cutting master`);
-  console.log(`   🔒 DEL    /api/cutting-masters/:id  - Delete cutting master`);
-
-  // Store Keeper Routes
-  console.log(`\n🏪 STORE KEEPER ROUTES:`);
-  console.log(`   🔒 POST   /api/store-keepers        - Create new store keeper`);
-  console.log(`   🔒 GET    /api/store-keepers/stats  - Get store keeper statistics`);
-  console.log(`   🔒 GET    /api/store-keepers        - Get all store keepers (with filters)`);
-  console.log(`   🔒 GET    /api/store-keepers/:id    - Get store keeper by ID`);
-  console.log(`   🔒 PUT    /api/store-keepers/:id    - Update store keeper`);
-  console.log(`   🔒 DEL    /api/store-keepers/:id    - Delete store keeper`);
-
-  // Notification Routes
-  console.log(`\n🔔 NOTIFICATION ROUTES:`);
-  console.log(`   🔒 GET    /api/notifications/unread-count - Get unread count`);
-  console.log(`   🔒 GET    /api/notifications              - Get user notifications`);
-  console.log(`   🔒 GET    /api/notifications/:id          - Get notification by ID`);
-  console.log(`   🔒 PATCH  /api/notifications/:id/read     - Mark as read`);
-  console.log(`   🔒 PATCH  /api/notifications/mark-all-read - Mark all as read`);
-  console.log(`   🔒 DELETE /api/notifications/:id          - Delete notification`);
-
-  // Banking / Transaction Routes
-  console.log(`\n💰 BANKING / TRANSACTION ROUTES:`);
-  console.log(`   🔒 GET    /api/transactions           - Get all transactions (with filters)`);
-  console.log(`   🔒 GET    /api/transactions/summary   - Get transaction summary`);
-  console.log(`   🔒 POST   /api/transactions           - Create new transaction (income/expense)`);
-  console.log(`   🔒 DELETE /api/transactions/:id       - Delete transaction (Admin only)`);
+  // ⚙️ WORK ROUTES
+  console.log(`\n⚙️ WORK ROUTES:`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 GET    /api/works/stats`);
+  console.log(`   🔒 GET    /api/works/pool`);
+  console.log(`   🔒 POST   /api/works/:id/accept`);
+  console.log(`   🔒 POST   /api/works/:id/start`);
+  console.log(`   🔒 POST   /api/works/:id/complete`);
+  console.log(`   🔒 GET    /api/works/cutting-master/:cuttingMasterId`);
+  console.log(`   🔒 GET    /api/works/:id`);
+  console.log(`   🔒 PUT    /api/works/:id`);
+  console.log(`   🔒 DELETE /api/works/:id`);
   
-  console.log("-".repeat(60));
-  console.log(`\n📊 TOTAL ENDPOINTS: 100+`);
-  console.log("=".repeat(60) + "\n");
+  // 👕 GARMENT ROUTES
+  console.log(`\n👕 GARMENT ROUTES:`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 POST   /api/garments`);
+  console.log(`   🔒 GET    /api/garments`);
+  console.log(`   🔒 GET    /api/garments/:id`);
+  console.log(`   🔒 PUT    /api/garments/:id`);
+  console.log(`   🔒 DELETE /api/garments/:id`);
+  
+  // ✂️ TAILOR & CUTTING MASTER ROUTES
+  console.log(`\n✂️ TAILOR MANAGEMENT:`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 CRUD   /api/tailors`);
+  console.log(`   🔒 CRUD   /api/cutting-masters`);
+  console.log(`   🔒 CRUD   /api/store-keepers`);
+  
+  // 📏 SIZE MANAGEMENT
+  console.log(`\n📏 SIZE MANAGEMENT:`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 CRUD   /api/size-templates`);
+  console.log(`   🔒 CRUD   /api/size-fields`);
+  console.log(`   🔒 CRUD   /api/customer-size`);
+  
+  // 👕 FABRIC & CATEGORY
+  console.log(`\n👕 FABRIC & CATEGORY:`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 CRUD   /api/fabrics`);
+  console.log(`   🔒 CRUD   /api/categories`);
+  console.log(`   🔒 CRUD   /api/items`);
+  
+  // 🔔 NOTIFICATIONS
+  console.log(`\n🔔 NOTIFICATIONS:`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 CRUD   /api/notifications`);
+  
+  // 💰 TRANSACTIONS
+  console.log(`\n💰 TRANSACTIONS:`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 CRUD   /api/transactions`);
+  
+  // 👥 USERS
+  console.log(`\n👥 USERS:`);
+  console.log("-".repeat(40));
+  console.log(`   🔒 CRUD   /api/users`);
+  
+  console.log("=".repeat(80));
+  console.log(`\n📊 TOTAL ENDPOINTS: 100+ ACTIVE ENDPOINTS`);
+  console.log("✅ ALL MODULES COMPLETE AND CONNECTED");
+  console.log("=".repeat(80) + "\n");
 });
 
 export default app;

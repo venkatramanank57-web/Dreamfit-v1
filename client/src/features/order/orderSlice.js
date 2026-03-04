@@ -1,16 +1,17 @@
-// features/order/orderSlice.js
+// frontend/src/features/orders/orderSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import * as orderApi from "./orderApi";
 
-// ===== ASYNC THUNKS =====
+// ============================================
+// 🔄 ASYNC THUNKS
+// ============================================
 
-// ✅ FETCH ORDER STATS
+// Get order stats
 export const fetchOrderStats = createAsyncThunk(
-  "order/fetchStats",
+  "orders/fetchStats",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("📊 Fetching order statistics...");
-      const response = await orderApi.getOrderStatsApi();
+      const response = await orderApi.getOrderStats();
       return response.stats;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Failed to fetch stats");
@@ -18,80 +19,113 @@ export const fetchOrderStats = createAsyncThunk(
   }
 );
 
-export const fetchAllOrders = createAsyncThunk(
-  "order/fetchAll",
-  async (params, { rejectWithValue }) => {
+// Get dashboard data
+export const fetchDashboardData = createAsyncThunk(
+  "orders/fetchDashboard",
+  async (_, { rejectWithValue }) => {
     try {
-      console.log("📡 Fetching orders with params:", params);
-      const response = await orderApi.getAllOrdersApi(params);
-      return response;
+      const response = await orderApi.getDashboardData();
+      return response.dashboard;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Failed to fetch orders");
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch dashboard");
     }
   }
 );
 
-// ✅ UPDATED: Fetch order by ID (now includes payments & works)
-export const fetchOrderById = createAsyncThunk(
-  "order/fetchById",
-  async (id, { rejectWithValue }) => {
-    try {
-      console.log(`📡 Fetching order by ID: ${id}`);
-      const response = await orderApi.getOrderByIdApi(id);
-      return response;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Failed to fetch order");
-    }
-  }
-);
-
-// ✅ UPDATED: Create order (with payments)
-export const createOrder = createAsyncThunk(
-  "order/create",
+// Create new order
+export const createNewOrder = createAsyncThunk(
+  "orders/create",
   async (orderData, { rejectWithValue }) => {
     try {
-      console.log("📝 Creating order with payments:", orderData);
-      const response = await orderApi.createOrderApi(orderData);
-      return response;
+      const response = await orderApi.createOrder(orderData);
+      return response.order;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Failed to create order");
     }
   }
 );
 
-// ✅ UPDATED: Update order
-export const updateOrder = createAsyncThunk(
-  "order/update",
-  async ({ id, orderData }, { rejectWithValue }) => {
+// Get all orders
+export const fetchOrders = createAsyncThunk(
+  "orders/fetchAll",
+  async (params = {}, { rejectWithValue }) => {
     try {
-      console.log(`📝 Updating order ${id}:`, orderData);
-      const response = await orderApi.updateOrderApi(id, orderData);
-      return response;
+      const response = await orderApi.getAllOrders(params);
+      return {
+        orders: response.orders,
+        pagination: response.pagination
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch orders");
+    }
+  }
+);
+
+// ✅ NEW: Get orders by customer ID
+export const fetchOrdersByCustomer = createAsyncThunk(
+  "orders/fetchByCustomer",
+  async (customerId, { rejectWithValue }) => {
+    try {
+      const response = await orderApi.getOrdersByCustomer(customerId);
+      return {
+        customerId,
+        orders: response.orders || []
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch customer orders");
+    }
+  }
+);
+
+// Get single order
+export const fetchOrderById = createAsyncThunk(
+  "orders/fetchById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await orderApi.getOrderById(id);
+      return {
+        order: response.order,
+        payments: response.payments,
+        works: response.works
+      };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch order");
+    }
+  }
+);
+
+// Update order
+export const updateExistingOrder = createAsyncThunk(
+  "orders/update",
+  async ({ id, data }, { rejectWithValue }) => {
+    try {
+      const response = await orderApi.updateOrder(id, data);
+      return response.order;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Failed to update order");
     }
   }
 );
 
-export const updateOrderStatus = createAsyncThunk(
-  "order/updateStatus",
+// Update order status
+export const updateOrderStatusThunk = createAsyncThunk(
+  "orders/updateStatus",
   async ({ id, status }, { rejectWithValue }) => {
     try {
-      console.log(`🔄 Updating order ${id} status to:`, status);
-      const response = await orderApi.updateOrderStatusApi(id, status);
-      return response;
+      const response = await orderApi.updateOrderStatus(id, status);
+      return response.order;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Failed to update order status");
+      return rejectWithValue(error.response?.data?.message || "Failed to update status");
     }
   }
 );
 
-export const deleteOrder = createAsyncThunk(
-  "order/delete",
+// Delete order
+export const deleteExistingOrder = createAsyncThunk(
+  "orders/delete",
   async (id, { rejectWithValue }) => {
     try {
-      console.log(`🗑️ Deleting order: ${id}`);
-      await orderApi.deleteOrderApi(id);
+      await orderApi.deleteOrder(id);
       return id;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Failed to delete order");
@@ -99,70 +133,103 @@ export const deleteOrder = createAsyncThunk(
   }
 );
 
-// ✅ NEW: Add payment to order
-export const addPaymentToOrder = createAsyncThunk(
-  "order/addPayment",
+// Add payment to order
+export const addPayment = createAsyncThunk(
+  "orders/addPayment",
   async ({ orderId, paymentData }, { rejectWithValue }) => {
     try {
-      console.log(`💰 Adding payment to order ${orderId}:`, paymentData);
-      const response = await orderApi.addPaymentToOrderApi(orderId, paymentData);
-      return response;
+      const response = await orderApi.addPaymentToOrder(orderId, paymentData);
+      return {
+        orderId,
+        payment: response.payment
+      };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Failed to add payment");
     }
   }
 );
 
-// ✅ NEW: Get order payments
+// Get order payments
 export const fetchOrderPayments = createAsyncThunk(
-  "order/fetchPayments",
+  "orders/fetchPayments",
   async (orderId, { rejectWithValue }) => {
     try {
-      console.log(`💰 Fetching payments for order ${orderId}`);
-      const response = await orderApi.getOrderPaymentsApi(orderId);
-      return response;
+      const response = await orderApi.getOrderPayments(orderId);
+      return {
+        orderId,
+        payments: response.payments
+      };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Failed to fetch payments");
     }
   }
 );
 
-const orderSlice = createSlice({
-  name: "order",
-  initialState: {
-    orders: [],
-    currentOrder: null,
-    currentOrderPayments: [], // ✅ NEW: Store payments for current order
-    currentOrderWorks: [], // ✅ NEW: Store works for current order
-    stats: {
-      today: 0,
-      thisWeek: 0,
-      thisMonth: 0,
-      total: 0,
-      statusBreakdown: []
-    },
-    pagination: {
-      page: 1,
-      limit: 10,
-      total: 0,
-      pages: 1
-    },
-    loading: false,
-    error: null,
+// ============================================
+// 📊 INITIAL STATE
+// ============================================
+const initialState = {
+  orders: [],
+  currentOrder: null,
+  currentPayments: [],
+  currentWorks: [],
+  customerOrders: {}, // ✅ New: Store orders by customer ID
+  stats: {
+    today: 0,
+    thisWeek: 0,
+    thisMonth: 0,
+    total: 0,
+    statusBreakdown: [],
+    paymentBreakdown: []
   },
+  dashboard: {
+    todayOrders: { count: 0, orders: [] },
+    pendingDeliveries: { count: 0, orders: [] },
+    recentOrders: [],
+    todayCollection: 0
+  },
+  pagination: {
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1
+  },
+  loading: false,
+  error: null,
+  success: false
+};
+
+// ============================================
+// 🎯 ORDER SLICE
+// ============================================
+const orderSlice = createSlice({
+  name: "orders",
+  initialState,
   reducers: {
-    clearCurrentOrder: (state) => {
-      state.currentOrder = null;
-      state.currentOrderPayments = []; // ✅ Clear payments
-      state.currentOrderWorks = []; // ✅ Clear works
-    },
-    clearError: (state) => {
+    clearOrderError: (state) => {
       state.error = null;
     },
+    clearCurrentOrder: (state) => {
+      state.currentOrder = null;
+      state.currentPayments = [];
+      state.currentWorks = [];
+    },
+    clearCustomerOrders: (state, action) => {
+      const { customerId } = action.payload;
+      if (customerId) {
+        delete state.customerOrders[customerId];
+      } else {
+        state.customerOrders = {};
+      }
+    },
+    setPagination: (state, action) => {
+      state.pagination = { ...state.pagination, ...action.payload };
+    },
+    resetOrderState: () => initialState
   },
   extraReducers: (builder) => {
     builder
-      // ===== FETCH ORDER STATS =====
+      // ===== FETCH STATS =====
       .addCase(fetchOrderStats.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -170,222 +237,242 @@ const orderSlice = createSlice({
       .addCase(fetchOrderStats.fulfilled, (state, action) => {
         state.loading = false;
         state.stats = action.payload;
-        console.log("📊 Stats updated in store:", action.payload);
       })
       .addCase(fetchOrderStats.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
-      // ===== FETCH ALL ORDERS =====
-      .addCase(fetchAllOrders.pending, (state) => {
+      // ===== FETCH DASHBOARD =====
+      .addCase(fetchDashboardData.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchAllOrders.fulfilled, (state, action) => {
+      .addCase(fetchDashboardData.fulfilled, (state, action) => {
+        state.loading = false;
+        state.dashboard = action.payload;
+      })
+      .addCase(fetchDashboardData.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== CREATE ORDER =====
+      .addCase(createNewOrder.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.success = false;
+      })
+      .addCase(createNewOrder.fulfilled, (state, action) => {
+        state.loading = false;
+        state.orders.unshift(action.payload);
+        state.success = true;
+        
+        // ✅ Also add to customerOrders if customer exists
+        if (action.payload.customer) {
+          const customerId = action.payload.customer._id || action.payload.customer;
+          if (!state.customerOrders[customerId]) {
+            state.customerOrders[customerId] = [];
+          }
+          state.customerOrders[customerId].unshift(action.payload);
+        }
+      })
+      .addCase(createNewOrder.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.success = false;
+      })
+
+      // ===== FETCH ALL ORDERS =====
+      .addCase(fetchOrders.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchOrders.fulfilled, (state, action) => {
         state.loading = false;
         state.orders = action.payload.orders;
         state.pagination = action.payload.pagination;
-        console.log("✅ Orders loaded:", action.payload.orders?.length);
       })
-      .addCase(fetchAllOrders.rejected, (state, action) => {
+      .addCase(fetchOrders.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
-      // ===== FETCH ORDER BY ID (UPDATED) =====
+      // ===== FETCH ORDERS BY CUSTOMER =====
+      .addCase(fetchOrdersByCustomer.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchOrdersByCustomer.fulfilled, (state, action) => {
+        state.loading = false;
+        const { customerId, orders } = action.payload;
+        state.customerOrders[customerId] = orders;
+      })
+      .addCase(fetchOrdersByCustomer.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== FETCH ORDER BY ID =====
       .addCase(fetchOrderById.pending, (state) => {
         state.loading = true;
         state.error = null;
-        state.currentOrder = null;
-        state.currentOrderPayments = [];
-        state.currentOrderWorks = [];
       })
       .addCase(fetchOrderById.fulfilled, (state, action) => {
         state.loading = false;
-        // ✅ Store order, payments, and works separately
-        state.currentOrder = action.payload.order || action.payload;
-        state.currentOrderPayments = action.payload.payments || [];
-        state.currentOrderWorks = action.payload.works || [];
-        
-        console.log("✅ Order loaded:", state.currentOrder?.orderId);
-        console.log(`💰 Payments loaded: ${state.currentOrderPayments.length}`);
-        console.log(`⚙️ Works loaded: ${state.currentOrderWorks.length}`);
+        state.currentOrder = action.payload.order;
+        state.currentPayments = action.payload.payments || [];
+        state.currentWorks = action.payload.works || [];
       })
       .addCase(fetchOrderById.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.currentOrder = null;
-        state.currentOrderPayments = [];
-        state.currentOrderWorks = [];
-      })
-
-      // ===== CREATE ORDER (UPDATED) =====
-      .addCase(createOrder.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(createOrder.fulfilled, (state, action) => {
-        state.loading = false;
-        const newOrder = action.payload.order || action.payload;
-        if (newOrder && newOrder._id) {
-          state.orders = [newOrder, ...state.orders];
-          state.pagination.total += 1;
-          
-          if (state.stats) {
-            state.stats.total += 1;
-            state.stats.today += 1;
-            state.stats.thisWeek += 1;
-            state.stats.thisMonth += 1;
-          }
-          
-          console.log("✅ Order created:", newOrder.orderId);
-        }
-      })
-      .addCase(createOrder.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
       // ===== UPDATE ORDER =====
-      .addCase(updateOrder.pending, (state) => {
+      .addCase(updateExistingOrder.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(updateOrder.fulfilled, (state, action) => {
+      .addCase(updateExistingOrder.fulfilled, (state, action) => {
         state.loading = false;
-        const updatedOrder = action.payload.order || action.payload;
-        if (updatedOrder && updatedOrder._id) {
-          // Update in orders list
-          const index = state.orders.findIndex(o => o._id === updatedOrder._id);
-          if (index !== -1) {
-            state.orders[index] = updatedOrder;
-          }
-          
-          // Update current order if it's the same one
-          if (state.currentOrder?._id === updatedOrder._id) {
-            state.currentOrder = updatedOrder;
-          }
-          
-          console.log("✅ Order updated:", updatedOrder.orderId);
+        
+        // Update in main orders array
+        const index = state.orders.findIndex(o => o._id === action.payload._id);
+        if (index !== -1) {
+          state.orders[index] = action.payload;
         }
+        
+        // Update in customerOrders if customer exists
+        if (action.payload.customer) {
+          const customerId = action.payload.customer._id || action.payload.customer;
+          if (state.customerOrders[customerId]) {
+            const custIndex = state.customerOrders[customerId].findIndex(o => o._id === action.payload._id);
+            if (custIndex !== -1) {
+              state.customerOrders[customerId][custIndex] = action.payload;
+            }
+          }
+        }
+        
+        // Update currentOrder if it's the same
+        if (state.currentOrder?._id === action.payload._id) {
+          state.currentOrder = action.payload;
+        }
+        state.success = true;
       })
-      .addCase(updateOrder.rejected, (state, action) => {
+      .addCase(updateExistingOrder.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
       // ===== UPDATE ORDER STATUS =====
-      .addCase(updateOrderStatus.pending, (state) => {
+      .addCase(updateOrderStatusThunk.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(updateOrderStatus.fulfilled, (state, action) => {
+      .addCase(updateOrderStatusThunk.fulfilled, (state, action) => {
         state.loading = false;
-        const updatedOrder = action.payload.order || action.payload;
-        if (updatedOrder && updatedOrder._id) {
-          const index = state.orders.findIndex(o => o._id === updatedOrder._id);
-          if (index !== -1) {
-            state.orders[index] = updatedOrder;
+        
+        // Update in main orders array
+        const index = state.orders.findIndex(o => o._id === action.payload._id);
+        if (index !== -1) {
+          state.orders[index] = action.payload;
+        }
+        
+        // Update in customerOrders if customer exists
+        if (action.payload.customer) {
+          const customerId = action.payload.customer._id || action.payload.customer;
+          if (state.customerOrders[customerId]) {
+            const custIndex = state.customerOrders[customerId].findIndex(o => o._id === action.payload._id);
+            if (custIndex !== -1) {
+              state.customerOrders[customerId][custIndex] = action.payload;
+            }
           }
-          if (state.currentOrder?._id === updatedOrder._id) {
-            state.currentOrder = updatedOrder;
-          }
-          console.log("✅ Order status updated:", updatedOrder.status);
+        }
+        
+        // Update currentOrder if it's the same
+        if (state.currentOrder?._id === action.payload._id) {
+          state.currentOrder = action.payload;
         }
       })
-      .addCase(updateOrderStatus.rejected, (state, action) => {
+      .addCase(updateOrderStatusThunk.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
       // ===== DELETE ORDER =====
-      .addCase(deleteOrder.pending, (state) => {
+      .addCase(deleteExistingOrder.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(deleteOrder.fulfilled, (state, action) => {
+      .addCase(deleteExistingOrder.fulfilled, (state, action) => {
         state.loading = false;
-        const deletedId = action.payload;
-        state.orders = state.orders.filter(o => o._id !== deletedId);
-        if (state.currentOrder?._id === deletedId) {
+        
+        // Remove from main orders array
+        state.orders = state.orders.filter(o => o._id !== action.payload);
+        
+        // Remove from all customerOrders entries
+        Object.keys(state.customerOrders).forEach(customerId => {
+          state.customerOrders[customerId] = state.customerOrders[customerId].filter(
+            o => o._id !== action.payload
+          );
+        });
+        
+        // Clear currentOrder if it's the deleted one
+        if (state.currentOrder?._id === action.payload) {
           state.currentOrder = null;
-          state.currentOrderPayments = [];
-          state.currentOrderWorks = [];
+          state.currentPayments = [];
+          state.currentWorks = [];
         }
-        state.pagination.total -= 1;
-        
-        if (state.stats && state.stats.total > 0) {
-          state.stats.total -= 1;
-        }
-        
-        console.log("✅ Order deleted:", deletedId);
+        state.success = true;
       })
-      .addCase(deleteOrder.rejected, (state, action) => {
+      .addCase(deleteExistingOrder.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
-      // ===== ADD PAYMENT TO ORDER (NEW) =====
-      .addCase(addPaymentToOrder.pending, (state) => {
+      // ===== ADD PAYMENT =====
+      .addCase(addPayment.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(addPaymentToOrder.fulfilled, (state, action) => {
+      .addCase(addPayment.fulfilled, (state, action) => {
         state.loading = false;
-        const payment = action.payload.payment || action.payload;
-        
-        // Add payment to current order's payments list
-        if (payment) {
-          state.currentOrderPayments = [payment, ...state.currentOrderPayments];
-          
-          // Update current order's payment summary if available
-          if (state.currentOrder) {
-            if (!state.currentOrder.paymentSummary) {
-              state.currentOrder.paymentSummary = { totalPaid: 0, paymentCount: 0 };
-            }
-            state.currentOrder.paymentSummary.totalPaid = 
-              (state.currentOrder.paymentSummary.totalPaid || 0) + payment.amount;
-            state.currentOrder.paymentSummary.paymentCount = 
-              (state.currentOrder.paymentSummary.paymentCount || 0) + 1;
-            state.currentOrder.paymentSummary.lastPaymentDate = payment.paymentDate;
-            state.currentOrder.paymentSummary.lastPaymentAmount = payment.amount;
-          }
-        }
-        
-        console.log("✅ Payment added to order");
+        // Will be refreshed by fetch
+        state.success = true;
       })
-      .addCase(addPaymentToOrder.rejected, (state, action) => {
+      .addCase(addPayment.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
-      // ===== FETCH ORDER PAYMENTS (NEW) =====
+      // ===== FETCH ORDER PAYMENTS =====
       .addCase(fetchOrderPayments.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchOrderPayments.fulfilled, (state, action) => {
         state.loading = false;
-        state.currentOrderPayments = action.payload.payments || action.payload;
-        console.log(`💰 Payments loaded: ${state.currentOrderPayments.length}`);
+        if (state.currentOrder?._id === action.payload.orderId) {
+          state.currentPayments = action.payload.payments;
+        }
       })
       .addCase(fetchOrderPayments.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });
-  },
+  }
 });
 
-// ===== SELECTORS =====
-export const selectOrders = (state) => state.order.orders;
-export const selectCurrentOrder = (state) => state.order.currentOrder;
-export const selectCurrentOrderPayments = (state) => state.order.currentOrderPayments; // ✅ NEW
-export const selectCurrentOrderWorks = (state) => state.order.currentOrderWorks; // ✅ NEW
-export const selectOrderStats = (state) => state.order.stats;
-export const selectOrderLoading = (state) => state.order.loading;
-export const selectOrderError = (state) => state.order.error;
-export const selectOrderPagination = (state) => state.order.pagination;
+// ============================================
+// 📤 EXPORT ACTIONS & REDUCER
+// ============================================
+export const { 
+  clearOrderError, 
+  clearCurrentOrder,
+  clearCustomerOrders, 
+  setPagination, 
+  resetOrderState 
+} = orderSlice.actions;
 
-export const { clearCurrentOrder, clearError } = orderSlice.actions;
 export default orderSlice.reducer;

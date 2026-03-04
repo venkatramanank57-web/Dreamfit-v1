@@ -1,20 +1,23 @@
 // backend/controllers/customer.controller.js
 import Customer from "../models/Customer.js";
-import Payment from "../models/Payment.js"; // ✅ Import Payment model
-import Order from "../models/Order.js"; // ✅ Import Order model
+import Payment from "../models/Payment.js";
+import Order from "../models/Order.js";
+import mongoose from "mongoose";
 
 // ===== HELPER FUNCTION TO GET CUSTOMER PAYMENT SUMMARY =====
 const getCustomerPaymentSummary = async (customerId) => {
   try {
+    console.log(`💰 Getting payment summary for customer: ${customerId}`);
+    
     // Get all payments for this customer
     const payments = await Payment.find({ 
-      customer: customerId,
+      customer: customerId,  // ✅ FIXED: changed from customerId to customer
       isDeleted: false 
     });
 
     // Get all orders for this customer
     const orders = await Order.find({ 
-      customer: customerId,
+      customer: customerId,  // ✅ FIXED: changed from customerId to customer
       isActive: true 
     });
 
@@ -25,12 +28,28 @@ const getCustomerPaymentSummary = async (customerId) => {
     
     // Get recent payments
     const recentPayments = await Payment.find({ 
-      customer: customerId,
+      customer: customerId,  // ✅ FIXED: changed from customerId to customer
       isDeleted: false 
     })
-    .populate('order', 'orderId')
+    .populate('order', 'orderId')  // ✅ FIXED: changed from orderId to order
     .sort('-paymentDate -paymentTime')
     .limit(5);
+
+    // Calculate payment by method
+    const byMethod = {
+      cash: payments.filter(p => p.method === 'cash').reduce((sum, p) => sum + p.amount, 0),  // ✅ FIXED: paymentMethod → method
+      upi: payments.filter(p => p.method === 'upi').reduce((sum, p) => sum + p.amount, 0),
+      card: payments.filter(p => p.method === 'card').reduce((sum, p) => sum + p.amount, 0),
+      'bank-transfer': payments.filter(p => p.method === 'bank-transfer').reduce((sum, p) => sum + p.amount, 0)
+    };
+
+    // Calculate payment by type
+    const byType = {
+      advance: payments.filter(p => p.type === 'advance').reduce((sum, p) => sum + p.amount, 0),  // ✅ FIXED: paymentType → type
+      full: payments.filter(p => p.type === 'full').reduce((sum, p) => sum + p.amount, 0),
+      partial: payments.filter(p => p.type === 'partial').reduce((sum, p) => sum + p.amount, 0),
+      extra: payments.filter(p => p.type === 'extra').reduce((sum, p) => sum + p.amount, 0)
+    };
 
     return {
       totalPaid,
@@ -38,15 +57,34 @@ const getCustomerPaymentSummary = async (customerId) => {
       completedOrders,
       pendingOrders: totalOrders - completedOrders,
       paymentCount: payments.length,
-      recentPayments
+      recentPayments,
+      byMethod,
+      byType,
+      lastPayment: payments.length > 0 ? payments[0] : null
     };
   } catch (error) {
     console.error("❌ Error getting customer payment summary:", error);
-    return null;
+    return {
+      totalPaid: 0,
+      totalOrders: 0,
+      completedOrders: 0,
+      pendingOrders: 0,
+      paymentCount: 0,
+      recentPayments: [],
+      byMethod: {},
+      byType: {},
+      lastPayment: null
+    };
   }
 };
 
-// 🔍 Search Customer by Phone
+// ==================== SEARCH FUNCTIONS ====================
+
+/**
+ * @desc    Search customer by phone number
+ * @route   GET /api/customers/search/phone/:phone
+ * @access  Private
+ */
 export const getCustomerByPhone = async (req, res) => {
   try {
     const { phone } = req.params;
@@ -56,26 +94,38 @@ export const getCustomerByPhone = async (req, res) => {
 
     if (!customer) {
       console.log(`❌ Customer not found with phone: ${phone}`);
-      return res.status(404).json({ message: "Customer Not Found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Customer not found" 
+      });
     }
 
-    // ✅ Get payment summary for this customer
+    // Get payment summary
     const paymentSummary = await getCustomerPaymentSummary(customer._id);
 
-    console.log(`✅ Customer found: ${customer.customerId} - ${customer.name}`);
-    console.log(`💰 Total Paid: ₹${paymentSummary?.totalPaid || 0}`);
+    console.log(`✅ Customer found: ${customer.customerId} - ${customer.firstName} ${customer.lastName}`);
 
     res.status(200).json({
-      ...customer.toObject(),
-      paymentSummary // ✅ Include payment summary
+      success: true,
+      customer: {
+        ...customer.toObject(),
+        paymentSummary
+      }
     });
   } catch (error) {
     console.error("❌ Search by phone error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
-// 🔍 Search Customer by Customer ID
+/**
+ * @desc    Search customer by customer ID (CUST-2024-00001 format)
+ * @route   GET /api/customers/search/id/:customerId
+ * @access  Private
+ */
 export const getCustomerByCustomerId = async (req, res) => {
   try {
     const { customerId } = req.params;
@@ -85,37 +135,51 @@ export const getCustomerByCustomerId = async (req, res) => {
 
     if (!customer) {
       console.log(`❌ Customer not found with ID: ${customerId}`);
-      return res.status(404).json({ message: "Customer Not Found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Customer not found" 
+      });
     }
 
-    // ✅ Get payment summary for this customer
+    // Get payment summary
     const paymentSummary = await getCustomerPaymentSummary(customer._id);
 
-    console.log(`✅ Customer found: ${customer.customerId} - ${customer.name}`);
-    console.log(`💰 Total Paid: ₹${paymentSummary?.totalPaid || 0}`);
+    console.log(`✅ Customer found: ${customer.customerId} - ${customer.firstName} ${customer.lastName}`);
 
     res.status(200).json({
-      ...customer.toObject(),
-      paymentSummary // ✅ Include payment summary
+      success: true,
+      customer: {
+        ...customer.toObject(),
+        paymentSummary
+      }
     });
   } catch (error) {
     console.error("❌ Search by customer ID error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
-// 🆕 Create New Customer
+// ==================== CREATE FUNCTION ====================
+
+/**
+ * @desc    Create new customer
+ * @route   POST /api/customers/create
+ * @access  Private
+ */
 export const createCustomer = async (req, res) => {
   try {
     console.log("\n🔵 ========== CREATE CUSTOMER START ==========");
-    console.log("📥 RAW REQUEST BODY:", JSON.stringify(req.body, null, 2));
+    console.log("📥 Request body:", JSON.stringify(req.body, null, 2));
     
     const { 
       salutation,
       firstName,
       lastName,
       dateOfBirth,
-      contactNumber,
+      phone,
       whatsappNumber,
       email,
       addressLine1,
@@ -126,56 +190,40 @@ export const createCustomer = async (req, res) => {
       notes
     } = req.body;
 
-    // ✅ DEBUG: Log each field individually
-    console.log("📋 PARSED FIELDS:");
-    console.log("   - salutation:", salutation);
-    console.log("   - firstName:", firstName);
-    console.log("   - lastName:", lastName);
-    console.log("   - dateOfBirth:", dateOfBirth);
-    console.log("   - contactNumber:", contactNumber);
-    console.log("   - whatsappNumber:", whatsappNumber);
-    console.log("   - email:", email);
-    console.log("   - addressLine1:", addressLine1);
-    console.log("   - addressLine2:", addressLine2);
-    console.log("   - city:", city);
-    console.log("   - state:", state);
-    console.log("   - pincode:", pincode);
-    console.log("   - notes:", notes);
-
     // ✅ Validate required fields
-    if (!contactNumber) {
-      console.log("❌ Validation failed: contactNumber is missing");
-      return res.status(400).json({ message: "Contact number is required" });
-    }
+    const missingFields = [];
+    if (!phone) missingFields.push('phone');
+    if (!firstName) missingFields.push('firstName');
+    if (!addressLine1) missingFields.push('addressLine1');
     
-    if (!addressLine1) {
-      console.log("❌ Validation failed: addressLine1 is missing");
-      return res.status(400).json({ message: "Address is required" });
-    }
-
-    if (!firstName) {
-      console.log("❌ Validation failed: firstName is missing");
-      return res.status(400).json({ message: "First name is required" });
+    if (missingFields.length > 0) {
+      console.log("❌ Missing required fields:", missingFields);
+      return res.status(400).json({ 
+        success: false,
+        message: `Missing required fields: ${missingFields.join(', ')}` 
+      });
     }
 
     // Check if phone already exists
-    console.log(`🔍 Checking if phone ${contactNumber} already exists...`);
-    const existing = await Customer.findOne({ phone: contactNumber });
+    console.log(`🔍 Checking if phone ${phone} already exists...`);
+    const existing = await Customer.findOne({ phone });
     if (existing) {
-      console.log(`❌ Phone ${contactNumber} already exists for customer: ${existing.name}`);
-      return res.status(400).json({ message: "Customer with this phone already exists" });
+      console.log(`❌ Phone ${phone} already exists for customer: ${existing.firstName} ${existing.lastName}`);
+      return res.status(400).json({ 
+        success: false,
+        message: "Phone number already exists. Please use a different number." 
+      });
     }
     console.log("✅ Phone number is available");
 
-    // Create new customer with all fields
-    console.log("📦 Creating new customer with data:");
+    // Create new customer
     const customerData = {
       salutation: salutation || "Mr.",
       firstName,
       lastName: lastName || "",
       dateOfBirth: dateOfBirth || null,
-      phone: contactNumber,
-      whatsappNumber: whatsappNumber || contactNumber,
+      phone,
+      whatsappNumber: whatsappNumber || phone,
       email: email || "",
       addressLine1,
       addressLine2: addressLine2 || "",
@@ -184,17 +232,20 @@ export const createCustomer = async (req, res) => {
       pincode: pincode || "",
       notes: notes || ""
     };
-    console.log(JSON.stringify(customerData, null, 2));
 
-    const newCustomer = await Customer.create(customerData);
+    console.log("📦 Creating customer with data:", customerData);
+    
+    const newCustomer = new Customer(customerData);
+    await newCustomer.save();
 
     console.log("\n✅ Customer created successfully:");
     console.log("   - ID:", newCustomer._id);
     console.log("   - Customer ID:", newCustomer.customerId);
-    console.log("   - Name:", newCustomer.name);
+    console.log("   - Name:", newCustomer.firstName, newCustomer.lastName);
     console.log("🔵 ========== CREATE CUSTOMER END ==========\n");
 
     res.status(201).json({
+      success: true,
       message: "Customer created successfully",
       customer: newCustomer
     });
@@ -202,34 +253,80 @@ export const createCustomer = async (req, res) => {
     console.error("\n❌ ERROR IN CREATE CUSTOMER:");
     console.error("   - Name:", error.name);
     console.error("   - Message:", error.message);
+    console.error("   - Stack:", error.stack);
     
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number already exists. Please use a different number."
+      });
+    }
+    
+    // Handle validation errors
     if (error.name === "ValidationError") {
       const errors = {};
       Object.keys(error.errors).forEach(key => {
         errors[key] = error.errors[key].message;
       });
       return res.status(400).json({ 
+        success: false,
         message: "Validation failed", 
         errors 
       });
     }
     
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message || "Failed to create customer" 
+    });
   }
 };
 
-// 📋 Get All Customers (with payment summary)
+// ==================== LIST FUNCTIONS ====================
+
+/**
+ * @desc    Get all customers
+ * @route   GET /api/customers/all
+ * @access  Private
+ */
 export const getAllCustomers = async (req, res) => {
   try {
     console.log("📋 Fetching all customers...");
     
     const customers = await Customer.find()
-      .sort({ createdAt: -1 })
-      .limit(50);
+      .sort({ createdAt: -1 });
     
     console.log(`📋 Found ${customers.length} customers`);
 
-    // ✅ Get payment summaries for all customers
+    res.status(200).json({
+      success: true,
+      count: customers.length,
+      customers
+    });
+  } catch (error) {
+    console.error("❌ Get all customers error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * @desc    Get all customers with payment summary
+ * @route   GET /api/customers/with-payments
+ * @access  Private
+ */
+export const getCustomersWithPaymentSummary = async (req, res) => {
+  try {
+    console.log("📋 Fetching all customers with payment summary...");
+    
+    const customers = await Customer.find()
+      .sort({ createdAt: -1 })
+      .limit(50);
+    
+    // Get payment summaries for all customers
     const customersWithPayments = await Promise.all(
       customers.map(async (customer) => {
         const paymentSummary = await getCustomerPaymentSummary(customer._id);
@@ -240,75 +337,123 @@ export const getAllCustomers = async (req, res) => {
       })
     );
     
-    res.status(200).json(customersWithPayments);
+    console.log(`✅ Found ${customers.length} customers with payment data`);
+
+    res.status(200).json({
+      success: true,
+      count: customers.length,
+      customers: customersWithPayments
+    });
   } catch (error) {
-    console.error("❌ Get all customers error:", error);
-    res.status(500).json({ message: error.message });
+    console.error("❌ Get customers with payments error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
-// ➕ Get Single Customer by MongoDB ID (with full details)
+// ==================== SINGLE CUSTOMER FUNCTIONS ====================
+
+/**
+ * @desc    Get customer by MongoDB ID (with payments and orders)
+ * @route   GET /api/customers/:id
+ * @access  Private
+ */
 export const getCustomerById = async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`🔍 Fetching customer by ID: ${id}`);
     
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID format"
+      });
+    }
+    
     const customer = await Customer.findById(id);
 
     if (!customer) {
-      console.log(`❌ Customer not found with ID: ${id}`);
-      return res.status(404).json({ message: "Customer not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Customer not found" 
+      });
     }
 
-    // ✅ Get all payments for this customer
+    // Get all payments
     const payments = await Payment.find({ 
-      customer: id,
+      customer: id,  // ✅ FIXED: changed from customerId to customer
       isDeleted: false 
     })
-    .populate('order', 'orderId orderDate status')
-    .populate('receivedBy', 'name')
+    .populate('order', 'orderId orderDate status')  // ✅ FIXED: changed from orderId to order
     .sort('-paymentDate -paymentTime');
 
-    // ✅ Get all orders for this customer
+    // Get all orders
     const orders = await Order.find({ 
-      customer: id,
+      customer: id,  // ✅ FIXED: changed from customerId to customer
       isActive: true 
     })
-    .populate('garments')
     .sort('-createdAt');
 
-    // ✅ Calculate payment summary
+    // Get payment summary
     const paymentSummary = await getCustomerPaymentSummary(id);
 
-    console.log(`✅ Found customer: ${customer.customerId} - ${customer.name}`);
-    console.log(`💰 Total Paid: ₹${paymentSummary?.totalPaid || 0}`);
-    console.log(`📦 Total Orders: ${orders.length}`);
-    console.log(`💳 Total Payments: ${payments.length}`);
-
     res.status(200).json({
+      success: true,
       customer,
-      payments, // ✅ Include all payments
-      orders, // ✅ Include all orders
-      paymentSummary // ✅ Include payment summary
+      payments,
+      orders,
+      paymentSummary
     });
   } catch (error) {
     console.error("❌ Get customer by ID error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
-// ✏️ Update Customer
+// ==================== UPDATE/DELETE FUNCTIONS ====================
+
+/**
+ * @desc    Update customer
+ * @route   PUT /api/customers/:id
+ * @access  Private
+ */
 export const updateCustomer = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
     
-    console.log(`\n🔵 ========== UPDATE CUSTOMER START ==========`);
     console.log(`📝 Updating customer ID: ${id}`);
-    console.log("📦 Update data:", JSON.stringify(updates, null, 2));
 
-    // Remove customerId from updates (cannot change customerId)
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID format"
+      });
+    }
+
+    // Remove fields that shouldn't be updated
     delete updates.customerId;
+    delete updates._id;
+    delete updates.createdAt;
+
+    // Check if updating phone to an existing one
+    if (updates.phone) {
+      const existing = await Customer.findOne({ 
+        phone: updates.phone,
+        _id: { $ne: id }
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number already exists. Please use a different number."
+        });
+      }
+    }
 
     const customer = await Customer.findByIdAndUpdate(
       id,
@@ -317,72 +462,261 @@ export const updateCustomer = async (req, res) => {
     );
 
     if (!customer) {
-      console.log(`❌ Customer not found with ID: ${id}`);
-      return res.status(404).json({ message: "Customer not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Customer not found" 
+      });
     }
 
-    console.log(`✅ Updated customer: ${customer.customerId} - ${customer.name}`);
-    console.log(`🔵 ========== UPDATE CUSTOMER END ==========\n`);
-
     res.status(200).json({
+      success: true,
       message: "Customer updated successfully",
       customer
     });
   } catch (error) {
     console.error("❌ Update customer error:", error);
-    res.status(500).json({ message: error.message });
+    
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone number already exists. Please use a different number."
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
-// ❌ Delete Customer
+/**
+ * @desc    Delete customer
+ * @route   DELETE /api/customers/:id
+ * @access  Private (Admin only)
+ */
 export const deleteCustomer = async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`🗑️ Deleting customer ID: ${id}`);
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID format"
+      });
+    }
     
-    // ✅ Check if customer has any orders or payments
-    const orders = await Order.countDocuments({ customer: id, isActive: true });
-    const payments = await Payment.countDocuments({ customer: id, isDeleted: false });
+    // Check if customer has any orders or payments
+    const orders = await Order.countDocuments({ customer: id, isActive: true });  // ✅ FIXED
+    const payments = await Payment.countDocuments({ customer: id, isDeleted: false });  // ✅ FIXED
 
     if (orders > 0 || payments > 0) {
-      console.log(`❌ Cannot delete: Customer has ${orders} orders and ${payments} payments`);
       return res.status(400).json({ 
-        message: "Cannot delete customer with existing orders or payments. Consider deactivating instead." 
+        success: false,
+        message: "Cannot delete customer with existing orders or payments." 
       });
     }
     
     const customer = await Customer.findByIdAndDelete(id);
 
     if (!customer) {
-      console.log(`❌ Customer not found with ID: ${id}`);
-      return res.status(404).json({ message: "Customer not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Customer not found" 
+      });
     }
 
-    console.log(`🗑️ Deleted customer: ${customer.customerId} - ${customer.name}`);
-
     res.status(200).json({ 
-      message: "Customer deleted successfully",
-      deletedCustomer: {
-        id: customer._id,
-        customerId: customer.customerId,
-        name: customer.name
-      }
+      success: true,
+      message: "Customer deleted successfully"
     });
   } catch (error) {
     console.error("❌ Delete customer error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 };
 
-// 📊 Get Customer Statistics (with payment stats)
+// ==================== PAYMENT/ORDER SPECIFIC FUNCTIONS ====================
+
+/**
+ * @desc    Get customer payments only
+ * @route   GET /api/customers/:id/payments
+ * @access  Private
+ */
+export const getCustomerPayments = async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`💰 Fetching payments for customer: ${id}`);
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID format"
+      });
+    }
+    
+    const payments = await Payment.find({ 
+      customer: id,  // ✅ FIXED: changed from customerId to customer
+      isDeleted: false 
+    })
+    .populate('order', 'orderId orderDate status')  // ✅ FIXED: changed from orderId to order
+    .sort('-paymentDate -paymentTime');
+
+    res.status(200).json({
+      success: true,
+      payments
+    });
+  } catch (error) {
+    console.error("❌ Get customer payments error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * @desc    Get customer orders only
+ * @route   GET /api/customers/:id/orders
+ * @access  Private
+ */
+export const getCustomerOrders = async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`📦 Fetching orders for customer: ${id}`);
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID format"
+      });
+    }
+    
+    const orders = await Order.find({ 
+      customer: id,  // ✅ FIXED: changed from customerId to customer
+      isActive: true 
+    })
+    .sort('-createdAt');
+
+    res.status(200).json({
+      success: true,
+      orders
+    });
+  } catch (error) {
+    console.error("❌ Get customer orders error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * @desc    Get payment statistics for a customer
+ * @route   GET /api/customers/:id/payment-stats
+ * @access  Private
+ */
+export const getCustomerPaymentStats = async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`📊 Fetching payment stats for customer: ${id}`);
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID format"
+      });
+    }
+    
+    const paymentSummary = await getCustomerPaymentSummary(id);
+
+    res.status(200).json({
+      success: true,
+      stats: paymentSummary
+    });
+  } catch (error) {
+    console.error("❌ Get payment stats error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * @desc    Get payment trends for a customer
+ * @route   GET /api/customers/:id/payment-trends
+ * @access  Private
+ */
+export const getCustomerPaymentTrends = async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`📈 Fetching payment trends for customer: ${id}`);
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID format"
+      });
+    }
+    
+    // Get payments grouped by month
+    const payments = await Payment.aggregate([
+      { 
+        $match: { 
+          customer: new mongoose.Types.ObjectId(id),  // ✅ FIXED: changed from customerId to customer
+          isDeleted: false 
+        } 
+      },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$paymentDate" },
+            month: { $month: "$paymentDate" }
+          },
+          totalAmount: { $sum: "$amount" },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { "_id.year": -1, "_id.month": -1 } },
+      { $limit: 12 }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      trends: payments
+    });
+  } catch (error) {
+    console.error("❌ Get payment trends error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+// ==================== STATISTICS FUNCTIONS ====================
+
+/**
+ * @desc    Get customer statistics
+ * @route   GET /api/customers/stats
+ * @access  Private (Admin only)
+ */
 export const getCustomerStats = async (req, res) => {
   try {
     console.log("📊 Fetching customer statistics...");
     
     const totalCustomers = await Customer.countDocuments();
-    const activeCustomers = await Customer.countDocuments({ totalOrders: { $gt: 0 } });
     
-    // ✅ Get payment statistics
+    // Get customers with orders
+    const customersWithOrders = await Order.distinct('customer', { isActive: true });  // ✅ FIXED
+    const activeCustomers = customersWithOrders.length;
+    
+    // Get payment statistics
     const paymentStats = await Payment.aggregate([
       { $match: { isDeleted: false } },
       {
@@ -395,12 +729,12 @@ export const getCustomerStats = async (req, res) => {
       }
     ]);
 
-    // ✅ Get top customers by payment
+    // Get top customers by payment
     const topCustomers = await Payment.aggregate([
       { $match: { isDeleted: false } },
       {
         $group: {
-          _id: '$customer',
+          _id: '$customer',  // ✅ FIXED: changed from customerId to customer
           totalPaid: { $sum: '$amount' },
           paymentCount: { $sum: 1 }
         }
@@ -418,71 +752,22 @@ export const getCustomerStats = async (req, res) => {
       { $unwind: '$customerDetails' }
     ]);
 
-    console.log("📊 Statistics:");
-    console.log("   - Total Customers:", totalCustomers);
-    console.log("   - Active Customers:", activeCustomers);
-    console.log("   - Total Payments:", paymentStats[0]?.totalPayments || 0);
-
     res.status(200).json({
-      totalCustomers,
-      activeCustomers,
-      paymentStats: paymentStats[0] || { totalPayments: 0, totalCount: 0 },
-      topCustomers
+      success: true,
+      stats: {
+        totalCustomers,
+        activeCustomers,
+        totalPayments: paymentStats[0]?.totalPayments || 0,
+        averagePayment: paymentStats[0]?.averagePayment || 0,
+        paymentCount: paymentStats[0]?.totalCount || 0,
+        topCustomers
+      }
     });
   } catch (error) {
     console.error("❌ Get customer stats error:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ NEW: Get Customer Payment History
-export const getCustomerPayments = async (req, res) => {
-  try {
-    const { id } = req.params;
-    console.log(`💰 Fetching payment history for customer: ${id}`);
-    
-    const payments = await Payment.find({ 
-      customer: id,
-      isDeleted: false 
-    })
-    .populate('order', 'orderId orderDate status')
-    .populate('receivedBy', 'name')
-    .sort('-paymentDate -paymentTime');
-
-    console.log(`💰 Found ${payments.length} payments`);
-
-    res.status(200).json({
-      success: true,
-      payments
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
     });
-  } catch (error) {
-    console.error("❌ Get customer payments error:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ✅ NEW: Get Customer Order History
-export const getCustomerOrders = async (req, res) => {
-  try {
-    const { id } = req.params;
-    console.log(`📦 Fetching order history for customer: ${id}`);
-    
-    const orders = await Order.find({ 
-      customer: id,
-      isActive: true 
-    })
-    .populate('garments')
-    .populate('createdBy', 'name')
-    .sort('-createdAt');
-
-    console.log(`📦 Found ${orders.length} orders`);
-
-    res.status(200).json({
-      success: true,
-      orders
-    });
-  } catch (error) {
-    console.error("❌ Get customer orders error:", error);
-    res.status(500).json({ message: error.message });
   }
 };

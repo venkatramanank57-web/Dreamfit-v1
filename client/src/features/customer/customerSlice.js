@@ -1,31 +1,99 @@
-// features/customer/customerSlice.js
+// frontend/src/features/customer/customerSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { 
-  searchCustomerApi, 
-  createCustomerApi, 
+import {
+  createCustomerApi,
   getAllCustomersApi,
+  getCustomersWithPaymentsApi,
   getCustomerByIdApi,
+  searchCustomerByPhoneApi,
+  searchCustomerByCustomerIdApi,
   updateCustomerApi,
   deleteCustomerApi,
-  searchCustomerByCustomerIdApi,
-  // ✅ NEW: Import payment-related APIs
   getCustomerPaymentsApi,
   getCustomerOrdersApi,
-  getCustomerPaymentStatsApi
+  getCustomerPaymentStatsApi,
+  getCustomerStatsApi
 } from "./customerApi";
+import showToast from "../../utils/toast";
+
+// ==================== INITIAL STATE ====================
+const initialState = {
+  customers: [],
+  currentCustomer: null,
+  customerPayments: [],
+  customerOrders: [],
+  paymentStats: null,
+  loading: false,
+  error: null,
+  searchResults: [],
+  stats: null
+};
+
+// ==================== ASYNC THUNKS ====================
+
+// 🆕 Create Customer
+export const createNewCustomer = createAsyncThunk(
+  "customer/create",
+  async (customerData, { rejectWithValue }) => {
+    try {
+      const response = await createCustomerApi(customerData);
+      showToast.success("✅ Customer created successfully!");
+      return response.customer;
+    } catch (error) {
+      showToast.error(error.message || "Failed to create customer");
+      return rejectWithValue(error.message || "Failed to create customer");
+    }
+  }
+);
+
+// 📋 Get All Customers
+export const fetchAllCustomers = createAsyncThunk(
+  "customer/fetchAll",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await getAllCustomersApi();
+      return response.customers || response;
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch customers");
+    }
+  }
+);
+
+// 📋 Get Customers with Payments
+export const fetchCustomersWithPayments = createAsyncThunk(
+  "customer/fetchWithPayments",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await getCustomersWithPaymentsApi();
+      return response.customers || response;
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch customers with payments");
+    }
+  }
+);
+
+// 🔍 Get Customer by ID
+export const fetchCustomerById = createAsyncThunk(
+  "customer/fetchById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await getCustomerByIdApi(id);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch customer");
+    }
+  }
+);
 
 // 🔍 Search Customer by Phone
 export const searchCustomerByPhone = createAsyncThunk(
-  "customer/search",
+  "customer/searchByPhone",
   async (phone, { rejectWithValue }) => {
     try {
-      console.log(`🔍 [Thunk] Searching customer by phone: ${phone}`);
-      const result = await searchCustomerApi(phone);
-      console.log(`✅ [Thunk] Search result:`, result);
-      return result;
-    } catch (err) {
-      console.error(`❌ [Thunk] Search failed:`, err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Search failed" });
+      const response = await searchCustomerByPhoneApi(phone);
+      return response.customer;
+    } catch (error) {
+      return rejectWithValue(error.message || "Customer not found");
     }
   }
 );
@@ -35,71 +103,10 @@ export const searchCustomerByCustomerId = createAsyncThunk(
   "customer/searchById",
   async (customerId, { rejectWithValue }) => {
     try {
-      console.log(`🔍 [Thunk] Searching customer by ID: ${customerId}`);
-      const result = await searchCustomerByCustomerIdApi(customerId);
-      console.log(`✅ [Thunk] Search result:`, result);
-      return result;
-    } catch (err) {
-      console.error(`❌ [Thunk] Search failed:`, err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Search failed" });
-    }
-  }
-);
-
-// 🆕 Create New Customer
-export const createNewCustomer = createAsyncThunk(
-  "customer/create",
-  async (customerData, { rejectWithValue }) => {
-    try {
-      console.log("\n🟢 ========== THUNK: CREATE CUSTOMER ==========");
-      console.log("📦 Raw customerData received in thunk:", customerData);
-      console.log("📞 contactNumber:", customerData.contactNumber);
-      console.log("🏠 addressLine1:", customerData.addressLine1);
-      console.log("📅 dateOfBirth:", customerData.dateOfBirth);
-      console.log("📧 email:", customerData.email);
-      console.log("===========================================\n");
-      
-      const result = await createCustomerApi(customerData);
-      
-      console.log("\n✅ [Thunk] Create successful:", result);
-      return result;
-    } catch (err) {
-      console.error("\n❌ [Thunk] Create failed:", err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Creation failed" });
-    }
-  }
-);
-
-// 📋 Fetch All Customers
-export const fetchAllCustomers = createAsyncThunk(
-  "customer/fetchAll",
-  async (_, { rejectWithValue }) => {
-    try {
-      console.log(`📋 [Thunk] Fetching all customers...`);
-      const result = await getAllCustomersApi();
-      console.log(`✅ [Thunk] Found ${result?.length || 0} customers`);
-      return result;
-    } catch (err) {
-      console.error(`❌ [Thunk] Fetch failed:`, err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Failed to fetch customers" });
-    }
-  }
-);
-
-// 👤 Fetch Customer by MongoDB ID (UPDATED - includes payments & orders)
-export const fetchCustomerById = createAsyncThunk(
-  "customer/fetchById",
-  async (id, { rejectWithValue }) => {
-    try {
-      console.log(`👤 [Thunk] Fetching customer by ID: ${id}`);
-      const result = await getCustomerByIdApi(id);
-      console.log(`✅ [Thunk] Found customer:`, result?.customer?.name);
-      console.log(`💰 Payments: ${result?.payments?.length || 0}`);
-      console.log(`📦 Orders: ${result?.orders?.length || 0}`);
-      return result;
-    } catch (err) {
-      console.error(`❌ [Thunk] Fetch failed:`, err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Failed to fetch customer" });
+      const response = await searchCustomerByCustomerIdApi(customerId);
+      return response.customer;
+    } catch (error) {
+      return rejectWithValue(error.message || "Customer not found");
     }
   }
 );
@@ -109,357 +116,297 @@ export const updateCustomer = createAsyncThunk(
   "customer/update",
   async ({ id, customerData }, { rejectWithValue }) => {
     try {
-      console.log(`✏️ [Thunk] Updating customer ID: ${id}`);
-      console.log("📦 Update data:", customerData);
-      
-      const result = await updateCustomerApi(id, customerData);
-      console.log(`✅ [Thunk] Update successful:`, result);
-      return result;
-    } catch (err) {
-      console.error(`❌ [Thunk] Update failed:`, err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Failed to update customer" });
+      const response = await updateCustomerApi(id, customerData);
+      showToast.success("✅ Customer updated successfully!");
+      return response.customer;
+    } catch (error) {
+      showToast.error(error.message || "Failed to update customer");
+      return rejectWithValue(error.message || "Failed to update customer");
     }
   }
 );
 
-// ❌ Delete Customer
+// 🗑️ Delete Customer
 export const deleteCustomer = createAsyncThunk(
   "customer/delete",
   async (id, { rejectWithValue }) => {
     try {
-      console.log(`🗑️ [Thunk] Deleting customer ID: ${id}`);
-      const result = await deleteCustomerApi(id);
-      console.log(`✅ [Thunk] Delete successful:`, result);
-      return result;
-    } catch (err) {
-      console.error(`❌ [Thunk] Delete failed:`, err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Failed to delete customer" });
+      await deleteCustomerApi(id);
+      showToast.success("✅ Customer deleted successfully!");
+      return id;
+    } catch (error) {
+      showToast.error(error.message || "Failed to delete customer");
+      return rejectWithValue(error.message || "Failed to delete customer");
     }
   }
 );
 
-// ===== ✅ NEW: GET CUSTOMER PAYMENTS =====
+// 💰 Get Customer Payments
 export const fetchCustomerPayments = createAsyncThunk(
   "customer/fetchPayments",
-  async (customerId, { rejectWithValue }) => {
+  async (id, { rejectWithValue }) => {
     try {
-      console.log(`💰 [Thunk] Fetching payments for customer: ${customerId}`);
-      const result = await getCustomerPaymentsApi(customerId);
-      console.log(`✅ [Thunk] Found ${result?.payments?.length || 0} payments`);
-      return result;
-    } catch (err) {
-      console.error(`❌ [Thunk] Fetch payments failed:`, err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Failed to fetch payments" });
+      const response = await getCustomerPaymentsApi(id);
+      return response.payments;
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch payments");
     }
   }
 );
 
-// ===== ✅ NEW: GET CUSTOMER ORDERS =====
+// 📦 Get Customer Orders
 export const fetchCustomerOrders = createAsyncThunk(
   "customer/fetchOrders",
-  async (customerId, { rejectWithValue }) => {
+  async (id, { rejectWithValue }) => {
     try {
-      console.log(`📦 [Thunk] Fetching orders for customer: ${customerId}`);
-      const result = await getCustomerOrdersApi(customerId);
-      console.log(`✅ [Thunk] Found ${result?.orders?.length || 0} orders`);
-      return result;
-    } catch (err) {
-      console.error(`❌ [Thunk] Fetch orders failed:`, err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Failed to fetch orders" });
+      const response = await getCustomerOrdersApi(id);
+      return response.orders;
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch orders");
     }
   }
 );
 
-// ===== ✅ NEW: GET CUSTOMER PAYMENT STATS =====
+// 📊 Get Customer Payment Stats
 export const fetchCustomerPaymentStats = createAsyncThunk(
   "customer/fetchPaymentStats",
-  async (customerId, { rejectWithValue }) => {
+  async (id, { rejectWithValue }) => {
     try {
-      console.log(`📊 [Thunk] Fetching payment stats for customer: ${customerId}`);
-      const result = await getCustomerPaymentStatsApi(customerId);
-      console.log(`✅ [Thunk] Payment stats:`, result);
-      return result;
-    } catch (err) {
-      console.error(`❌ [Thunk] Fetch payment stats failed:`, err.response?.data || err.message);
-      return rejectWithValue(err.response?.data || { message: "Failed to fetch payment stats" });
+      const response = await getCustomerPaymentStatsApi(id);
+      return response.stats;
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch payment stats");
     }
   }
 );
 
+// 📊 Get Overall Customer Stats
+export const fetchCustomerStats = createAsyncThunk(
+  "customer/fetchStats",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await getCustomerStatsApi();
+      return response.stats;
+    } catch (error) {
+      return rejectWithValue(error.message || "Failed to fetch stats");
+    }
+  }
+);
+
+// ==================== SLICE ====================
 const customerSlice = createSlice({
   name: "customer",
-  initialState: {
-    currentCustomer: null,
-    customers: [],
-    // ✅ NEW: Payment-related state
-    customerPayments: [],
-    customerOrders: [],
-    customerPaymentStats: {
-      totalPaid: 0,
-      totalOrders: 0,
-      completedOrders: 0,
-      pendingOrders: 0,
-      paymentCount: 0,
-      recentPayments: []
-    },
-    loading: false,
-    error: null,
-    success: false
-  },
+  initialState,
   reducers: {
     clearCustomerState: (state) => {
-      console.log("🧹 [Reducer] Clearing customer state");
+      state.customers = [];
       state.currentCustomer = null;
       state.customerPayments = [];
       state.customerOrders = [];
-      state.customerPaymentStats = {
-        totalPaid: 0,
-        totalOrders: 0,
-        completedOrders: 0,
-        pendingOrders: 0,
-        paymentCount: 0,
-        recentPayments: []
-      };
-      state.loading = false;
+      state.paymentStats = null;
       state.error = null;
-      state.success = false;
+      state.searchResults = [];
     },
-    // ✅ NEW: Clear customer payments
-    clearCustomerPayments: (state) => {
+    clearCurrentCustomer: (state) => {
+      state.currentCustomer = null;
       state.customerPayments = [];
-    },
-    // ✅ NEW: Clear customer orders
-    clearCustomerOrders: (state) => {
       state.customerOrders = [];
+      state.paymentStats = null;
+    },
+    clearError: (state) => {
+      state.error = null;
     }
   },
   extraReducers: (builder) => {
     builder
-      // Search by Phone Actions
-      .addCase(searchCustomerByPhone.pending, (state) => {
-        console.log("🟡 [Reducer] searchCustomerByPhone pending");
-        state.loading = true;
-        state.error = null;
-        state.currentCustomer = null;
-      })
-      .addCase(searchCustomerByPhone.fulfilled, (state, action) => {
-        console.log("✅ [Reducer] searchCustomerByPhone fulfilled");
-        state.loading = false;
-        state.currentCustomer = action.payload;
-        state.error = null;
-      })
-      .addCase(searchCustomerByPhone.rejected, (state, action) => {
-        console.error("❌ [Reducer] searchCustomerByPhone rejected:", action.payload);
-        state.loading = false;
-        state.error = action.payload?.message || "Search failed";
-        state.currentCustomer = null;
-      })
-      
-      // Search by Customer ID Actions
-      .addCase(searchCustomerByCustomerId.pending, (state) => {
-        console.log("🟡 [Reducer] searchCustomerByCustomerId pending");
-        state.loading = true;
-        state.error = null;
-        state.currentCustomer = null;
-      })
-      .addCase(searchCustomerByCustomerId.fulfilled, (state, action) => {
-        console.log("✅ [Reducer] searchCustomerByCustomerId fulfilled");
-        state.loading = false;
-        state.currentCustomer = action.payload;
-        state.error = null;
-      })
-      .addCase(searchCustomerByCustomerId.rejected, (state, action) => {
-        console.error("❌ [Reducer] searchCustomerByCustomerId rejected:", action.payload);
-        state.loading = false;
-        state.error = action.payload?.message || "Search failed";
-        state.currentCustomer = null;
-      })
-      
-      // Create Actions
+      // ===== CREATE CUSTOMER =====
       .addCase(createNewCustomer.pending, (state) => {
-        console.log("🟡 [Reducer] createNewCustomer pending");
         state.loading = true;
         state.error = null;
       })
       .addCase(createNewCustomer.fulfilled, (state, action) => {
-        console.log("✅ [Reducer] createNewCustomer fulfilled");
-        console.log("📦 Response data:", action.payload);
         state.loading = false;
-        state.success = true;
-        state.currentCustomer = action.payload.customer || action.payload;
-        state.customers = [state.currentCustomer, ...state.customers];
-        state.error = null;
+        state.customers = [action.payload, ...state.customers];
+        state.currentCustomer = action.payload;
       })
       .addCase(createNewCustomer.rejected, (state, action) => {
-        console.error("❌ [Reducer] createNewCustomer rejected:", action.payload);
         state.loading = false;
-        state.error = action.payload?.message || "Creation failed";
+        state.error = action.payload;
       })
 
-      // Fetch All Customers
+      // ===== GET ALL CUSTOMERS =====
       .addCase(fetchAllCustomers.pending, (state) => {
-        console.log("🟡 [Reducer] fetchAllCustomers pending");
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchAllCustomers.fulfilled, (state, action) => {
-        console.log(`✅ [Reducer] fetchAllCustomers fulfilled: ${action.payload?.length} customers`);
         state.loading = false;
         state.customers = action.payload;
-        state.error = null;
       })
       .addCase(fetchAllCustomers.rejected, (state, action) => {
-        console.error("❌ [Reducer] fetchAllCustomers rejected:", action.payload);
         state.loading = false;
-        state.error = action.payload?.message || "Failed to fetch customers";
+        state.error = action.payload;
       })
 
-      // Fetch Customer By MongoDB ID (UPDATED)
-      .addCase(fetchCustomerById.pending, (state) => {
-        console.log("🟡 [Reducer] fetchCustomerById pending");
+      // ===== GET CUSTOMERS WITH PAYMENTS =====
+      .addCase(fetchCustomersWithPayments.pending, (state) => {
         state.loading = true;
         state.error = null;
-        state.customerPayments = [];
-        state.customerOrders = [];
+      })
+      .addCase(fetchCustomersWithPayments.fulfilled, (state, action) => {
+        state.loading = false;
+        state.customers = action.payload;
+      })
+      .addCase(fetchCustomersWithPayments.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== GET CUSTOMER BY ID =====
+      .addCase(fetchCustomerById.pending, (state) => {
+        state.loading = true;
+        state.error = null;
       })
       .addCase(fetchCustomerById.fulfilled, (state, action) => {
-        console.log("✅ [Reducer] fetchCustomerById fulfilled");
         state.loading = false;
         state.currentCustomer = action.payload.customer;
         state.customerPayments = action.payload.payments || [];
         state.customerOrders = action.payload.orders || [];
-        state.customerPaymentStats = action.payload.paymentSummary || {
-          totalPaid: 0,
-          totalOrders: state.customerOrders.length,
-          completedOrders: state.customerOrders.filter(o => o.status === 'delivered').length,
-          pendingOrders: state.customerOrders.filter(o => o.status !== 'delivered').length,
-          paymentCount: state.customerPayments.length,
-          recentPayments: state.customerPayments.slice(0, 5)
-        };
-        state.error = null;
+        state.paymentStats = action.payload.paymentSummary || null;
       })
       .addCase(fetchCustomerById.rejected, (state, action) => {
-        console.error("❌ [Reducer] fetchCustomerById rejected:", action.payload);
         state.loading = false;
-        state.error = action.payload?.message || "Failed to fetch customer";
+        state.error = action.payload;
+      })
+
+      // ===== SEARCH BY PHONE =====
+      .addCase(searchCustomerByPhone.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(searchCustomerByPhone.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentCustomer = action.payload;
+        state.searchResults = [action.payload];
+      })
+      .addCase(searchCustomerByPhone.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
         state.currentCustomer = null;
-        state.customerPayments = [];
-        state.customerOrders = [];
+        state.searchResults = [];
       })
 
-      // ✅ NEW: Fetch Customer Payments
-      .addCase(fetchCustomerPayments.pending, (state) => {
-        console.log("🟡 [Reducer] fetchCustomerPayments pending");
+      // ===== SEARCH BY CUSTOMER ID =====
+      .addCase(searchCustomerByCustomerId.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchCustomerPayments.fulfilled, (state, action) => {
-        console.log("✅ [Reducer] fetchCustomerPayments fulfilled");
+      .addCase(searchCustomerByCustomerId.fulfilled, (state, action) => {
         state.loading = false;
-        state.customerPayments = action.payload.payments || [];
-        state.error = null;
+        state.currentCustomer = action.payload;
+        state.searchResults = [action.payload];
       })
-      .addCase(fetchCustomerPayments.rejected, (state, action) => {
-        console.error("❌ [Reducer] fetchCustomerPayments rejected:", action.payload);
+      .addCase(searchCustomerByCustomerId.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload?.message || "Failed to fetch payments";
+        state.error = action.payload;
+        state.currentCustomer = null;
+        state.searchResults = [];
       })
 
-      // ✅ NEW: Fetch Customer Orders
-      .addCase(fetchCustomerOrders.pending, (state) => {
-        console.log("🟡 [Reducer] fetchCustomerOrders pending");
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchCustomerOrders.fulfilled, (state, action) => {
-        console.log("✅ [Reducer] fetchCustomerOrders fulfilled");
-        state.loading = false;
-        state.customerOrders = action.payload.orders || [];
-        state.error = null;
-      })
-      .addCase(fetchCustomerOrders.rejected, (state, action) => {
-        console.error("❌ [Reducer] fetchCustomerOrders rejected:", action.payload);
-        state.loading = false;
-        state.error = action.payload?.message || "Failed to fetch orders";
-      })
-
-      // ✅ NEW: Fetch Customer Payment Stats
-      .addCase(fetchCustomerPaymentStats.pending, (state) => {
-        console.log("🟡 [Reducer] fetchCustomerPaymentStats pending");
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchCustomerPaymentStats.fulfilled, (state, action) => {
-        console.log("✅ [Reducer] fetchCustomerPaymentStats fulfilled");
-        state.loading = false;
-        state.customerPaymentStats = action.payload;
-        state.error = null;
-      })
-      .addCase(fetchCustomerPaymentStats.rejected, (state, action) => {
-        console.error("❌ [Reducer] fetchCustomerPaymentStats rejected:", action.payload);
-        state.loading = false;
-        state.error = action.payload?.message || "Failed to fetch payment stats";
-      })
-
-      // Update Customer
+      // ===== UPDATE CUSTOMER =====
       .addCase(updateCustomer.pending, (state) => {
-        console.log("🟡 [Reducer] updateCustomer pending");
         state.loading = true;
         state.error = null;
       })
       .addCase(updateCustomer.fulfilled, (state, action) => {
-        console.log("✅ [Reducer] updateCustomer fulfilled");
         state.loading = false;
-        state.currentCustomer = action.payload.customer || action.payload;
-        // Update in customers list
-        const index = state.customers.findIndex(c => c._id === state.currentCustomer._id);
-        if (index !== -1) {
-          state.customers[index] = state.currentCustomer;
-          console.log(`✅ Updated customer at index ${index}`);
-        }
-        state.success = true;
-        state.error = null;
+        state.currentCustomer = action.payload;
+        state.customers = state.customers.map(c => 
+          c._id === action.payload._id ? action.payload : c
+        );
       })
       .addCase(updateCustomer.rejected, (state, action) => {
-        console.error("❌ [Reducer] updateCustomer rejected:", action.payload);
         state.loading = false;
-        state.error = action.payload?.message || "Failed to update customer";
+        state.error = action.payload;
       })
 
-      // Delete Customer
+      // ===== DELETE CUSTOMER =====
       .addCase(deleteCustomer.pending, (state) => {
-        console.log("🟡 [Reducer] deleteCustomer pending");
         state.loading = true;
         state.error = null;
       })
       .addCase(deleteCustomer.fulfilled, (state, action) => {
-        console.log("✅ [Reducer] deleteCustomer fulfilled, ID:", action.meta.arg);
         state.loading = false;
-        state.currentCustomer = null;
-        state.customerPayments = [];
-        state.customerOrders = [];
-        // Remove from customers list
-        state.customers = state.customers.filter(c => c._id !== action.meta.arg);
-        state.success = true;
-        state.error = null;
+        state.customers = state.customers.filter(c => c._id !== action.payload);
+        if (state.currentCustomer?._id === action.payload) {
+          state.currentCustomer = null;
+          state.customerPayments = [];
+          state.customerOrders = [];
+        }
       })
       .addCase(deleteCustomer.rejected, (state, action) => {
-        console.error("❌ [Reducer] deleteCustomer rejected:", action.payload);
         state.loading = false;
-        state.error = action.payload?.message || "Failed to delete customer";
+        state.error = action.payload;
+      })
+
+      // ===== GET CUSTOMER PAYMENTS =====
+      .addCase(fetchCustomerPayments.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchCustomerPayments.fulfilled, (state, action) => {
+        state.loading = false;
+        state.customerPayments = action.payload;
+      })
+      .addCase(fetchCustomerPayments.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== GET CUSTOMER ORDERS =====
+      .addCase(fetchCustomerOrders.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchCustomerOrders.fulfilled, (state, action) => {
+        state.loading = false;
+        state.customerOrders = action.payload;
+      })
+      .addCase(fetchCustomerOrders.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== GET PAYMENT STATS =====
+      .addCase(fetchCustomerPaymentStats.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchCustomerPaymentStats.fulfilled, (state, action) => {
+        state.loading = false;
+        state.paymentStats = action.payload;
+      })
+      .addCase(fetchCustomerPaymentStats.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ===== GET OVERALL STATS =====
+      .addCase(fetchCustomerStats.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchCustomerStats.fulfilled, (state, action) => {
+        state.loading = false;
+        state.stats = action.payload;
+      })
+      .addCase(fetchCustomerStats.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
-  },
+  }
 });
 
-// ===== SELECTORS =====
-export const selectCustomer = (state) => state.customer.currentCustomer;
-export const selectCustomers = (state) => state.customer.customers;
-export const selectCustomerPayments = (state) => state.customer.customerPayments; // ✅ NEW
-export const selectCustomerOrders = (state) => state.customer.customerOrders; // ✅ NEW
-export const selectCustomerPaymentStats = (state) => state.customer.customerPaymentStats; // ✅ NEW
-export const selectCustomerLoading = (state) => state.customer.loading;
-export const selectCustomerError = (state) => state.customer.error;
-export const selectCustomerSuccess = (state) => state.customer.success;
-
-export const { clearCustomerState, clearCustomerPayments, clearCustomerOrders } = customerSlice.actions;
+// ==================== EXPORTS ====================
+export const { clearCustomerState, clearCurrentCustomer, clearError } = customerSlice.actions;
 export default customerSlice.reducer;

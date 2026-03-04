@@ -1,29 +1,109 @@
 import { useState, useEffect } from "react";
-import { Search, UserPlus, ShoppingBag, User, MapPin, Phone, Mail, Calendar, PlusCircle, Eye, Hash, IndianRupee, CreditCard, TrendingUp } from "lucide-react";
+import { Search, UserPlus, ShoppingBag, User, MapPin, Phone, Mail, Calendar, PlusCircle, Eye, Hash, IndianRupee, CreditCard, TrendingUp, Package } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
-import { searchCustomerByPhone, clearCustomerState, fetchAllCustomers } from "../../../features/customer/customerSlice";
+import { 
+  searchCustomerByPhone, 
+  searchCustomerByCustomerId,
+  clearCustomerState, 
+  fetchAllCustomers,
+  fetchCustomersWithPayments
+} from "../../../features/customer/customerSlice";
+import { fetchOrdersByCustomer } from "../../../features/order/orderSlice";
 import { useNavigate } from "react-router-dom";
 import showToast from "../../../utils/toast";
 
 export default function Customers() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchType, setSearchType] = useState("phone"); // ✅ "phone" or "id"
-  const [showPaymentInfo, setShowPaymentInfo] = useState({}); // Track which customers show payment details
+  const [searchType, setSearchType] = useState("phone");
+  const [showPaymentInfo, setShowPaymentInfo] = useState({});
+  const [customerOrders, setCustomerOrders] = useState({});
+  const [ordersLoading, setOrdersLoading] = useState({});
   
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { customers, loading, error } = useSelector((state) => state.customer);
   const { user } = useSelector((state) => state.auth);
+  
+  // ✅ Get orders from Redux
+  const ordersState = useSelector((state) => {
+    // Try different possible paths
+    const state1 = state.order?.customerOrders;
+    const state2 = state.orders?.customerOrders;
+    console.log("🔍 ordersState from order:", state1);
+    console.log("🔍 ordersState from orders:", state2);
+    return state1 || state2 || {};
+  });
 
-  // ✅ Get base path based on user role
+  // Get base path based on user role
   const rolePath = user?.role === "ADMIN" ? "/admin" : 
                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
                    "/cuttingmaster";
 
-  // Fetch all customers on component mount
+  // Fetch all customers with payment data on component mount
   useEffect(() => {
-    dispatch(fetchAllCustomers());
+    console.log("📋 Fetching customers with payments");
+    dispatch(fetchCustomersWithPayments());
   }, [dispatch]);
+
+  // ✅ Fetch orders for each customer with loading states
+  useEffect(() => {
+    if (customers && customers.length > 0) {
+      console.log("👥 Customers loaded:", customers);
+      customers.forEach(customer => {
+        if (customer._id) {
+          console.log(`🔍 Fetching orders for customer ${customer._id} (${customer.customerId})`);
+          setOrdersLoading(prev => ({ ...prev, [customer._id]: true }));
+          
+          dispatch(fetchOrdersByCustomer(customer._id))
+            .unwrap()
+            .then((result) => {
+              console.log(`✅ Orders fetched for ${customer.customerId}:`, result);
+              setOrdersLoading(prev => ({ ...prev, [customer._id]: false }));
+            })
+            .catch((error) => {
+              console.error(`❌ Error fetching orders for ${customer.customerId}:`, error);
+              setOrdersLoading(prev => ({ ...prev, [customer._id]: false }));
+            });
+        }
+      });
+    }
+  }, [customers, dispatch]);
+
+  // ✅ Process orders data when ordersState changes
+  useEffect(() => {
+    if (ordersState && Object.keys(ordersState).length > 0) {
+      console.log("🔄 Processing ordersState:", ordersState);
+      const ordersMap = {};
+      
+      Object.keys(ordersState).forEach(customerId => {
+        let customerOrderData = [];
+        
+        // Handle different possible data structures
+        if (Array.isArray(ordersState[customerId])) {
+          customerOrderData = ordersState[customerId];
+        } else if (ordersState[customerId]?.orders) {
+          customerOrderData = ordersState[customerId].orders;
+        }
+        
+        console.log(`📊 Customer ${customerId} has ${customerOrderData.length} orders`);
+        
+        ordersMap[customerId] = {
+          count: customerOrderData.length || 0,
+          orders: customerOrderData,
+          totalValue: customerOrderData.reduce((sum, order) => 
+            sum + (order.priceSummary?.totalMax || 0), 0
+          ),
+          completedOrders: customerOrderData.filter(o => o?.status === 'delivered').length,
+          pendingOrders: customerOrderData.filter(o => 
+            ['draft', 'confirmed', 'in-progress'].includes(o?.status)
+          ).length
+        };
+      });
+      
+      console.log("✅ Final ordersMap:", ordersMap);
+      setCustomerOrders(prev => ({ ...prev, ...ordersMap }));
+    }
+  }, [ordersState]);
 
   // Handle errors
   useEffect(() => {
@@ -37,7 +117,6 @@ export default function Customers() {
     e.preventDefault();
     
     if (searchType === "phone") {
-      // Phone search - remove non-digits and check length
       const cleanPhone = searchTerm.replace(/\D/g, '');
       
       if (cleanPhone.length > 0 && cleanPhone.length !== 10) {
@@ -48,17 +127,14 @@ export default function Customers() {
         dispatch(searchCustomerByPhone(cleanPhone));
       } else {
         dispatch(clearCustomerState());
-        dispatch(fetchAllCustomers());
+        dispatch(fetchCustomersWithPayments());
       }
     } else {
-      // ID search - just pass the term as is
       if (searchTerm.trim()) {
-        // You'll need to add this action to your slice
-        // dispatch(searchCustomerById(searchTerm));
-        showToast.info("ID search coming soon!");
+        dispatch(searchCustomerByCustomerId(searchTerm.trim()));
       } else {
         dispatch(clearCustomerState());
-        dispatch(fetchAllCustomers());
+        dispatch(fetchCustomersWithPayments());
       }
     }
   };
@@ -68,21 +144,19 @@ export default function Customers() {
     const value = e.target.value;
     
     if (searchType === "phone") {
-      // Only digits for phone
       const cleaned = value.replace(/\D/g, '').slice(0, 10);
       setSearchTerm(cleaned);
       
       if (cleaned.length === 0) {
         dispatch(clearCustomerState());
-        dispatch(fetchAllCustomers());
+        dispatch(fetchCustomersWithPayments());
       }
     } else {
-      // Any characters for ID
       setSearchTerm(value);
       
       if (value.length === 0) {
         dispatch(clearCustomerState());
-        dispatch(fetchAllCustomers());
+        dispatch(fetchCustomersWithPayments());
       }
     }
   };
@@ -98,6 +172,7 @@ export default function Customers() {
 
   // Format date
   const formatDate = (dateString) => {
+    if (!dateString) return "";
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
@@ -108,17 +183,17 @@ export default function Customers() {
     return `${customer.salutation || ''} ${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Unknown';
   };
 
-  // Navigate to customer details - with rolePath
+  // Navigate to customer details
   const viewCustomerDetails = (customerId) => {
     navigate(`${rolePath}/customers/${customerId}`);
   };
 
-  // Navigate to add customer page - with rolePath
+  // Navigate to add customer page
   const goToAddCustomer = () => {
     navigate(`${rolePath}/add-customer`);
   };
 
-  // Navigate to create order - with rolePath
+  // Navigate to create order
   const goToCreateOrder = (customer) => {
     navigate(`${rolePath}/orders/new`, { state: { customer } });
   };
@@ -141,13 +216,49 @@ export default function Customers() {
     }).format(amount || 0);
   };
 
+  // Get payment data from customer.paymentSummary
+  const getPaymentData = (customer) => {
+    if (customer.paymentSummary) {
+      return {
+        totalPaid: customer.paymentSummary.totalPaid || 0,
+        lastPayment: customer.paymentSummary.lastPayment?.amount || 0,
+        paymentCount: customer.paymentSummary.paymentCount || 0,
+        pendingAmount: customer.paymentSummary.pendingOrders || 0,
+        byMethod: customer.paymentSummary.byMethod || {}
+      };
+    }
+    return {
+      totalPaid: 0,
+      lastPayment: 0,
+      paymentCount: 0,
+      pendingAmount: 0,
+      byMethod: {}
+    };
+  };
+
+  // Get order data for a customer
+  const getOrderData = (customerId) => {
+    return customerOrders[customerId] || {
+      count: 0,
+      orders: [],
+      totalValue: 0,
+      completedOrders: 0,
+      pendingOrders: 0
+    };
+  };
+
+  // Check if orders are loading for a customer
+  const isOrdersLoading = (customerId) => {
+    return ordersLoading[customerId] || false;
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* HEADER & SEARCH */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
         <div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">Customers</h1>
-          <p className="text-slate-500 font-medium">Search, view, and manage your customers with payment details.</p>
+          <p className="text-slate-500 font-medium">Search, view, and manage your customers with payment and order details.</p>
         </div>
 
         <div className="flex gap-3">
@@ -250,14 +361,9 @@ export default function Customers() {
             {filteredCustomers.map((customer) => {
               const customerName = getCustomerName(customer);
               const showPayment = showPaymentInfo[customer._id];
-              
-              // Mock payment data - in real app, this would come from the API
-              const paymentData = {
-                totalPaid: Math.floor(Math.random() * 50000),
-                lastPayment: Math.floor(Math.random() * 10000),
-                paymentCount: Math.floor(Math.random() * 5) + 1,
-                pendingAmount: Math.floor(Math.random() * 20000)
-              };
+              const paymentData = getPaymentData(customer);
+              const orderData = getOrderData(customer._id);
+              const loadingOrders = isOrdersLoading(customer._id);
               
               return (
                 <div 
@@ -300,12 +406,27 @@ export default function Customers() {
                               </span>
                             )}
                             
+                            {/* ORDER COUNT BADGE */}
                             <span className="flex items-center gap-1.5 text-sm bg-purple-50 px-3 py-1 rounded-full">
-                              <ShoppingBag size={12} className="text-purple-600" /> 
-                              <span className="font-medium text-purple-700">{customer.totalOrders || 0} orders</span>
+                              <Package size={12} className="text-purple-600" /> 
+                              <span className="font-medium text-purple-700">
+                                {loadingOrders ? (
+                                  <span className="flex items-center gap-1">
+                                    <span className="w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></span>
+                                    Loading...
+                                  </span>
+                                ) : (
+                                  `${orderData.count} ${orderData.count === 1 ? 'order' : 'orders'}`
+                                )}
+                              </span>
+                              {!loadingOrders && orderData.pendingOrders > 0 && (
+                                <span className="ml-1 text-xs bg-purple-200 text-purple-700 px-1.5 rounded-full">
+                                  {orderData.pendingOrders} pending
+                                </span>
+                              )}
                             </span>
                             
-                            {/* ✅ Payment Summary Badge */}
+                            {/* Payment Summary Badge */}
                             <button
                               onClick={(e) => togglePaymentInfo(customer._id, e)}
                               className="flex items-center gap-1.5 text-sm bg-green-50 px-3 py-1 rounded-full hover:bg-green-100 transition-all"
@@ -325,10 +446,20 @@ export default function Customers() {
                           {customer.address && (
                             <p className="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
                               <MapPin size={10} className="text-slate-400" />
-                              {typeof customer.address === 'string' 
-                                ? customer.address 
-                                : customer.address?.line1 || 'Address available'}
+                              {customer.address}
                             </p>
+                          )}
+
+                          {/* Quick Order Stats */}
+                          {!loadingOrders && orderData.count > 0 && (
+                            <div className="flex items-center gap-3 mt-2 text-xs">
+                              <span className="text-green-600">
+                                ✓ {orderData.completedOrders} completed
+                              </span>
+                              <span className="text-blue-600">
+                                ₹{(orderData.totalValue).toLocaleString('en-IN')} total
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -341,7 +472,7 @@ export default function Customers() {
                           }}
                           className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-lg active:scale-95 text-sm"
                         >
-                          <ShoppingBag size={14} /> Order
+                          <ShoppingBag size={14} /> New Order
                         </button>
                         <button
                           onClick={(e) => {
@@ -355,25 +486,71 @@ export default function Customers() {
                       </div>
                     </div>
 
-                    {/* ✅ Payment Details Dropdown */}
+                    {/* Payment Details Dropdown */}
                     {showPayment && (
-                      <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="bg-blue-50 p-3 rounded-xl">
-                          <p className="text-xs text-blue-600 font-bold mb-1">Total Paid</p>
-                          <p className="text-lg font-black text-blue-700">{formatCurrency(paymentData.totalPaid)}</p>
+                      <div className="mt-3 pt-3 border-t border-slate-100">
+                        {/* Payment Method Breakdown */}
+                        {Object.keys(paymentData.byMethod).length > 0 && (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                            {Object.entries(paymentData.byMethod).map(([method, amount]) => (
+                              amount > 0 && (
+                                <div key={method} className="bg-slate-50 p-2 rounded-lg">
+                                  <p className="text-xs text-slate-500 capitalize">{method}</p>
+                                  <p className="text-sm font-bold text-slate-700">{formatCurrency(amount)}</p>
+                                </div>
+                              )
+                            ))}
+                          </div>
+                        )}
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="bg-blue-50 p-3 rounded-xl">
+                            <p className="text-xs text-blue-600 font-bold mb-1">Total Paid</p>
+                            <p className="text-lg font-black text-blue-700">{formatCurrency(paymentData.totalPaid)}</p>
+                          </div>
+                          <div className="bg-green-50 p-3 rounded-xl">
+                            <p className="text-xs text-green-600 font-bold mb-1">Last Payment</p>
+                            <p className="text-lg font-black text-green-700">{formatCurrency(paymentData.lastPayment)}</p>
+                          </div>
+                          <div className="bg-purple-50 p-3 rounded-xl">
+                            <p className="text-xs text-purple-600 font-bold mb-1">Total Payments</p>
+                            <p className="text-lg font-black text-purple-700">{paymentData.paymentCount}</p>
+                          </div>
+                          <div className="bg-orange-50 p-3 rounded-xl">
+                            <p className="text-xs text-orange-600 font-bold mb-1">Pending Orders</p>
+                            <p className="text-lg font-black text-orange-700">{orderData.pendingOrders}</p>
+                          </div>
                         </div>
-                        <div className="bg-green-50 p-3 rounded-xl">
-                          <p className="text-xs text-green-600 font-bold mb-1">Last Payment</p>
-                          <p className="text-lg font-black text-green-700">{formatCurrency(paymentData.lastPayment)}</p>
-                        </div>
-                        <div className="bg-purple-50 p-3 rounded-xl">
-                          <p className="text-xs text-purple-600 font-bold mb-1">Total Payments</p>
-                          <p className="text-lg font-black text-purple-700">{paymentData.paymentCount}</p>
-                        </div>
-                        <div className="bg-orange-50 p-3 rounded-xl">
-                          <p className="text-xs text-orange-600 font-bold mb-1">Pending Amount</p>
-                          <p className="text-lg font-black text-orange-700">{formatCurrency(paymentData.pendingAmount)}</p>
-                        </div>
+
+                        {/* Order List Preview */}
+                        {!loadingOrders && orderData.orders.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1">
+                              <Package size={12} />
+                              Recent Orders
+                            </p>
+                            <div className="space-y-2">
+                              {orderData.orders.slice(0, 3).map(order => (
+                                <div key={order._id} className="flex items-center justify-between bg-slate-50 p-2 rounded-lg text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-indigo-600">{order.orderId}</span>
+                                    <span className={`px-1.5 py-0.5 rounded-full ${
+                                      order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                                      order.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                                      order.status === 'in-progress' ? 'bg-orange-100 text-orange-700' :
+                                      'bg-slate-100 text-slate-700'
+                                    }`}>
+                                      {order.status}
+                                    </span>
+                                  </div>
+                                  <span className="font-bold text-blue-600">
+                                    ₹{(order.priceSummary?.totalMax || 0).toLocaleString('en-IN')}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

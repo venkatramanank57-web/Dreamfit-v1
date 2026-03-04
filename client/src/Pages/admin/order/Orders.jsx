@@ -11,23 +11,23 @@ import {
   Trash2,
   Filter,
   Calendar,
-  Download,
   IndianRupee,
-  CreditCard,
   TrendingUp,
 } from "lucide-react";
 import {
-  fetchAllOrders,
-  deleteOrder,
-  updateOrderStatus,
-} from "../../../features/order/orderSlice";
+  fetchOrders,
+  deleteExistingOrder,
+  updateOrderStatusThunk,
+  clearOrderError,
+  setPagination
+} from "../../../features/order/orderSlice";  
 import showToast from "../../../utils/toast";
 
 export default function Orders() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   
-  // Debug flag - set to true to enable console logs
+  // Debug flag
   const DEBUG = true;
   
   // Debug logger
@@ -43,19 +43,29 @@ export default function Orders() {
     return () => logDebug('Orders component unmounted');
   }, []);
 
+  // ✅ FIXED: Correct state selectors with fallbacks
   const { orders, pagination, loading, error } = useSelector((state) => {
-    logDebug('Redux state updated', { 
-      ordersCount: state.order?.orders?.length,
-      pagination: state.order?.pagination,
-      loading: state.order?.loading,
-      error: state.order?.error
-    });
-    return {
-      orders: state.order?.orders || [],
-      pagination: state.order?.pagination || { page: 1, pages: 1, total: 0 },
-      loading: state.order?.loading || false,
-      error: state.order?.error
+    // Log the actual state structure for debugging
+    console.log("🔍 Available Redux keys:", Object.keys(state));
+    
+    // Try different possible state paths
+    const ordersState = state.orders || state.order || {};
+    
+    const result = {
+      orders: ordersState.orders || ordersState.items || [],
+      pagination: ordersState.pagination || { page: 1, pages: 1, total: 0 },
+      loading: ordersState.loading || false,
+      error: ordersState.error || null
     };
+    
+    logDebug('Redux state accessed', { 
+      ordersCount: result.orders?.length,
+      pagination: result.pagination,
+      loading: result.loading,
+      error: result.error
+    });
+    
+    return result;
   });
   
   const { user } = useSelector((state) => {
@@ -65,17 +75,19 @@ export default function Orders() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
   const [timeFilter, setTimeFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showPaymentFilterMenu, setShowPaymentFilterMenu] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState({});
 
   const isAdmin = user?.role === "ADMIN";
   const isStoreKeeper = user?.role === "STORE_KEEPER";
   const canEdit = isAdmin || isStoreKeeper;
 
-  // ✅ Get base path based on user role
+  // Get base path based on user role
   const basePath = useMemo(() => {
     if (isAdmin) return "/admin";
     if (isStoreKeeper) return "/storekeeper";
@@ -83,11 +95,6 @@ export default function Orders() {
   }, [isAdmin, isStoreKeeper]);
 
   logDebug('User permissions', { isAdmin, isStoreKeeper, canEdit, basePath });
-
-  // Log when filters change
-  useEffect(() => {
-    logDebug('Filters changed', { searchTerm, statusFilter, timeFilter, currentPage });
-  }, [searchTerm, statusFilter, timeFilter, currentPage]);
 
   // Debounce search
   useEffect(() => {
@@ -103,20 +110,22 @@ export default function Orders() {
     };
   }, [searchTerm]);
 
-  // Fetch orders with error handling
+  // Fetch orders with filters
   useEffect(() => {
-    const fetchOrders = async () => {
+    const fetchOrdersData = async () => {
       const params = {
         page: currentPage,
+        limit: pagination?.limit || 10,
         search: debouncedSearch,
         status: statusFilter !== "all" ? statusFilter : "",
+        paymentStatus: paymentStatusFilter !== "all" ? paymentStatusFilter : "",
         timeFilter,
       };
       
       logDebug('Fetching orders with params', params);
       
       try {
-        const result = await dispatch(fetchAllOrders(params)).unwrap();
+        const result = await dispatch(fetchOrders(params)).unwrap();
         logDebug('Orders fetched successfully', { 
           count: result?.orders?.length,
           pagination: result?.pagination 
@@ -127,35 +136,28 @@ export default function Orders() {
       }
     };
 
-    fetchOrders();
-  }, [dispatch, currentPage, debouncedSearch, statusFilter, timeFilter]);
+    fetchOrdersData();
+  }, [dispatch, currentPage, debouncedSearch, statusFilter, paymentStatusFilter, timeFilter, pagination?.limit]);
 
-  // Log when orders update
+  // Clear error on unmount
   useEffect(() => {
-    logDebug('Orders updated', { 
-      count: orders?.length,
-      orders: orders?.map(o => ({ id: o._id, orderId: o.orderId, status: o.status }))
-    });
-  }, [orders]);
-
-  // Log pagination changes
-  useEffect(() => {
-    logDebug('Pagination updated', pagination);
-  }, [pagination]);
+    return () => {
+      dispatch(clearOrderError());
+    };
+  }, [dispatch]);
 
   const handleSearch = useCallback((e) => {
     const value = e.target.value;
-    logDebug('Search input changed', { value });
     setSearchTerm(value);
   }, []);
 
-  // ✅ FIXED: Use basePath for navigation
+  // Navigate to view order
   const handleViewOrder = useCallback((id) => {
     logDebug('View order', { id, basePath });
     navigate(`${basePath}/orders/${id}`);
   }, [navigate, basePath]);
 
-  // ✅ FIXED: Use basePath for navigation
+  // Navigate to edit order
   const handleEditOrder = useCallback((id) => {
     logDebug('Edit order', { id, canEdit, basePath });
     if (canEdit) {
@@ -165,6 +167,7 @@ export default function Orders() {
     }
   }, [canEdit, navigate, basePath]);
 
+  // Delete order
   const handleDeleteOrder = useCallback(async (id, orderId) => {
     logDebug('Delete order attempt', { id, orderId, canEdit });
     
@@ -176,8 +179,8 @@ export default function Orders() {
     if (window.confirm(`Are you sure you want to delete order ${orderId}?`)) {
       setDeleteLoading(prev => ({ ...prev, [id]: true }));
       try {
-        logDebug('Dispatching deleteOrder', { id });
-        await dispatch(deleteOrder(id)).unwrap();
+        logDebug('Dispatching deleteExistingOrder', { id });
+        await dispatch(deleteExistingOrder(id)).unwrap();
         logDebug('Order deleted successfully', { id });
         showToast.success("Order deleted successfully");
       } catch (error) {
@@ -189,35 +192,45 @@ export default function Orders() {
     }
   }, [dispatch, canEdit]);
 
-  // ✅ FIXED: Use basePath for navigation
+  // Navigate to new order
   const handleNewOrder = useCallback(() => {
     logDebug('Navigate to new order', { basePath });
     navigate(`${basePath}/orders/new`);
   }, [navigate, basePath]);
 
+  // Handle page change
   const handlePageChange = useCallback((newPage) => {
     logDebug('Page change requested', { newPage, currentPage, totalPages: pagination?.pages });
     if (newPage >= 1 && newPage <= pagination?.pages) {
       setCurrentPage(newPage);
-    } else {
-      logDebug('Invalid page number', { newPage });
+      dispatch(setPagination({ page: newPage }));
     }
-  }, [pagination?.pages]);
+  }, [pagination?.pages, dispatch]);
 
+  // Status badge generator
   const getStatusBadge = useCallback((status) => {
     const statusConfig = {
-      draft: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Draft" },
-      confirmed: { bg: "bg-orange-100", text: "text-orange-700", label: "Confirmed" },
-      "in-progress": { bg: "bg-blue-100", text: "text-blue-700", label: "In Progress" },
+      draft: { bg: "bg-gray-100", text: "text-gray-700", label: "Draft" },
+      confirmed: { bg: "bg-blue-100", text: "text-blue-700", label: "Confirmed" },
+      "in-progress": { bg: "bg-yellow-100", text: "text-yellow-700", label: "In Progress" },
       delivered: { bg: "bg-green-100", text: "text-green-700", label: "Delivered" },
       cancelled: { bg: "bg-red-100", text: "text-red-700", label: "Cancelled" },
     };
-    const config = statusConfig[status] || statusConfig.draft;
-    logDebug('Status badge config', { status, config });
-    return config;
+    return statusConfig[status] || statusConfig.draft;
   }, []);
 
-  // ✅ Format currency
+  // Payment status badge generator
+  const getPaymentStatusBadge = useCallback((status) => {
+    const statusConfig = {
+      pending: { bg: "bg-red-100", text: "text-red-700", label: "Pending" },
+      partial: { bg: "bg-orange-100", text: "text-orange-700", label: "Partial" },
+      paid: { bg: "bg-green-100", text: "text-green-700", label: "Paid" },
+      overpaid: { bg: "bg-purple-100", text: "text-purple-700", label: "Overpaid" },
+    };
+    return statusConfig[status] || statusConfig.pending;
+  }, []);
+
+  // Format currency
   const formatCurrency = useCallback((amount) => {
     if (!amount && amount !== 0) return "₹0";
     return new Intl.NumberFormat('en-IN', {
@@ -227,6 +240,7 @@ export default function Orders() {
     }).format(amount);
   }, []);
 
+  // Status options
   const statusOptions = useMemo(() => [
     { value: "all", label: "All Status" },
     { value: "draft", label: "Draft" },
@@ -236,14 +250,23 @@ export default function Orders() {
     { value: "cancelled", label: "Cancelled" },
   ], []);
 
+  // Payment status options
+  const paymentStatusOptions = useMemo(() => [
+    { value: "all", label: "All Payments" },
+    { value: "pending", label: "Pending" },
+    { value: "partial", label: "Partial" },
+    { value: "paid", label: "Paid" },
+    { value: "overpaid", label: "Overpaid" },
+  ], []);
+
+  // Time filter options
   const timeFilters = useMemo(() => [
     { value: "all", label: "All Time" },
-    { value: "week", label: "Week" },
-    { value: "month", label: "Month" },
-    { value: "3m", label: "3 Months" },
-    { value: "6m", label: "6 Months" },
-    { value: "9m", label: "9 Months" },
-    { value: "1y", label: "1 Year" },
+    { value: "week", label: "This Week" },
+    { value: "month", label: "This Month" },
+    { value: "3m", label: "Last 3 Months" },
+    { value: "6m", label: "Last 6 Months" },
+    { value: "1y", label: "Last Year" },
   ], []);
 
   // Error display
@@ -255,12 +278,15 @@ export default function Orders() {
         <button
           onClick={() => {
             logDebug('Retry fetching orders');
-            dispatch(fetchAllOrders({
+            dispatch(fetchOrders({
               page: currentPage,
+              limit: pagination?.limit || 10,
               search: debouncedSearch,
               status: statusFilter !== "all" ? statusFilter : "",
+              paymentStatus: paymentStatusFilter !== "all" ? paymentStatusFilter : "",
               timeFilter,
             }));
+            dispatch(clearOrderError());
           }}
           className="mt-4 px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700"
         >
@@ -272,7 +298,7 @@ export default function Orders() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Debug Panel (only in development) */}
+      {/* Debug Panel */}
       {DEBUG && process.env.NODE_ENV === 'development' && (
         <div className="bg-gray-900 text-green-400 p-4 rounded-3xl font-mono text-sm overflow-auto max-h-40">
           <div className="flex justify-between items-center mb-2">
@@ -288,7 +314,7 @@ export default function Orders() {
             <div>State: {loading ? '🔄 Loading' : '✅ Idle'}</div>
             <div>Orders: {orders?.length || 0}</div>
             <div>Page: {currentPage}/{pagination?.pages || 1}</div>
-            <div>Filters: S="{searchTerm}" | St="{statusFilter}" | T="{timeFilter}"</div>
+            <div>Filters: "{searchTerm}" | Status:{statusFilter} | Payment:{paymentStatusFilter} | Time:{timeFilter}</div>
             <div>Permissions: {canEdit ? '✏️ Edit' : '👀 View'}</div>
             <div>Base Path: {basePath}</div>
             <div>Role: {user?.role}</div>
@@ -299,7 +325,7 @@ export default function Orders() {
       {/* Header */}
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
         <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">
-          Orders
+          Orders Management
         </h1>
         <p className="text-slate-500 font-medium">Manage and track all customer orders with payments</p>
       </div>
@@ -310,7 +336,7 @@ export default function Orders() {
           <Search className="absolute left-4 top-3.5 text-slate-400" size={20} />
           <input
             type="text"
-            placeholder="Search by Order ID..."
+            placeholder="Search by Order ID or Customer..."
             value={searchTerm}
             onChange={handleSearch}
             className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
@@ -322,13 +348,13 @@ export default function Orders() {
           <div className="relative">
             <button
               onClick={() => {
-                logDebug('Toggle filter menu', { show: !showFilterMenu });
                 setShowFilterMenu(!showFilterMenu);
+                setShowPaymentFilterMenu(false);
               }}
               className="px-4 py-3 bg-white border border-slate-200 rounded-xl font-medium flex items-center gap-2 hover:bg-slate-50 transition-all"
             >
               <Filter size={18} />
-              {statusOptions.find(s => s.value === statusFilter)?.label || "Filter"}
+              {statusOptions.find(s => s.value === statusFilter)?.label || "Status"}
             </button>
             
             {showFilterMenu && (
@@ -337,13 +363,46 @@ export default function Orders() {
                   <button
                     key={option.value}
                     onClick={() => {
-                      logDebug('Status filter changed', { from: statusFilter, to: option.value });
                       setStatusFilter(option.value);
                       setShowFilterMenu(false);
                       setCurrentPage(1);
                     }}
                     className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-all ${
                       statusFilter === option.value ? "bg-blue-50 text-blue-600 font-medium" : ""
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Payment Status Filter Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowPaymentFilterMenu(!showPaymentFilterMenu);
+                setShowFilterMenu(false);
+              }}
+              className="px-4 py-3 bg-white border border-slate-200 rounded-xl font-medium flex items-center gap-2 hover:bg-slate-50 transition-all"
+            >
+              <IndianRupee size={18} />
+              {paymentStatusOptions.find(s => s.value === paymentStatusFilter)?.label || "Payment"}
+            </button>
+            
+            {showPaymentFilterMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 z-10">
+                {paymentStatusOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => {
+                      setPaymentStatusFilter(option.value);
+                      setShowPaymentFilterMenu(false);
+                      setCurrentPage(1);
+                    }}
+                    className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-all ${
+                      paymentStatusFilter === option.value ? "bg-blue-50 text-blue-600 font-medium" : ""
                     }`}
                   >
                     {option.label}
@@ -372,7 +431,6 @@ export default function Orders() {
           <button
             key={filter.value}
             onClick={() => {
-              logDebug('Time filter changed', { from: timeFilter, to: filter.value });
               setTimeFilter(filter.value);
               setCurrentPage(1);
             }}
@@ -411,14 +469,18 @@ export default function Orders() {
                 <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">
                   Garments
                 </th>
-                {/* ✅ NEW PAYMENT COLUMN */}
                 <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">
                   <div className="flex items-center gap-1">
                     <IndianRupee size={14} />
-                    Payment
+                    Total
                   </div>
                 </th>
-                {/* ✅ NEW BALANCE COLUMN */}
+                <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">
+                  <div className="flex items-center gap-1">
+                    <IndianRupee size={14} />
+                    Paid
+                  </div>
+                </th>
                 <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">
                   <div className="flex items-center gap-1">
                     <TrendingUp size={14} />
@@ -426,7 +488,10 @@ export default function Orders() {
                   </div>
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">
-                  Status
+                  Payment Status
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">
+                  Order Status
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">
                   Actions
@@ -436,41 +501,23 @@ export default function Orders() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="10" className="px-6 py-12 text-center">
+                  <td colSpan="12" className="px-6 py-12 text-center">
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
                     <p className="mt-2 text-slate-500">Loading orders...</p>
                   </td>
                 </tr>
               ) : orders?.length > 0 ? (
                 orders.map((order) => {
-                  if (!order) {
-                    logDebug('Invalid order object', order);
-                    return null;
-                  }
+                  if (!order) return null;
                   
                   const statusBadge = getStatusBadge(order.status);
+                  const paymentStatusBadge = getPaymentStatusBadge(order.paymentSummary?.paymentStatus);
                   const customer = order.customer || {};
                   const isDeleting = deleteLoading[order._id];
                   
-                  // ✅ Get payment summary from order
-                  const paymentSummary = order.paymentSummary || { totalPaid: 0 };
-                  const totalPaid = paymentSummary.totalPaid || 0;
                   const totalAmount = order.priceSummary?.totalMax || 0;
+                  const totalPaid = order.paymentSummary?.totalPaid || 0;
                   const balanceAmount = order.balanceAmount || (totalAmount - totalPaid);
-                  
-                  // ✅ Determine payment status color
-                  const getPaymentStatusColor = () => {
-                    if (totalPaid === 0) return "text-slate-400";
-                    if (totalPaid >= totalAmount) return "text-green-600 font-bold";
-                    return "text-blue-600";
-                  };
-                  
-                  // ✅ Determine balance status color
-                  const getBalanceStatusColor = () => {
-                    if (balanceAmount <= 0) return "text-green-600 font-bold";
-                    if (balanceAmount > 0) return "text-orange-600";
-                    return "text-slate-400";
-                  };
                   
                   return (
                     <tr key={order._id} className={`hover:bg-slate-50 transition-all ${isDeleting ? 'opacity-50' : ''}`}>
@@ -497,33 +544,27 @@ export default function Orders() {
                           {order.garments?.length || 0} items
                         </span>
                       </td>
-                      {/* ✅ PAYMENT COLUMN */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-1">
-                          <IndianRupee size={14} className="text-slate-400" />
-                          <span className={`font-bold ${getPaymentStatusColor()}`}>
-                            {formatCurrency(totalPaid)}
-                          </span>
-                        </div>
-                        {paymentSummary.paymentCount > 0 && (
-                          <p className="text-xs text-slate-400 mt-1">
-                            {paymentSummary.paymentCount} payment{paymentSummary.paymentCount !== 1 ? 's' : ''}
-                          </p>
-                        )}
+                      <td className="px-6 py-4 font-bold">
+                        {formatCurrency(totalAmount)}
                       </td>
-                      {/* ✅ BALANCE COLUMN */}
+                      <td className="px-6 py-4 font-bold text-green-600">
+                        {formatCurrency(totalPaid)}
+                      </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-1">
-                          <TrendingUp size={14} className="text-slate-400" />
-                          <span className={`font-bold ${getBalanceStatusColor()}`}>
-                            {formatCurrency(balanceAmount)}
-                          </span>
-                        </div>
-                        {balanceAmount < 0 && (
-                          <p className="text-xs text-green-600 mt-1">Overpaid</p>
-                        )}
-                        {balanceAmount > 0 && balanceAmount < totalAmount && (
-                          <p className="text-xs text-orange-600 mt-1">Pending</p>
+                        <span className={`font-bold ${
+                          balanceAmount <= 0 ? 'text-green-600' : 'text-orange-600'
+                        }`}>
+                          {formatCurrency(balanceAmount)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${paymentStatusBadge.bg} ${paymentStatusBadge.text}`}>
+                          {paymentStatusBadge.label}
+                        </span>
+                        {order.paymentSummary?.paymentCount > 0 && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            {order.paymentSummary.paymentCount} payment(s)
+                          </p>
                         )}
                       </td>
                       <td className="px-6 py-4">
@@ -551,18 +592,20 @@ export default function Orders() {
                               >
                                 <Edit size={16} />
                               </button>
-                              <button
-                                onClick={() => handleDeleteOrder(order._id, order.orderId)}
-                                disabled={isDeleting}
-                                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Delete"
-                              >
-                                {isDeleting ? (
-                                  <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                  <Trash2 size={16} />
-                                )}
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  onClick={() => handleDeleteOrder(order._id, order.orderId)}
+                                  disabled={isDeleting}
+                                  className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Delete"
+                                >
+                                  {isDeleting ? (
+                                    <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Trash2 size={16} />
+                                  )}
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -572,7 +615,7 @@ export default function Orders() {
                 })
               ) : (
                 <tr>
-                  <td colSpan="10" className="px-6 py-12 text-center">
+                  <td colSpan="12" className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center">
                       <Calendar size={48} className="text-slate-300 mb-4" />
                       <p className="text-slate-500 text-lg">No orders found</p>
@@ -613,7 +656,6 @@ export default function Orders() {
               </button>
               
               {Array.from({ length: pagination.pages }, (_, i) => i + 1).map((pageNum) => {
-                // Show limited page numbers
                 if (
                   pageNum === 1 ||
                   pageNum === pagination.pages ||

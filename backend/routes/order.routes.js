@@ -7,9 +7,13 @@ import {
   updateOrderStatus,
   deleteOrder,
   getOrderStats,
-  // ✅ Add these new payment-related functions
+  // ✅ New: Get orders by customer
+  getOrdersByCustomer,
+  // ✅ Payment-related functions
   addPaymentToOrder,
-  getOrderPayments
+  getOrderPayments,
+  // ✅ Dashboard function
+  getDashboardData
 } from "../controllers/order.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
 
@@ -18,34 +22,65 @@ const router = express.Router();
 // Debug middleware to track API hits
 router.use((req, res, next) => {
   console.log(`📡 Order Route: ${req.method} ${req.originalUrl}`);
+  console.log(`   User Role: ${req.user?.role || 'Not authenticated'}`);
   next();
 });
 
-// All routes are PROTECTED (Must be logged in)
+// ============================================
+// 🔒 ALL ROUTES ARE PROTECTED
+// ============================================
 router.use(protect);
+
+// ============================================
+// 📊 STATS & DASHBOARD
+// ============================================
 
 /**
  * @route   GET /api/orders/stats
  * @desc    Get order statistics
+ * @access  Admin, Store Keeper, Cutting Master (VIEW)
+ */
+router.get("/stats", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getOrderStats);
+
+/**
+ * @route   GET /api/orders/dashboard
+ * @desc    Get dashboard data (today's orders, pending deliveries, collection)
  * @access  Admin, Store Keeper
  */
-router.get("/stats", authorize("ADMIN", "STORE_KEEPER"), getOrderStats);
+router.get("/dashboard", authorize("ADMIN", "STORE_KEEPER"), getDashboardData);
+
+// ============================================
+// 📋 MAIN ORDER ROUTES
+// ============================================
 
 /**
  * @route   POST /api/orders
  * @desc    Create new order (with optional payments)
- * @access  Admin, Store Keeper
+ * @access  Admin, Store Keeper ONLY
  */
 router.post("/", authorize("ADMIN", "STORE_KEEPER"), createOrder);
 
 /**
  * @route   GET /api/orders
  * @desc    Get all orders with filters
- * @access  Admin, Store Keeper, Cutting Master
+ * @access  Admin, Store Keeper, Cutting Master (VIEW)
  */
 router.get("/", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getAllOrders);
 
-// ===== PAYMENT ROUTES =====
+// ============================================
+// 👤 CUSTOMER-SPECIFIC ORDER ROUTES
+// ============================================
+
+/**
+ * @route   GET /api/orders/customer/:customerId
+ * @desc    Get all orders for a specific customer
+ * @access  Admin, Store Keeper, Cutting Master (VIEW)
+ */
+router.get("/customer/:customerId", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getOrdersByCustomer);
+
+// ============================================
+// 💰 PAYMENT ROUTES (Specific to order)
+// ============================================
 
 /**
  * @route   POST /api/orders/:id/payments
@@ -61,26 +96,28 @@ router.post("/:id/payments", authorize("ADMIN", "STORE_KEEPER"), addPaymentToOrd
  */
 router.get("/:id/payments", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getOrderPayments);
 
-// ===== ORDER DETAIL ROUTES =====
+// ============================================
+// 🔍 SINGLE ORDER OPERATIONS
+// ============================================
 
 /**
  * @route   GET /api/orders/:id
  * @desc    Get specific order details (includes payments & works)
- * @access  Admin, Store Keeper, Cutting Master
+ * @access  Admin, Store Keeper, Cutting Master (VIEW)
  */
 router.get("/:id", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getOrderById);
 
 /**
  * @route   PUT /api/orders/:id
- * @desc    Update order details
- * @access  Admin, Store Keeper
+ * @desc    Update order details (delivery date, notes, add garments)
+ * @access  Admin, Store Keeper ONLY
  */
 router.put("/:id", authorize("ADMIN", "STORE_KEEPER"), updateOrder);
 
 /**
  * @route   PATCH /api/orders/:id/status
- * @desc    Update order status
- * @access  Admin, Store Keeper
+ * @desc    Update order status only
+ * @access  Admin, Store Keeper ONLY
  */
 router.patch("/:id/status", authorize("ADMIN", "STORE_KEEPER"), updateOrderStatus);
 

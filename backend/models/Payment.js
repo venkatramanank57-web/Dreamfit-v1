@@ -21,12 +21,12 @@ const paymentSchema = new mongoose.Schema({
   },
   
   // ✅ Payment Type - Added 'extra'
-  type: {
-    type: String,
-    enum: ['advance', 'full', 'partial', 'refund', 'extra'], // 'extra' added
-    default: 'advance',
-    index: true
-  },
+type: {
+  type: String,
+  enum: ['advance', 'partial', 'full', 'final-settlement', 'refund', 'extra'],
+  default: 'advance',
+  index: true
+},
   
   method: {
     type: String,
@@ -55,11 +55,7 @@ const paymentSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  store: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Store',
-    required: true
-  },
+  // ✅ STORE FIELD REMOVED - No Store model exists
   isDeleted: {
     type: Boolean,
     default: false
@@ -67,5 +63,11 @@ const paymentSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+// ✅ Add compound indexes for better query performance
+paymentSchema.index({ order: 1, paymentDate: -1 });
+paymentSchema.index({ customer: 1, paymentDate: -1 });
+paymentSchema.index({ paymentDate: -1 });
+paymentSchema.index({ type: 1, paymentDate: -1 });
 
 module.exports = mongoose.model('Payment', paymentSchema);

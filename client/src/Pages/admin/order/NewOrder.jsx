@@ -11,19 +11,22 @@ import {
   CreditCard,
   IndianRupee,
   Package,
-  ChevronDown,
   Clock,
   Wallet,
   Banknote,
   Smartphone,
   Landmark,
   X,
+  AlertCircle,
+  CheckCircle,
+  Info,
+  Bug,
 } from "lucide-react";
-import { createOrder } from "../../../features/order/orderSlice";
+import { createNewOrder } from "../../../features/order/orderSlice";
 import { createGarment } from "../../../features/garment/garmentSlice";
 import { fetchAllCustomers } from "../../../features/customer/customerSlice";
 import GarmentForm from "../garment/GarmentForm";
-import AddPaymentModal from "../../../components/AddPaymentModal"; // ✅ Import reusable modal
+import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
 
 export default function NewOrder() {
@@ -31,42 +34,102 @@ export default function NewOrder() {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Debug flag
-  const DEBUG = true;
+  // Enhanced Debug configuration
+  const DEBUG = {
+    ENABLED: true,
+    LOG_LEVEL: 'verbose',
+    SHOW_PANEL: true,
+    LOG_REDUX: true,
+    LOG_API: true,
+    LOG_VALIDATION: true,
+    LOG_FORM_DATA: true
+  };
   
-  const logDebug = (message, data) => {
-    if (DEBUG) {
-      console.log(`[NewOrder Debug] ${message}`, data || '');
-    }
+  // Debug logger
+  const logDebug = (level, category, message, data = null) => {
+    if (!DEBUG.ENABLED) return;
+    
+    const levels = { minimal: 1, normal: 2, verbose: 3 };
+    const currentLevel = levels[DEBUG.LOG_LEVEL] || 2;
+    const msgLevel = levels[level] || 2;
+    
+    if (msgLevel > currentLevel) return;
+    
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+    console.log(
+      `%c[${timestamp}][${category}] ${message}`,
+      `color: #00ff00; font-weight: bold;`,
+      data || ''
+    );
   };
 
-  // ✅ Get passed customer from Customer Page (if any)
+  // Error logger
+  const logError = (context, error, additionalData = {}) => {
+    console.group(`❌ ERROR [${context}] - ${new Date().toISOString()}`);
+    console.error('Error object:', error);
+    console.error('Error message:', error?.message);
+    
+    if (error?.response) {
+      console.log('🔍 Response Data:', error.response.data);
+      console.log('🔍 Status:', error.response.status);
+      console.log('🔍 Status Text:', error.response.statusText);
+      console.log('🔍 Headers:', error.response.headers);
+      
+      // Log specific validation errors
+      if (error.response.data?.errors) {
+        console.log('📋 Validation Errors:', error.response.data.errors);
+      }
+      if (error.response.data?.message) {
+        console.log('📋 Server Message:', error.response.data.message);
+      }
+    }
+    
+    if (error?.request) {
+      console.log('📡 Request:', error.request);
+    }
+    
+    if (Object.keys(additionalData).length > 0) {
+      console.log('📦 Additional Data:', additionalData);
+    }
+    
+    console.groupEnd();
+  };
+
+  // Validation helper
+  const validateMongoId = (id) => {
+    if (!id) return { valid: false, reason: 'ID is empty' };
+    const isValid = /^[0-9a-fA-F]{24}$/.test(id);
+    return { 
+      valid: isValid, 
+      reason: isValid ? 'Valid' : 'Invalid format - must be 24 hex characters' 
+    };
+  };
+
+  // Get passed customer from Customer Page (if any)
   const passedCustomer = location.state?.customer;
   
-  logDebug('Received from state:', passedCustomer);
+  logDebug('normal', 'INIT', 'Component initialized', {
+    hasPassedCustomer: !!passedCustomer,
+    passedCustomerId: passedCustomer?._id
+  });
 
   useEffect(() => {
-    logDebug('Component mounted');
-    return () => logDebug('Component unmounted');
+    logDebug('normal', 'LIFECYCLE', 'Component mounted');
+    return () => logDebug('normal', 'LIFECYCLE', 'Component unmounted');
   }, []);
 
-  // Get customers from Redux with safety check
+  // Fixed Redux selectors
   const { customers, loading: customersLoading } = useSelector((state) => {
-    console.log('🔍 Redux state.customer:', state.customer);
-    
-    const customerData = state.customer?.customers;
+    const customerData = state.customers?.customers || state.customer?.customers || [];
     const customersArray = Array.isArray(customerData) ? customerData : [];
     
     return {
       customers: customersArray,
-      loading: state.customer?.loading || false
+      loading: state.customers?.loading || state.customer?.loading || false
     };
   });
 
-  // Get current user from auth state
   const { user } = useSelector((state) => {
-    console.log('👤 Full auth state:', state.auth);
-    console.log('👤 User object from Redux:', state.auth?.user);
     return { user: state.auth?.user };
   });
   
@@ -80,7 +143,7 @@ export default function NewOrder() {
     },
   });
 
-  // 👇 State for multiple payments with enhanced fields
+  // State for multiple payments
   const [payments, setPayments] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
@@ -92,66 +155,46 @@ export default function NewOrder() {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedCustomerDisplay, setSelectedCustomerDisplay] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverErrors, setServerErrors] = useState(null); // Track server errors
 
-  // Get user ID directly from user.id
-  const userId = user?.id;
+  // Get user ID
+  const userId = user?.id || user?._id;
   const userRole = user?.role;
 
-  // ✅ Get base path based on user role
+  // Validate user ID
+  const userIdValidation = validateMongoId(userId);
+
+  logDebug('normal', 'AUTH', 'User authentication details', {
+    userId,
+    userIdValid: userIdValidation.valid,
+    userRole
+  });
+
+  // Get base path based on user role
   const basePath = user?.role === "ADMIN" ? "/admin" : 
                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
                    "/cuttingmaster";
 
-  // Enhanced user debugging
-  useEffect(() => {
-    console.log("👤 USER DEBUG:", {
-      userExists: !!user,
-      userObject: user,
-      userId,
-      userRole,
-      allKeys: user ? Object.keys(user) : []
-    });
-  }, [user, userId, userRole]);
-
-  // Log customers state for debugging
-  useEffect(() => {
-    console.log("👥 Customers state:", {
-      exists: !!customers,
-      isArray: Array.isArray(customers),
-      length: customers?.length || 0,
-      type: typeof customers,
-      sample: customers?.length > 0 ? customers[0] : null
-    });
-  }, [customers]);
-
-  logDebug('User authentication', { 
-    userExists: !!user, 
-    userId, 
-    userRole,
-    userObject: user 
-  });
-
   // Load customers on mount
   useEffect(() => {
-    logDebug('Dispatching fetchAllCustomers');
+    logDebug('normal', 'API', 'Fetching customers');
     dispatch(fetchAllCustomers())
       .unwrap()
       .then((result) => {
-        logDebug('Customers fetched successfully', { 
-          count: result?.length,
-          isArray: Array.isArray(result)
-        });
+        logDebug('normal', 'API', 'Customers fetched', { count: result?.length });
       })
       .catch((error) => {
-        logDebug('Error fetching customers', { error: error.message });
+        logError('fetchCustomers', error);
         showToast.error("Failed to load customers");
       });
   }, [dispatch]);
 
-  // ✅ AUTO-FILL LOGIC: When passedCustomer is available, auto-select them
+  // AUTO-FILL LOGIC: When passedCustomer is available, auto-select them
   useEffect(() => {
     if (passedCustomer) {
-      logDebug('Auto-filling customer from state', passedCustomer);
+      logDebug('normal', 'AUTO-FILL', 'Auto-filling customer', {
+        passedCustomerId: passedCustomer._id
+      });
       
       const fullCustomer = customers?.find(c => c._id === passedCustomer._id) || passedCustomer;
       
@@ -167,12 +210,10 @@ export default function NewOrder() {
       setSelectedCustomerDisplay(displayText);
       setSearchTerm(displayText);
       setShowCustomerDropdown(false);
-      
-      logDebug('Auto-fill complete', { fullName, displayId });
     }
   }, [passedCustomer, customers]);
 
-  // Function to get customer full name
+  // Helper functions for customer display
   const getCustomerFullName = (customer) => {
     if (!customer) return 'Unknown Customer';
     
@@ -183,104 +224,77 @@ export default function NewOrder() {
       if (fullName) return fullName;
     }
     
-    if (customer.salutation && customer.firstName) {
-      return `${customer.salutation} ${customer.firstName}`.trim();
-    }
+    if (customer.name) return customer.name;
     
     return 'Unknown Customer';
   };
 
-  // Function to get customer display ID
   const getCustomerDisplayId = (customer) => {
-    return customer.customerId || customer._id || '';
+    if (!customer) return '';
+    return customer.customerId || customer._id?.slice(-6) || '';
   };
 
-  // Function to get customer phone
   const getCustomerPhone = (customer) => {
+    if (!customer) return 'No phone';
     return customer.phone || customer.whatsappNumber || 'No phone';
   };
 
-  // Filter customers based on search with proper safety checks
+  // Filter customers
   const filteredCustomers = useMemo(() => {
     if (!customers || !Array.isArray(customers) || customers.length === 0) {
-      console.log('🔍 No valid customers array:', { 
-        exists: !!customers, 
-        isArray: Array.isArray(customers),
-        length: customers?.length 
-      });
       return [];
     }
-    
-    console.log('🔍 Filtering customers:', {
-      totalCustomers: customers.length,
-      searchTerm: searchTerm || '(empty)'
-    });
     
     if (formData.customer && searchTerm === selectedCustomerDisplay) {
       return [];
     }
     
-    const filtered = customers.filter(customer => {
+    return customers.filter(customer => {
       if (!customer) return false;
 
       const fullName = getCustomerFullName(customer).toLowerCase();
       const customerId = getCustomerDisplayId(customer).toLowerCase();
-      const phone = getCustomerPhone(customer);
+      const phone = getCustomerPhone(customer).toLowerCase();
       const firstName = (customer.firstName || '').toLowerCase();
       const lastName = (customer.lastName || '').toLowerCase();
       
       const searchLower = searchTerm.toLowerCase();
       
-      return (
-        fullName.includes(searchLower) ||
-        firstName.includes(searchLower) ||
-        lastName.includes(searchLower) ||
-        phone.includes(searchTerm) ||
-        customerId.includes(searchLower)
-      );
+      return fullName.includes(searchLower) ||
+             firstName.includes(searchLower) ||
+             lastName.includes(searchLower) ||
+             phone.includes(searchLower) ||
+             customerId.includes(searchLower);
     });
-    
-    logDebug('Filtered customers', { 
-      searchTerm, 
-      total: customers.length,
-      filtered: filtered.length
-    });
-    
-    return filtered;
   }, [customers, searchTerm, formData.customer, selectedCustomerDisplay]);
 
-  // 👇 Calculate total payments
+  // Calculate total payments
   const totalPayments = useMemo(() => {
-    return payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
+    return payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
   }, [payments]);
 
+  // Calculate price summary
   const priceSummary = useMemo(() => {
     const totalMin = garments.reduce((sum, g) => {
-      const price = g.priceRange?.min || 0;
-      return sum + Number(price);
+      return sum + Number(g.priceRange?.min || 0);
     }, 0);
     
     const totalMax = garments.reduce((sum, g) => {
-      const price = g.priceRange?.max || 0;
-      return sum + Number(price);
+      return sum + Number(g.priceRange?.max || 0);
     }, 0);
     
-    return {
-      totalMin,
-      totalMax
-    };
+    return { totalMin, totalMax };
   }, [garments]);
 
-  // 👇 Calculate balance amount based on total payments
+  // Calculate balance
   const balanceAmount = useMemo(() => {
-    const totalPaid = totalPayments;
     return {
-      min: Number(priceSummary.totalMin) - totalPaid,
-      max: Number(priceSummary.totalMax) - totalPaid,
+      min: Number(priceSummary.totalMin) - totalPayments,
+      max: Number(priceSummary.totalMax) - totalPayments,
     };
   }, [priceSummary, totalPayments]);
 
-  // 👇 Payment handlers
+  // Payment handlers
   const handleAddPayment = useCallback(() => {
     setEditingPayment(null);
     setShowPaymentModal(true);
@@ -300,17 +314,36 @@ export default function NewOrder() {
     }
   }, [payments]);
 
+  // Handle Save Payment with proper type mapping
   const handleSavePayment = useCallback((paymentData) => {
-    if (editingPayment !== null) {
+    logDebug('normal', 'PAYMENT', 'Saving payment', { 
+      isEdit: !!editingPayment,
+      paymentData
+    });
+    
+    // Map frontend type to backend enum
+    let backendType = paymentData.type || 'advance';
+    if (backendType === 'partial') {
+      backendType = 'part-payment';
+    } else if (backendType === 'full') {
+      backendType = 'final-settlement';
+    }
+    
+    const paymentWithMappedType = {
+      ...paymentData,
+      type: backendType,
+      date: paymentData.paymentDate || paymentData.date || new Date().toISOString().split('T')[0],
+      time: paymentData.paymentTime || paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false })
+    };
+    
+    if (editingPayment) {
       // Update existing payment
       const index = payments.findIndex(p => p.tempId === editingPayment.tempId);
       if (index !== -1) {
         const newPayments = [...payments];
         newPayments[index] = { 
-          ...paymentData, 
-          tempId: editingPayment.tempId,
-          date: paymentData.date || new Date().toISOString().split('T')[0],
-          time: paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+          ...paymentWithMappedType, 
+          tempId: editingPayment.tempId
         };
         setPayments(newPayments);
         showToast.success("Payment updated");
@@ -318,10 +351,8 @@ export default function NewOrder() {
     } else {
       // Add new payment
       const newPayment = {
-        ...paymentData,
-        tempId: Date.now() + Math.random(),
-        date: paymentData.date || new Date().toISOString().split('T')[0],
-        time: paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+        ...paymentWithMappedType,
+        tempId: Date.now() + Math.random()
       };
       setPayments([...payments, newPayment]);
       showToast.success("Payment added");
@@ -331,6 +362,7 @@ export default function NewOrder() {
     setEditingPayment(null);
   }, [payments, editingPayment]);
 
+  // Garment handlers
   const handleAddGarment = useCallback(() => {
     setEditingGarment(null);
     setShowGarmentModal(true);
@@ -350,11 +382,14 @@ export default function NewOrder() {
     }
   }, [garments]);
 
-  // Handle FormData from GarmentForm
+  // Handle Save Garment
   const handleSaveGarment = useCallback((garmentData) => {
-    console.log("📦 Received garment data:", garmentData);
+    logDebug('normal', 'GARMENT', 'Saving garment', {
+      isEdit: !!editingGarment
+    });
     
     if (garmentData instanceof FormData) {
+      // Convert FormData to object
       const garmentObj = {
         tempId: editingGarment?.tempId || Date.now() + Math.random(),
         referenceImages: [],
@@ -375,7 +410,7 @@ export default function NewOrder() {
           if (key === 'measurements' || key === 'priceRange') {
             try {
               garmentObj[key] = JSON.parse(value);
-            } catch {
+            } catch (e) {
               garmentObj[key] = value;
             }
           } else {
@@ -384,14 +419,7 @@ export default function NewOrder() {
         }
       }
       
-      console.log("📦 Converted garment object:", {
-        name: garmentObj.name,
-        referenceImages: garmentObj.referenceImages?.length || 0,
-        customerImages: garmentObj.customerImages?.length || 0,
-        customerClothImages: garmentObj.customerClothImages?.length || 0
-      });
-      
-      if (editingGarment !== null) {
+      if (editingGarment) {
         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
         if (index !== -1) {
           const newGarments = [...garments];
@@ -404,7 +432,7 @@ export default function NewOrder() {
         showToast.success("Garment added");
       }
     } else {
-      if (editingGarment !== null) {
+      if (editingGarment) {
         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
         if (index !== -1) {
           const newGarments = [...garments];
@@ -415,7 +443,7 @@ export default function NewOrder() {
       } else {
         const newGarment = {
           ...garmentData,
-          tempId: Date.now() + Math.random(),
+          tempId: Date.now() + Math.random()
         };
         setGarments([...garments, newGarment]);
         showToast.success("Garment added");
@@ -429,24 +457,12 @@ export default function NewOrder() {
     const fullName = getCustomerFullName(customer);
     const displayId = getCustomerDisplayId(customer);
     
-    logDebug('Customer selected', { 
-      id: customer._id,
-      fullName,
-      displayId,
-      customer
-    });
-
     setFormData(prev => ({
       ...prev,
       customer: customer._id
     }));
 
-    let displayText = fullName;
-    if (customer.salutation && !fullName.includes(customer.salutation)) {
-      displayText = `${customer.salutation} ${fullName}`.trim();
-    }
-    displayText = `${displayText} (${displayId})`;
-    
+    let displayText = `${fullName} (${displayId})`;
     setSelectedCustomerDisplay(displayText);
     setSearchTerm(displayText);
     setShowCustomerDropdown(false);
@@ -463,7 +479,7 @@ export default function NewOrder() {
     }
   }, []);
 
-  // ✅ Payment Method Icon Component
+  // Payment Method Icon Component
   const PaymentMethodIcon = ({ method }) => {
     switch(method) {
       case 'cash':
@@ -479,8 +495,12 @@ export default function NewOrder() {
     }
   };
 
+  // COMPLETELY FIXED handleSubmit with proper validation
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    logDebug('normal', 'SUBMIT', 'Form submission started');
+    setServerErrors(null); // Clear previous errors
 
     // Validation
     if (!formData.customer) {
@@ -498,87 +518,136 @@ export default function NewOrder() {
       return;
     }
 
-    const finalUserId = user?.id;
-
+    const finalUserId = userId;
     if (!finalUserId) {
-      console.error("❌ No user ID found. User object:", user);
-      showToast.error("You must be logged in to create an order. Please log in and try again.");
+      showToast.error("You must be logged in to create an order");
       return;
     }
 
-    console.log("✅ Using User ID for createdBy:", finalUserId);
+    // Validate MongoDB IDs
+    const customerIdValid = /^[0-9a-fA-F]{24}$/.test(formData.customer);
+    const userIdValid = /^[0-9a-fA-F]{24}$/.test(finalUserId);
 
-    const isValidMongoId = /^[0-9a-fA-F]{24}$/.test(finalUserId);
-    if (!isValidMongoId) {
-      console.warn("⚠️ User ID may not be a valid MongoDB ID:", finalUserId);
+    if (!customerIdValid) {
+      showToast.error("Invalid customer ID format");
+      return;
     }
 
-    for (const [index, garment] of garments.entries()) {
-      if (!garment.name || !garment.category || !garment.item) {
-        showToast.error(`Garment #${index + 1} is incomplete`);
-        return;
-      }
+    if (!userIdValid) {
+      showToast.error("Invalid user ID format. Please log in again.");
+      return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Prepare order data with multiple payments
+      // ✅ CRITICAL: Map payment types to match model enum EXACTLY
+      const mappedPayments = payments.map(payment => {
+        let modelType = payment.type || 'advance';
+        
+        // Map frontend display types to backend enum values
+        if (modelType === 'partial') {
+          modelType = 'part-payment';
+        } else if (modelType === 'full') {
+          modelType = 'final-settlement';
+        }
+        // 'advance' stays as 'advance'
+        // 'extra' stays as 'extra'
+        
+        // Validate the mapped type
+        const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
+        if (!validTypes.includes(modelType)) {
+          console.error(`Invalid payment type after mapping: ${modelType}`);
+          modelType = 'advance'; // Fallback to advance
+        }
+        
+        return {
+          amount: Number(payment.amount),
+          type: modelType,  // ✅ Now matches: advance, part-payment, final-settlement, extra
+          method: payment.method || 'cash',
+          referenceNumber: payment.referenceNumber || '',
+          date: payment.date || new Date().toISOString().split('T')[0],
+          notes: payment.notes || ''
+        };
+      });
+
+      // Log mapped payments for debugging
+      console.log("💰 Mapped Payments:", JSON.stringify(mappedPayments, null, 2));
+
+      // ✅ Validate each payment
+      const validMethods = ['cash', 'upi', 'bank-transfer', 'card'];
+      const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
+      
+      for (const payment of mappedPayments) {
+        if (!validTypes.includes(payment.type)) {
+          throw new Error(`Invalid payment type: ${payment.type}. Must be one of: ${validTypes.join(', ')}`);
+        }
+        if (!validMethods.includes(payment.method)) {
+          throw new Error(`Invalid payment method: ${payment.method}`);
+        }
+        if (isNaN(payment.amount) || payment.amount <= 0) {
+          throw new Error(`Invalid payment amount: ${payment.amount}`);
+        }
+      }
+
+      // ✅ Prepare order data with EXACT structure matching backend
       const orderData = {
         customer: formData.customer,
         deliveryDate: formData.deliveryDate,
         specialNotes: formData.specialNotes || "",
-        // 👇 Include all payments with enhanced fields
-        payments: payments.map(payment => ({
-          amount: Number(payment.amount),
-          type: payment.type,
-          method: payment.method,
-          referenceNumber: payment.referenceNumber || "",
-          date: payment.date || new Date().toISOString().split('T')[0],
-          time: payment.time || new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-          notes: payment.notes || ""
-        })),
-        // Keep advancePayment for backward compatibility
-        advancePayment: payments.length > 0 ? {
-          amount: totalPayments,
-          method: payments[0]?.method || "cash",
-          date: new Date().toISOString(),
-        } : {
-          amount: 0,
-          method: "cash",
-          date: new Date().toISOString(),
+        
+        // Payments array with correct fields
+        payments: mappedPayments,
+        
+        // Backward compatibility
+        advancePayment: {
+          amount: mappedPayments.length > 0 ? mappedPayments[0]?.amount || 0 : 0,
+          method: mappedPayments.length > 0 ? mappedPayments[0]?.method || "cash" : "cash",
+          date: new Date().toISOString()
         },
+        
+        // Price summary
         priceSummary: {
           totalMin: Number(priceSummary.totalMin),
-          totalMax: Number(priceSummary.totalMax),
+          totalMax: Number(priceSummary.totalMax)
         },
+        
+        // Balance amount
         balanceAmount: Number(balanceAmount.min),
+        
+        // Required fields
         createdBy: finalUserId,
         status: "draft",
         orderDate: new Date().toISOString(),
-        garments: [],
+        
+        // Empty garments array
+        garments: []
       };
 
-      if (!orderData.createdBy) {
-        throw new Error("createdBy is undefined in final order data!");
+      // ✅ Validate required fields
+      const requiredFields = ['customer', 'deliveryDate', 'createdBy', 'priceSummary', 'balanceAmount', 'status', 'orderDate'];
+      const missingFields = requiredFields.filter(field => !orderData[field]);
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
       }
 
-      console.log("========== FINAL ORDER DATA ==========");
-      console.log("📦 createdBy value:", orderData.createdBy);
-      console.log("📦 Payments:", payments);
-      console.log("📦 Total Payments:", totalPayments);
-      console.log("📦 Full order data:", JSON.stringify(orderData, null, 2));
-      console.log("======================================");
+      // ✅ FINAL DEBUG: Log complete order data
+      console.log("🔍 FINAL ORDER DATA BEING SENT:", JSON.stringify(orderData, null, 2));
+      console.log("🔍 Payment Types Check:", orderData.payments.map(p => p.type));
 
-      const result = await dispatch(createOrder(orderData)).unwrap();
-      logDebug('Order created successfully', result);
+      // Create order
+      const result = await dispatch(createNewOrder(orderData)).unwrap();
+      logDebug('normal', 'SUBMIT', 'Order created', result);
       
       const orderId = result.order?._id || result._id;
 
-      // Create garments with images
+      if (!orderId) {
+        throw new Error("Order created but no ID returned");
+      }
+
+      // Create garments
       for (const garment of garments) {
-        logDebug(`Creating garment`, garment);
-        
         const garmentFormData = new FormData();
         
         garmentFormData.append("name", garment.name);
@@ -588,59 +657,39 @@ export default function NewOrder() {
         garmentFormData.append("measurementSource", garment.measurementSource || "template");
         garmentFormData.append("measurements", JSON.stringify(garment.measurements || []));
         garmentFormData.append("additionalInfo", garment.additionalInfo || "");
-        garmentFormData.append("estimatedDelivery", garment.estimatedDelivery);
+        garmentFormData.append("estimatedDelivery", garment.estimatedDelivery || formData.deliveryDate);
         garmentFormData.append("priority", garment.priority || "normal");
-        
-        const priceRange = {
+        garmentFormData.append("priceRange", JSON.stringify({
           min: Number(garment.priceRange?.min) || 0,
           max: Number(garment.priceRange?.max) || 0
-        };
-        garmentFormData.append("priceRange", JSON.stringify(priceRange));
-        
+        }));
         garmentFormData.append("orderId", orderId);
         garmentFormData.append("createdBy", finalUserId);
 
-        if (garment.referenceImages && garment.referenceImages.length > 0) {
-          console.log(`📸 Adding ${garment.referenceImages.length} reference images`);
-          for (const img of garment.referenceImages) {
+        // Add images
+        if (garment.referenceImages?.length > 0) {
+          garment.referenceImages.forEach(img => {
             if (img instanceof File) {
               garmentFormData.append("referenceImages", img);
-              console.log(`   ✅ Added: ${img.name}`);
             }
-          }
+          });
         }
         
-        if (garment.customerImages && garment.customerImages.length > 0) {
-          console.log(`📸 Adding ${garment.customerImages.length} customer images`);
-          for (const img of garment.customerImages) {
+        if (garment.customerImages?.length > 0) {
+          garment.customerImages.forEach(img => {
             if (img instanceof File) {
               garmentFormData.append("customerImages", img);
-              console.log(`   ✅ Added: ${img.name}`);
             }
-          }
+          });
         }
         
-        if (garment.customerClothImages && garment.customerClothImages.length > 0) {
-          console.log(`📸 Adding ${garment.customerClothImages.length} cloth images`);
-          for (const img of garment.customerClothImages) {
+        if (garment.customerClothImages?.length > 0) {
+          garment.customerClothImages.forEach(img => {
             if (img instanceof File) {
               garmentFormData.append("customerClothImages", img);
-              console.log(`   ✅ Added: ${img.name}`);
             }
-          }
+          });
         }
-
-        console.log("🔍 Garment FormData contents:");
-        let imageCount = 0;
-        for (let [key, value] of garmentFormData.entries()) {
-          if (value instanceof File) {
-            imageCount++;
-            console.log(`   📸 ${key}: ${value.name} (${value.size} bytes)`);
-          } else {
-            console.log(`   📝 ${key}: ${value?.substring?.(0, 50) || value}`);
-          }
-        }
-        console.log(`📊 Total images in this garment: ${imageCount}`);
 
         await dispatch(createGarment({ orderId, garmentData: garmentFormData })).unwrap();
       }
@@ -648,12 +697,27 @@ export default function NewOrder() {
       showToast.success("Order created successfully! 🎉");
       navigate(`${basePath}/orders`);
     } catch (error) {
-      console.error('❌ Full error:', error);
-      console.error('❌ Error response:', error.response?.data);
+      logError('createOrder', error, { 
+        formData, 
+        garmentsCount: garments.length,
+        paymentsCount: payments.length 
+      });
       
-      const errorMessage = typeof error === 'string' 
-        ? error 
-        : (error.response?.data?.message || error.message || "Failed to create order");
+      // Store server errors for display
+      if (error.response?.data) {
+        setServerErrors(error.response.data);
+      }
+      
+      // Better error handling
+      let errorMessage = "Failed to create order";
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        errorMessage = `Validation failed: ${error.response.data.errors.join(', ')}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
       
       showToast.error(errorMessage);
     } finally {
@@ -661,55 +725,208 @@ export default function NewOrder() {
     }
   };
 
-  // Debug Panel
+  // Enhanced Debug Panel
   const DebugPanel = () => {
-    if (!DEBUG || process.env.NODE_ENV !== 'development') return null;
+    if (!DEBUG.SHOW_PANEL || process.env.NODE_ENV !== 'development') return null;
     
     return (
-      <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-96">
-        <div className="flex justify-between items-center mb-2">
-          <span className="font-bold">🔍 Debug Info</span>
-          <button 
-            onClick={() => console.clear()} 
-            className="text-xs bg-gray-700 px-2 py-1 rounded"
-          >
-            Clear Console
-          </button>
+      <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-[600px] border border-green-500/30">
+        <div className="flex justify-between items-center mb-3 sticky top-0 bg-gray-900 pb-2 border-b border-gray-700">
+          <div className="flex items-center gap-2">
+            <Bug size={16} className="text-yellow-400" />
+            <span className="font-bold text-yellow-400">DEBUG PANEL v3.0</span>
+            <span className="text-xs bg-blue-600 px-2 py-0.5 rounded-full">DEV MODE</span>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => window.location.reload()} 
+              className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
+            >
+              🔄 Refresh
+            </button>
+            <button 
+              onClick={() => console.clear()} 
+              className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
+            >
+              🧹 Clear
+            </button>
+          </div>
         </div>
-        <div className="space-y-1">
-          <div>Customer ID: {formData.customer || '❌ Not selected'}</div>
-          <div>Customer Display: {selectedCustomerDisplay || 'None'}</div>
-          <div>Search Term: "{searchTerm}"</div>
-          <div>Garments: {garments.length}</div>
-          <div>Payments: {payments.length}</div>
-          <div>Total Payments: ₹{totalPayments}</div>
-          <div>Garments with Images: {
-            garments.filter(g => 
-              (g.referenceImages?.length > 0) || 
-              (g.customerImages?.length > 0) || 
-              (g.customerClothImages?.length > 0)
-            ).length
-          }</div>
-          <div>Delivery Date: {formData.deliveryDate || 'Not set'}</div>
-          <div>Customers State: {customers ? '✅ Exists' : '❌ Missing'}</div>
-          <div>Customers is Array: {Array.isArray(customers) ? '✅ Yes' : '❌ No'}</div>
-          <div>Customers Length: {customers?.length || 0}</div>
-          <div>Filtered Customers: {filteredCustomers.length}</div>
-          <div>Base Path: {basePath}</div>
-          <div className="text-yellow-400 font-bold">
-            User Object: {user ? JSON.stringify(user).substring(0, 100) + '...' : '❌ No user'}
+        
+        {/* State Overview */}
+        <div className="space-y-2 mb-3">
+          <div className="font-bold text-yellow-400 flex items-center gap-1">
+            <Info size={14} /> STATE OVERVIEW
           </div>
-          <div className="text-green-400 font-bold">
-            User ID: {userId || '❌ Not found'} {userId && ( /^[0-9a-fA-F]{24}$/.test(userId) ? '✅ Valid' : '⚠️ Invalid format' )}
-          </div>
-          <div>User Role: {userRole || 'N/A'}</div>
-          <div>Price Summary: Min ₹{priceSummary.totalMin} - Max ₹{priceSummary.totalMax}</div>
-          <div>Balance Amount: Min ₹{balanceAmount.min} - Max ₹{balanceAmount.max}</div>
-          {passedCustomer && (
-            <div className="text-green-400 font-bold">
-              ✅ Auto-filled from Customer Page: {passedCustomer.firstName} {passedCustomer.lastName}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="text-gray-400">Customer:</div>
+            <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
+              {formData.customer ? '✅ Selected' : '❌ Not selected'}
             </div>
-          )}
+            
+            <div className="text-gray-400">Customer ID:</div>
+            <div className="font-mono text-xs">
+              {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
+            </div>
+            
+            <div className="text-gray-400">ID Valid:</div>
+            <div className={validateMongoId(formData.customer).valid ? 'text-green-400' : 'text-red-400'}>
+              {validateMongoId(formData.customer).valid ? '✅' : '❌'}
+            </div>
+            
+            <div className="text-gray-400">Garments:</div>
+            <div className="text-blue-400 font-bold">{garments.length}</div>
+            
+            <div className="text-gray-400">Payments:</div>
+            <div className="text-green-400 font-bold">{payments.length}</div>
+            
+            <div className="text-gray-400">Total Paid:</div>
+            <div className="text-green-400 font-bold">₹{totalPayments}</div>
+          </div>
+        </div>
+
+        {/* User Info */}
+        <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
+          <div className="font-bold text-yellow-400 flex items-center gap-1">
+            <User size={14} /> USER INFO
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="text-gray-400">User ID:</div>
+            <div className="font-mono">{userId ? `${userId.substring(0,8)}...` : '❌'}</div>
+            
+            <div className="text-gray-400">ID Valid:</div>
+            <div className={userIdValidation.valid ? 'text-green-400' : 'text-red-400'}>
+              {userIdValidation.valid ? '✅' : '❌'}
+            </div>
+            
+            <div className="text-gray-400">Role:</div>
+            <div className="text-purple-400">{userRole || 'N/A'}</div>
+            
+            <div className="text-gray-400">Base Path:</div>
+            <div className="text-blue-400">{basePath}</div>
+          </div>
+        </div>
+
+        {/* Payment Details with Type Validation */}
+        {payments.length > 0 && (
+          <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
+            <div className="font-bold text-yellow-400 flex items-center gap-1">
+              <Wallet size={14} /> PAYMENT DETAILS (with validation)
+            </div>
+            {payments.map((p, idx) => {
+              // Check if type is valid for backend
+              const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
+              const typeValid = validTypes.includes(p.type);
+              
+              return (
+                <div key={p.tempId} className="bg-gray-800 p-2 rounded text-xs">
+                  <div className="grid grid-cols-2 gap-1">
+                    <span className="text-gray-400">#{idx+1}:</span>
+                    <span className="text-green-400">₹{p.amount}</span>
+                    
+                    <span className="text-gray-400">Type:</span>
+                    <div className="flex items-center gap-1">
+                      <span className={`${
+                        p.type === 'advance' ? 'text-blue-400' :
+                        p.type === 'part-payment' ? 'text-orange-400' :
+                        p.type === 'final-settlement' ? 'text-green-400' : 
+                        p.type === 'extra' ? 'text-purple-400' : 'text-red-400'
+                      }`}>
+                        {p.type}
+                      </span>
+                      {!typeValid && (
+                        <span className="text-red-400 font-bold ml-1">❌ INVALID</span>
+                      )}
+                    </div>
+                    
+                    <span className="text-gray-400">Method:</span>
+                    <span className="capitalize">{p.method}</span>
+                    
+                    <span className="text-gray-400">Will map to:</span>
+                    <span className="text-yellow-400">
+                      {p.type === 'partial' ? 'part-payment' : 
+                       p.type === 'full' ? 'final-settlement' : p.type}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Price Summary */}
+        <div className="space-y-2 border-t border-gray-700 pt-2">
+          <div className="font-bold text-yellow-400 flex items-center gap-1">
+            <IndianRupee size={14} /> PRICE SUMMARY
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="text-gray-400">Total Min:</div>
+            <div className="text-blue-400">₹{priceSummary.totalMin}</div>
+            <div className="text-gray-400">Total Max:</div>
+            <div className="text-blue-400">₹{priceSummary.totalMax}</div>
+            <div className="text-gray-400">Balance Min:</div>
+            <div className="text-orange-400">₹{balanceAmount.min}</div>
+            <div className="text-gray-400">Balance Max:</div>
+            <div className="text-orange-400">₹{balanceAmount.max}</div>
+          </div>
+        </div>
+
+        {/* Validation Status */}
+        <div className="space-y-2 border-t border-gray-700 pt-2 mt-2">
+          <div className="font-bold text-yellow-400 flex items-center gap-1">
+            <CheckCircle size={14} /> VALIDATION STATUS
+          </div>
+          <div className="space-y-1 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">Customer Selected:</span>
+              {formData.customer ? 
+                <span className="text-green-400">✅</span> : 
+                <span className="text-red-400">❌</span>}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">Garments Added:</span>
+              {garments.length > 0 ? 
+                <span className="text-green-400">✅ ({garments.length})</span> : 
+                <span className="text-red-400">❌</span>}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">Delivery Date:</span>
+              {formData.deliveryDate ? 
+                <span className="text-green-400">✅</span> : 
+                <span className="text-red-400">❌</span>}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">User Logged In:</span>
+              {userId ? 
+                <span className="text-green-400">✅</span> : 
+                <span className="text-red-400">❌</span>}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400">Payment Types Valid:</span>
+              {payments.every(p => ['advance', 'part-payment', 'final-settlement', 'extra', 'partial', 'full'].includes(p.type)) ? 
+                <span className="text-green-400">✅</span> : 
+                <span className="text-red-400">❌</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* Server Errors Display */}
+        {serverErrors && (
+          <div className="space-y-2 border-t border-red-700 pt-2 mt-2">
+            <div className="font-bold text-red-400 flex items-center gap-1">
+              <AlertCircle size={14} /> SERVER ERRORS
+            </div>
+            <div className="bg-red-900/50 p-2 rounded text-xs text-red-300">
+              <pre className="whitespace-pre-wrap">
+                {JSON.stringify(serverErrors, null, 2)}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        <div className="text-xs text-gray-500 mt-4 text-center border-t border-gray-700 pt-2">
+          <div>Last updated: {new Date().toLocaleTimeString()}</div>
+          <div>Log Level: {DEBUG.LOG_LEVEL}</div>
         </div>
       </div>
     );
@@ -719,7 +936,7 @@ export default function NewOrder() {
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 p-6">
       <DebugPanel />
 
-      {/* ✅ Add Payment Modal - Reusable Component */}
+      {/* Add Payment Modal */}
       <AddPaymentModal
         isOpen={showPaymentModal}
         onClose={() => {
@@ -728,7 +945,7 @@ export default function NewOrder() {
         }}
         onSave={handleSavePayment}
         orderTotal={priceSummary.totalMax}
-        orderId="temp" // Will be replaced after order creation
+        orderId="temp"
         customerId={formData.customer}
         initialData={editingPayment}
         title={editingPayment ? "Edit Payment" : "Add Payment"}
@@ -786,11 +1003,6 @@ export default function NewOrder() {
                         const displayId = getCustomerDisplayId(customer);
                         const phone = getCustomerPhone(customer);
                         
-                        let displayName = fullName;
-                        if (customer.salutation && !fullName.includes(customer.salutation)) {
-                          displayName = `${customer.salutation} ${fullName}`.trim();
-                        }
-                        
                         return (
                           <button
                             key={customer._id}
@@ -798,7 +1010,7 @@ export default function NewOrder() {
                             onClick={() => handleCustomerSelect(customer)}
                             className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-100 last:border-0"
                           >
-                            <p className="font-medium text-slate-800">{displayName}</p>
+                            <p className="font-medium text-slate-800">{fullName}</p>
                             <p className="text-xs text-slate-400">
                               <span className="font-mono">{displayId}</span> • {phone}
                             </p>
@@ -1003,12 +1215,12 @@ export default function NewOrder() {
                     Garment Delivery Range
                   </p>
                   <p className="text-sm font-bold text-purple-700">
-                    {new Date(Math.min(...garments.map(g => new Date(g.estimatedDelivery)))).toLocaleDateString()} - {new Date(Math.max(...garments.map(g => new Date(g.estimatedDelivery)))).toLocaleDateString()}
+                    {new Date(Math.min(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()} - {new Date(Math.max(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()}
                   </p>
                 </div>
               )}
 
-              {/* 👇 Enhanced Payments Section */}
+              {/* Payments Section */}
               <div className="border-t border-slate-100 pt-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-black text-slate-700">Payments</h3>
@@ -1038,11 +1250,14 @@ export default function NewOrder() {
                             <div className="flex items-center gap-2">
                               <p className="font-bold text-green-600">₹{payment.amount}</p>
                               <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                payment.type === 'full' 
-                                  ? 'bg-green-100 text-green-700' 
-                                  : 'bg-blue-100 text-blue-700'
+                                payment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
+                                payment.type === 'part-payment' ? 'bg-orange-100 text-orange-700' :
+                                payment.type === 'final-settlement' ? 'bg-green-100 text-green-700' :
+                                'bg-purple-100 text-purple-700'
                               }`}>
-                                {payment.type === 'full' ? 'Full' : 'Advance'}
+                                {payment.type === 'advance' ? 'Advance' :
+                                 payment.type === 'part-payment' ? 'Part' :
+                                 payment.type === 'final-settlement' ? 'Full' : 'Extra'}
                               </span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">

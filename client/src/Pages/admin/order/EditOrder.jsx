@@ -23,17 +23,32 @@ import {
   Receipt,
   TrendingUp,
 } from "lucide-react";
-import { fetchOrderById, updateOrder, updateOrderStatus } from "../../../features/order/orderSlice";
-import { fetchGarmentsByOrder, deleteGarment } from "../../../features/garment/garmentSlice";
+
+// ✅ CORRECTED IMPORTS - Using correct slice names from Redux state
+import { 
+  fetchOrderById, 
+  updateExistingOrder,
+  updateOrderStatusThunk,
+  clearCurrentOrder
+} from "../../../features/order/orderSlice";
+
+import { 
+  fetchGarmentsByOrder, 
+  deleteGarment 
+} from "../../../features/garment/garmentSlice";
+
 import {
   fetchOrderPayments,
   createPayment,
   updatePayment,
   deletePayment,
-} from "../../../features/payment/paymentSlice";
+  clearPayments
+} from "../../../features/payment/paymentSlice.js";
+
 import { fetchAllCustomers } from "../../../features/customer/customerSlice";
+
 import GarmentForm from "../garment/GarmentForm";
-import AddPaymentModal from "../../../components/AddPaymentModal"; // ✅ Import AddPaymentModal
+import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
 
 export default function EditOrder() {
@@ -41,10 +56,54 @@ export default function EditOrder() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   
-  const { currentOrder, loading } = useSelector((state) => state.order);
-  const { garments } = useSelector((state) => state.garment);
-  const { payments = [], loading: paymentsLoading } = useSelector((state) => state.payment || { payments: [] });
-  const { customers } = useSelector((state) => state.customer);
+  // ✅ DEBUG: Log component mount
+  console.log("🔍 EditOrder mounted with ID:", id);
+  console.log("📍 Current URL:", window.location.href);
+  
+  // ✅ CORRECTED STATE SELECTORS - Using state.order (singular) as shown in Redux
+  const { currentOrder, loading } = useSelector((state) => {
+    console.log("🔍 Order state (state.order):", state.order);
+    return {
+      currentOrder: state.order?.currentOrder || null,
+      loading: state.order?.loading || false
+    };
+  });
+  
+  // Garments - check both singular and plural
+  const garments = useSelector((state) => {
+    const garmentsData = state.garment?.garments || state.garments?.garments || [];
+    console.log("🔍 Garments state:", { 
+      fromGarment: state.garment?.garments,
+      fromGarments: state.garments?.garments,
+      result: garmentsData 
+    });
+    return garmentsData;
+  });
+  
+  // Payments - check both singular and plural
+  const payments = useSelector((state) => {
+    const paymentsData = state.payment?.payments || state.payments?.payments || [];
+    console.log("🔍 Payments state:", { 
+      fromPayment: state.payment?.payments,
+      fromPayments: state.payments?.payments,
+      result: paymentsData 
+    });
+    return paymentsData;
+  });
+  
+  const paymentsLoading = useSelector((state) => state.payment?.loading || state.payments?.loading || false);
+  
+  // Customers - check both singular and plural
+  const customers = useSelector((state) => {
+    const customersData = state.customer?.customers || state.customers?.customers || [];
+    console.log("🔍 Customers state:", { 
+      fromCustomer: state.customer?.customers,
+      fromCustomers: state.customers?.customers,
+      result: customersData 
+    });
+    return customersData;
+  });
+  
   const { user } = useSelector((state) => state.auth);
 
   const [formData, setFormData] = useState({
@@ -59,31 +118,87 @@ export default function EditOrder() {
   });
 
   const [showGarmentModal, setShowGarmentModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false); // ✅ For Add Payment Modal
-  const [editingPayment, setEditingPayment] = useState(null); // ✅ For editing payments
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [editingPayment, setEditingPayment] = useState(null);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [editingGarment, setEditingGarment] = useState(null);
   const [expandedGarment, setExpandedGarment] = useState(null);
   const [customerName, setCustomerName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [dataLoadTimeout, setDataLoadTimeout] = useState(false);
+  const [fetchAttempts, setFetchAttempts] = useState(0);
 
   const isAdmin = user?.role === "ADMIN";
   const isStoreKeeper = user?.role === "STORE_KEEPER";
   const canEdit = isAdmin || isStoreKeeper;
 
-  // ✅ Get base path based on user role
+  // Get base path based on user role
   const basePath = user?.role === "ADMIN" ? "/admin" : 
                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
                    "/cuttingmaster";
 
+  // ✅ Set timeout for loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loading) {
+        setDataLoadTimeout(true);
+      }
+    }, 8000);
+    
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  // ✅ Fetch all data on mount
   useEffect(() => {
     if (id) {
-      dispatch(fetchOrderById(id));
-      dispatch(fetchGarmentsByOrder(id));
-      dispatch(fetchOrderPayments(id));
+      console.log("🔍 Fetching order details for ID:", id, "Attempt:", fetchAttempts + 1);
+      
+      const fetchData = async () => {
+        try {
+          setFetchAttempts(prev => prev + 1);
+          
+          console.log("📦 Fetching order by ID...");
+          await dispatch(fetchOrderById(id)).unwrap();
+          
+          console.log("👕 Fetching garments...");
+          await dispatch(fetchGarmentsByOrder(id)).unwrap();
+          
+          console.log("💰 Fetching payments...");
+          await dispatch(fetchOrderPayments(id)).unwrap();
+          
+          console.log("👥 Fetching customers...");
+          await dispatch(fetchAllCustomers()).unwrap();
+          
+          console.log("🎉 All data fetched successfully!");
+          
+        } catch (error) {
+          console.error("❌ Error fetching data:", error);
+          showToast.error(error?.message || "Failed to load order details");
+        }
+      };
+      
+      fetchData();
     }
-    dispatch(fetchAllCustomers());
+
+    // Cleanup on unmount
+    return () => {
+      console.log("🧹 Cleaning up edit order");
+      dispatch(clearCurrentOrder());
+      dispatch(clearPayments());
+    };
   }, [dispatch, id]);
+
+  // ✅ Log state changes
+  useEffect(() => {
+    console.log("📊 Current state:", {
+      currentOrder: currentOrder?._id,
+      garmentsCount: garments?.length,
+      paymentsCount: payments?.length,
+      customersCount: customers?.length,
+      loading,
+      fetchAttempts
+    });
+  }, [currentOrder, garments, payments, customers, loading, fetchAttempts]);
 
   // Find customer name from customers array
   useEffect(() => {
@@ -106,12 +221,15 @@ export default function EditOrder() {
         }
         
         setCustomerName(name || 'Customer');
+        console.log("👤 Customer name set:", name);
       }
     }
   }, [currentOrder, customers]);
 
+  // Set form data when order loads
   useEffect(() => {
     if (currentOrder) {
+      console.log("📝 Setting form data from order:", currentOrder);
       setFormData({
         customer: currentOrder.customer?._id || "",
         deliveryDate: currentOrder.deliveryDate?.split("T")[0] || "",
@@ -122,26 +240,20 @@ export default function EditOrder() {
     }
   }, [currentOrder]);
 
-  // ✅ Debug payments
-  useEffect(() => {
-    if (payments?.length > 0) {
-      console.log("💰 Payments loaded:", payments);
-    }
-  }, [payments]);
-
-  // ✅ Calculate payment statistics
+  // Calculate payment statistics
   const paymentStats = {
-    totalPaid: payments?.reduce((sum, p) => sum + p.amount, 0) || 0,
+    totalPaid: payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     totalPayments: payments?.length || 0,
-    lastPayment: payments?.length > 0 ? payments[0] : null,
-    advanceTotal: payments?.filter(p => p.type === 'advance').reduce((sum, p) => sum + p.amount, 0) || 0,
-    fullTotal: payments?.filter(p => p.type === 'full').reduce((sum, p) => sum + p.amount, 0) || 0,
-    extraTotal: payments?.filter(p => p.type === 'extra').reduce((sum, p) => sum + p.amount, 0) || 0,
+    lastPayment: payments?.length > 0 ? payments[payments.length - 1] : null,
+    advanceTotal: payments?.filter(p => p.type === 'advance').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    fullTotal: payments?.filter(p => p.type === 'full').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    partialTotal: payments?.filter(p => p.type === 'partial').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    extraTotal: payments?.filter(p => p.type === 'extra').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     byMethod: {
-      cash: payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + p.amount, 0) || 0,
-      upi: payments?.filter(p => p.method === 'upi').reduce((sum, p) => sum + p.amount, 0) || 0,
-      'bank-transfer': payments?.filter(p => p.method === 'bank-transfer').reduce((sum, p) => sum + p.amount, 0) || 0,
-      card: payments?.filter(p => p.method === 'card').reduce((sum, p) => sum + p.amount, 0) || 0
+      cash: payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      upi: payments?.filter(p => p.method === 'upi').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      'bank-transfer': payments?.filter(p => p.method === 'bank-transfer').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      card: payments?.filter(p => p.method === 'card').reduce((sum, p) => sum + (p.amount || 0), 0) || 0
     }
   };
 
@@ -158,11 +270,11 @@ export default function EditOrder() {
 
   // Calculate garment delivery range
   const garmentDeliveryRange = garments?.length > 0 ? {
-    min: new Date(Math.min(...garments.map(g => new Date(g.estimatedDelivery)))),
-    max: new Date(Math.max(...garments.map(g => new Date(g.estimatedDelivery))))
+    min: new Date(Math.min(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))),
+    max: new Date(Math.max(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate))))
   } : null;
 
-  // ✅ Payment Method Icon Component
+  // Payment Method Icon Component
   const PaymentMethodIcon = ({ method }) => {
     switch(method) {
       case 'cash':
@@ -193,38 +305,47 @@ export default function EditOrder() {
       try {
         await dispatch(deleteGarment(garmentId)).unwrap();
         showToast.success("Garment removed");
+        dispatch(fetchGarmentsByOrder(id));
       } catch (error) {
         showToast.error("Failed to remove garment");
       }
     }
   };
 
-  const handleSaveGarment = (garmentData) => {
+  const handleSaveGarment = () => {
     setShowGarmentModal(false);
     dispatch(fetchGarmentsByOrder(id));
     showToast.success("Garment updated");
   };
 
-  // ✅ Handle Add Payment - Opens modal for new payment
+  // Handle Add Payment
   const handleAddPayment = () => {
     setEditingPayment(null);
     setShowPaymentModal(true);
   };
 
-  // ✅ Handle Edit Payment - Opens modal with payment data
+  // Handle Edit Payment
   const handleEditPayment = (payment) => {
     setEditingPayment(payment);
     setShowPaymentModal(true);
   };
 
-  // ✅ Handle Save Payment (for both new and edited)
+  // Handle Save Payment
   const handleSavePayment = async (paymentData) => {
     try {
       if (editingPayment) {
         // Update existing payment
         await dispatch(updatePayment({
           id: editingPayment._id,
-          data: paymentData
+          data: {
+            amount: Number(paymentData.amount),
+            type: paymentData.type || 'advance',
+            method: paymentData.method || 'cash',
+            referenceNumber: paymentData.referenceNumber || '',
+            paymentDate: paymentData.paymentDate || paymentData.date || new Date().toISOString().split('T')[0],
+            paymentTime: paymentData.paymentTime || paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false }),
+            notes: paymentData.notes || ''
+          }
         })).unwrap();
         showToast.success("Payment updated successfully");
       } else {
@@ -232,20 +353,28 @@ export default function EditOrder() {
         await dispatch(createPayment({
           order: id,
           customer: currentOrder?.customer?._id,
-          ...paymentData
+          amount: Number(paymentData.amount),
+          type: paymentData.type || 'advance',
+          method: paymentData.method || 'cash',
+          referenceNumber: paymentData.referenceNumber || '',
+          paymentDate: paymentData.paymentDate || paymentData.date || new Date().toISOString().split('T')[0],
+          paymentTime: paymentData.paymentTime || paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false }),
+          notes: paymentData.notes || ''
         })).unwrap();
         showToast.success("Payment added successfully");
       }
       
       setShowPaymentModal(false);
       setEditingPayment(null);
-      dispatch(fetchOrderPayments(id)); // Refresh payments
+      dispatch(fetchOrderPayments(id));
+      dispatch(fetchOrderById(id));
     } catch (error) {
+      console.error("Payment error:", error);
       showToast.error(error.message || "Failed to save payment");
     }
   };
 
-  // ✅ Handle Delete Payment
+  // Handle Delete Payment
   const handleDeletePayment = async (paymentId) => {
     if (!canEdit) {
       showToast.error("You don't have permission to delete payments");
@@ -256,13 +385,32 @@ export default function EditOrder() {
       try {
         await dispatch(deletePayment(paymentId)).unwrap();
         showToast.success("Payment deleted successfully");
-        dispatch(fetchOrderPayments(id)); // Refresh payments
+        dispatch(fetchOrderPayments(id));
+        dispatch(fetchOrderById(id));
       } catch (error) {
         showToast.error("Failed to delete payment");
       }
     }
   };
 
+  // Handle Status Change
+  const handleStatusChange = async (newStatus) => {
+    if (!canEdit) {
+      showToast.error("You don't have permission to update status");
+      return;
+    }
+
+    try {
+      await dispatch(updateOrderStatusThunk({ id, status: newStatus })).unwrap();
+      showToast.success(`Status updated to ${newStatus}`);
+      setFormData(prev => ({ ...prev, status: newStatus }));
+      dispatch(fetchOrderById(id));
+    } catch (error) {
+      showToast.error("Failed to update status");
+    }
+  };
+
+  // Handle Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -280,7 +428,6 @@ export default function EditOrder() {
     }
 
     try {
-      // Prepare complete order update data
       const orderUpdateData = {
         deliveryDate: formData.deliveryDate,
         specialNotes: formData.specialNotes,
@@ -298,9 +445,9 @@ export default function EditOrder() {
 
       console.log("📤 Updating order with data:", orderUpdateData);
 
-      await dispatch(updateOrder({ 
+      await dispatch(updateExistingOrder({ 
         id, 
-        orderData: orderUpdateData 
+        data: orderUpdateData 
       })).unwrap();
       
       showToast.success("Order updated successfully");
@@ -356,10 +503,58 @@ export default function EditOrder() {
     );
   }
 
-  if (loading) {
+  // Loading state with timeout
+  if (loading && !dataLoadTimeout) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-slate-600">Loading order details...</p>
+          <p className="text-sm text-slate-400 mt-2">Attempt {fetchAttempts}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Timeout error
+  if (dataLoadTimeout && !currentOrder) {
+    return (
+      <div className="text-center py-16">
+        <Package size={64} className="mx-auto text-slate-300 mb-4" />
+        <h2 className="text-2xl font-bold text-slate-800">Taking too long to load</h2>
+        <p className="text-slate-500 mb-4">Order ID: {id}</p>
+        <p className="text-sm text-slate-400 mb-4">Attempts: {fetchAttempts}</p>
+        <div className="flex gap-4 justify-center">
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Retry
+          </button>
+          <button
+            onClick={() => navigate(`${basePath}/orders`)}
+            className="bg-slate-200 text-slate-700 px-6 py-2 rounded-lg hover:bg-slate-300"
+          >
+            Back to Orders
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentOrder) {
+    return (
+      <div className="text-center py-16">
+        <Package size={64} className="mx-auto text-slate-300 mb-4" />
+        <h2 className="text-2xl font-bold text-slate-800">Order Not Found</h2>
+        <p className="text-slate-500 mb-4">Order ID: {id}</p>
+        <p className="text-sm text-slate-400 mb-4">Attempts: {fetchAttempts}</p>
+        <button
+          onClick={() => navigate(`${basePath}/orders`)}
+          className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+        >
+          Back to Orders
+        </button>
       </div>
     );
   }
@@ -368,7 +563,7 @@ export default function EditOrder() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 p-6">
-      {/* ✅ Add Payment Modal - With all required props */}
+      {/* Add Payment Modal */}
       <AddPaymentModal
         isOpen={showPaymentModal}
         onClose={() => {
@@ -383,6 +578,34 @@ export default function EditOrder() {
         title={editingPayment ? "Edit Payment" : "Add Payment to Order"}
       />
 
+      {/* Debug Panel */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-60">
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-bold">🔍 DEBUG INFO</span>
+            <button 
+              onClick={() => console.clear()} 
+              className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
+            >
+              Clear Console
+            </button>
+          </div>
+          <div className="space-y-1">
+            <div>Order ID: {currentOrder?.orderId}</div>
+            <div>Order _id: {currentOrder?._id}</div>
+            <div>Garments: {garments?.length || 0}</div>
+            <div>Payments: {payments?.length || 0}</div>
+            <div>Customers: {customers?.length || 0}</div>
+            <div>Total Paid: {formatCurrency(paymentStats.totalPaid)}</div>
+            <div>Balance: {formatCurrency(balanceAmount)}</div>
+            <div>Can Edit: {canEdit ? 'Yes' : 'No'}</div>
+            <div>Role: {user?.role}</div>
+            <div>Loading: {loading ? 'Yes' : 'No'}</div>
+            <div>Fetch Attempts: {fetchAttempts}</div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
@@ -394,6 +617,30 @@ export default function EditOrder() {
         <div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Edit Order</h1>
           <p className="text-slate-500">Order ID: {currentOrder?.orderId}</p>
+        </div>
+      </div>
+
+      {/* Status Bar */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Clock size={20} className="text-blue-600" />
+            <span className="font-bold text-slate-700">Current Status:</span>
+            <select
+              value={formData.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold"
+            >
+              <option value="draft">Draft</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="in-progress">In Progress</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div className="text-sm text-slate-400">
+            Last updated: {currentOrder?.updatedAt ? new Date(currentOrder.updatedAt).toLocaleString() : 'N/A'}
+          </div>
         </div>
       </div>
 
@@ -478,24 +725,6 @@ export default function EditOrder() {
               <Package size={20} className="text-blue-600" />
               Order Details
             </h2>
-
-            {/* Status Selection */}
-            <div className="mb-4">
-              <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-                Order Status
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              >
-                <option value="draft">Draft</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="in-progress">In Progress</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
 
             {/* Special Notes */}
             <div>
@@ -597,7 +826,7 @@ export default function EditOrder() {
                                       {garment.referenceImages.map((img, idx) => (
                                         <div key={idx} className="relative group">
                                           <img
-                                            src={img.url}
+                                            src={img.url || img}
                                             alt={`Reference ${idx + 1}`}
                                             className="w-full h-24 object-cover rounded-lg border border-slate-200"
                                             onError={(e) => {
@@ -618,7 +847,7 @@ export default function EditOrder() {
                                       {garment.customerImages.map((img, idx) => (
                                         <div key={idx} className="relative group">
                                           <img
-                                            src={img.url}
+                                            src={img.url || img}
                                             alt={`Customer ${idx + 1}`}
                                             className="w-full h-24 object-cover rounded-lg border border-slate-200"
                                             onError={(e) => {
@@ -699,6 +928,12 @@ export default function EditOrder() {
                       <span className="font-bold text-blue-600">{formatCurrency(paymentStats.advanceTotal)}</span>
                     </div>
                   )}
+                  {paymentStats.partialTotal > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-slate-600">Partial</span>
+                      <span className="font-bold text-orange-600">{formatCurrency(paymentStats.partialTotal)}</span>
+                    </div>
+                  )}
                   {paymentStats.fullTotal > 0 && (
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-slate-600">Full</span>
@@ -772,56 +1007,6 @@ export default function EditOrder() {
                 </div>
               )}
 
-              {/* Advance Payment */}
-              <div>
-                <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-                  Advance Payment
-                </label>
-                <div className="relative">
-                  <IndianRupee className="absolute left-4 top-3.5 text-slate-400" size={18} />
-                  <input
-                    type="number"
-                    value={formData.advancePayment.amount}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      advancePayment: {
-                        ...formData.advancePayment,
-                        amount: parseInt(e.target.value) || 0,
-                      }
-                    })}
-                    min="0"
-                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* Payment Method */}
-              <div>
-                <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-                  Payment Method
-                </label>
-                <div className="relative">
-                  <CreditCard className="absolute left-4 top-3.5 text-slate-400" size={18} />
-                  <select
-                    value={formData.advancePayment.method}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      advancePayment: {
-                        ...formData.advancePayment,
-                        method: e.target.value,
-                      }
-                    })}
-                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="upi">UPI</option>
-                    <option value="bank-transfer">Bank Transfer</option>
-                    <option value="card">Card</option>
-                  </select>
-                  <ChevronDown className="absolute right-4 top-3.5 text-slate-400" size={18} />
-                </div>
-              </div>
-
               {/* Balance Amount */}
               <div className="bg-orange-50 p-4 rounded-xl mt-4">
                 <p className="text-xs text-orange-600 font-black uppercase mb-1">Balance Amount</p>
@@ -873,6 +1058,7 @@ export default function EditOrder() {
                               <span className={`text-xs px-2 py-0.5 rounded-full ${
                                 payment.type === 'full' ? 'bg-green-100 text-green-700' :
                                 payment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
+                                payment.type === 'partial' ? 'bg-orange-100 text-orange-700' :
                                 'bg-purple-100 text-purple-700'
                               }`}>
                                 {payment.type}

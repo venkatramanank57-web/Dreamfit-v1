@@ -23,7 +23,7 @@ export default function AddCustomer() {
     firstName: "",
     lastName: "",
     dateOfBirth: "",
-    contactNumber: "",
+    phone: "", // ✅ Changed from contactNumber to phone
     whatsappNumber: "",
     email: "",
     addressLine1: "",
@@ -36,7 +36,7 @@ export default function AddCustomer() {
 
   const [errors, setErrors] = useState({});
 
-  // ✅ Get base path based on user role
+  // Get base path based on user role
   const rolePath = user?.role === "ADMIN" ? "/admin" : 
                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
                    "/cuttingmaster";
@@ -49,7 +49,7 @@ export default function AddCustomer() {
     console.log(`✏️ Field changed: ${name} =`, value);
     
     // Special handling for phone numbers
-    if (name === "contactNumber" || name === "whatsappNumber" || name === "pincode") {
+    if (name === "phone" || name === "whatsappNumber" || name === "pincode") {
       const numericValue = value.replace(/\D/g, '');
       const maxLength = name === "pincode" ? 6 : 10;
       const truncated = numericValue.slice(0, maxLength);
@@ -79,13 +79,13 @@ export default function AddCustomer() {
       console.log("❌ First name missing");
     }
 
-    // Validate contact number
-    if (!formData.contactNumber) {
-      newErrors.contactNumber = "Contact number is required";
-      console.log("❌ Contact number missing");
-    } else if (formData.contactNumber.length !== 10) {
-      newErrors.contactNumber = "Contact number must be 10 digits";
-      console.log("❌ Contact number invalid length:", formData.contactNumber.length);
+    // Validate phone number
+    if (!formData.phone) {
+      newErrors.phone = "Phone number is required";
+      console.log("❌ Phone number missing");
+    } else if (formData.phone.length !== 10) {
+      newErrors.phone = "Phone number must be 10 digits";
+      console.log("❌ Phone number invalid length:", formData.phone.length);
     }
 
     // Validate WhatsApp number
@@ -133,9 +133,6 @@ export default function AddCustomer() {
       ...formData,
       dateOfBirth: formData.dateOfBirth ? `"${formData.dateOfBirth}"` : "empty"
     });
-    console.log("🎂 Raw dateOfBirth value:", formData.dateOfBirth ? `"${formData.dateOfBirth}"` : "empty");
-    console.log("🎂 dateOfBirth type:", typeof formData.dateOfBirth);
-    console.log("🎂 dateOfBirth length:", formData.dateOfBirth?.length || 0);
     
     if (!validateForm()) {
       console.log("❌ Form validation failed");
@@ -143,31 +140,26 @@ export default function AddCustomer() {
       return;
     }
     
-    // ✅ Process date of birth
+    // Process date of birth
     let dobValue = undefined;
     if (formData.dateOfBirth) {
       console.log("📅 Processing date:", formData.dateOfBirth);
       
       // Create date object (input is YYYY-MM-DD)
       const dateObj = new Date(formData.dateOfBirth);
-      console.log("📅 Date object created:", dateObj);
-      console.log("📅 Date ISO string:", dateObj.toISOString());
-      
       // Set to noon UTC to avoid timezone issues
-      const isoString = dateObj.toISOString();
-      dobValue = isoString;
+      dateObj.setUTCHours(12, 0, 0, 0);
+      dobValue = dateObj.toISOString();
       console.log("📅 Final DOB value for API:", dobValue);
-    } else {
-      console.log("📅 No date selected - sending undefined");
     }
     
-    // Prepare customer data for API
+    // Prepare customer data for API - ✅ Using 'phone' field to match backend
     const customerData = {
       salutation: formData.salutation,
       firstName: formData.firstName.trim(),
       lastName: formData.lastName.trim(),
       dateOfBirth: dobValue,
-      contactNumber: formData.contactNumber,
+      phone: formData.phone, // ✅ Changed from contactNumber to phone
       whatsappNumber: formData.whatsappNumber,
       email: formData.email.trim() || undefined,
       addressLine1: formData.addressLine1.trim(),
@@ -178,18 +170,13 @@ export default function AddCustomer() {
       notes: formData.notes.trim() || undefined
     };
 
-    console.log("📦 Final customerData being sent to API:", {
-      ...customerData,
-      dateOfBirth: customerData.dateOfBirth ? `"${customerData.dateOfBirth}"` : "undefined"
-    });
-    console.log("📦 Date of Birth in payload:", customerData.dateOfBirth ? `"${customerData.dateOfBirth}"` : "undefined");
+    console.log("📦 Final customerData being sent to API:", customerData);
 
     try {
       console.log("⏳ Dispatching createNewCustomer action...");
       const result = await dispatch(createNewCustomer(customerData)).unwrap();
       console.log("✅ Customer created successfully!");
       console.log("✅ Response from server:", result);
-      console.log("✅ Date of Birth in response:", result.customer?.dateOfBirth);
       
       showToast.success("Customer created successfully! 🎉");
       console.log("🔄 Navigating to:", `${rolePath}/customers`);
@@ -212,7 +199,7 @@ export default function AddCustomer() {
         // Highlight the phone field with error
         setErrors(prev => ({
           ...prev,
-          contactNumber: "This phone number is already taken"
+          phone: "This phone number is already taken" // ✅ Changed from contactNumber to phone
         }));
       } else {
         console.log("❌ Unknown error:", errorMsg);
@@ -223,7 +210,7 @@ export default function AddCustomer() {
     }
   };
 
-  // ✅ Handle Cancel - with rolePath
+  // Handle Cancel
   const handleCancel = () => {
     console.log("🔙 Cancel clicked - navigating to:", `${rolePath}/customers`);
     navigate(`${rolePath}/customers`);
@@ -241,11 +228,6 @@ export default function AddCustomer() {
     const sequential = String(nextNumber).padStart(5, '0');
     return `CUST-${year}-${sequential}`;
   };
-
-  console.log("🔄 Component rendering with formData:", {
-    ...formData,
-    dateOfBirth: formData.dateOfBirth ? `"${formData.dateOfBirth}"` : "empty"
-  });
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
@@ -266,9 +248,8 @@ export default function AddCustomer() {
           </div>
           <div className="space-y-1">
             <div>Date of Birth: {formData.dateOfBirth || '❌ Not set'}</div>
-            <div>DOB Length: {formData.dateOfBirth?.length || 0}</div>
             <div>First Name: {formData.firstName || '❌'}</div>
-            <div>Phone: {formData.contactNumber || '❌'}</div>
+            <div>Phone: {formData.phone || '❌'}</div>
             <div>Role: {user?.role}</div>
             <div>Base Path: {rolePath}</div>
           </div>
@@ -311,7 +292,7 @@ export default function AddCustomer() {
       )}
 
       {/* Customer ID Preview - Shows auto-generated ID */}
-      {formData.firstName && formData.contactNumber && (
+      {formData.firstName && formData.phone && (
         <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center gap-3">
           <Hash size={20} className="text-purple-600" />
           <div>
@@ -413,28 +394,28 @@ export default function AddCustomer() {
               </div>
             </div>
 
-            {/* Contact Number (Primary) */}
+            {/* Phone Number (Primary) - ✅ Changed label from Contact Number to Phone */}
             <div>
               <label className="block text-xs font-black uppercase text-slate-500 mb-2 tracking-wider">
-                Contact Number (Primary) <span className="text-red-500">*</span>
+                Phone Number <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <Phone className="absolute left-4 top-4 text-slate-400" size={20} />
                 <input
                   type="tel"
-                  name="contactNumber"
-                  value={formData.contactNumber}
+                  name="phone" // ✅ Changed from contactNumber to phone
+                  value={formData.phone}
                   onChange={handleChange}
                   placeholder="Enter 10-digit mobile number"
                   maxLength="10"
                   className={`w-full pl-12 pr-5 py-4 bg-slate-50 border ${
-                    errors.contactNumber ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                    errors.phone ? 'border-red-300 bg-red-50' : 'border-slate-200'
                   } rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-medium`}
                 />
               </div>
-              {errors.contactNumber && (
+              {errors.phone && (
                 <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                  <AlertCircle size={12} /> {errors.contactNumber}
+                  <AlertCircle size={12} /> {errors.phone}
                 </p>
               )}
             </div>

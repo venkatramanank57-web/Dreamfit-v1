@@ -67,6 +67,7 @@ import EditStoreKeeper from "../Pages/admin/storeKeeper/EditStoreKeeper";
 import BankingOverview from "../Pages/Banking/BankingOverview";
 import IncomePage from "../Pages/Banking/IncomePage";
 import ExpensePage from "../Pages/Banking/ExpensePage";
+import PaymentDetails from "../Pages/admin/payment/PaymentDetails";
 
 // ✅ NOTIFICATION COMPONENTS
 import NotificationsPage from "../Pages/notifications/NotificationsPage";
@@ -254,6 +255,9 @@ export default function AppRouter() {
           <Route path="reports/staff-performance" element={<ReportsPlaceholder title="Staff Performance" />} />
           <Route path="reports/financial" element={<ReportsPlaceholder title="Financial Report" />} />
           <Route path="reports/customer-analytics" element={<ReportsPlaceholder title="Customer Analytics" />} />
+
+            {/*  PAYMENT ROUTE */}
+         <Route path="payments/:id" element={<PaymentDetails />} />  
           
           {/* Settings */}
           <Route path="settings" element={<Settings />} />
@@ -320,6 +324,9 @@ export default function AppRouter() {
           <Route path="reports/sales" element={<ReportsPlaceholder title="Sales Report" />} />
           <Route path="reports/inventory" element={<ReportsPlaceholder title="Inventory Report" />} />
           <Route path="reports/production" element={<ReportsPlaceholder title="Production Report" />} />
+          
+            {/*  PAYMENT ROUTE */}
+         <Route path="payments/:id" element={<PaymentDetails />} />  
           
           {/* Notifications */}
           <Route path="notifications" element={<NotificationsPage />} />

@@ -1,4 +1,3 @@
-// backend/models/Customer.js
 import mongoose from "mongoose";
 
 const customerSchema = new mongoose.Schema({
@@ -65,6 +64,7 @@ const customerSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Computed fields (Stored in DB for fast searching)
   name: {
     type: String,
     trim: true
@@ -73,33 +73,39 @@ const customerSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // ✅ Customer Overview Logic: Stats for dashboard
   totalOrders: {
+    type: Number,
+    default: 0
+  },
+  totalSpent: {
     type: Number,
     default: 0
   }
 }, { 
   timestamps: true,
-  validateBeforeSave: false 
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
-// Pre-save hook to generate customerId and computed fields
+// ✅ MODERN ASYNC PRE-SAVE (Fixed 'next is not a function' error)
 customerSchema.pre("save", async function() {
   try {
-    console.log("🔧 Customer pre-save hook triggered for:", this.firstName);
+    console.log("🔧 Processing customer data for:", this.firstName);
     
-    // Generate customerId if not exists
+    // 1. Generate customerId
     if (!this.customerId) {
       const count = await mongoose.model("Customer").countDocuments();
       const year = new Date().getFullYear();
       const sequential = String(count + 1).padStart(5, "0");
       this.customerId = `CUST-${year}-${sequential}`;
-      console.log(`✅ Generated customerId: ${this.customerId}`);
+      console.log(`✅ ID Created: ${this.customerId}`);
     }
 
-    // Set computed name field
+    // 2. Compute full name
     this.name = `${this.salutation || ''} ${this.firstName || ''} ${this.lastName || ''}`.trim();
     
-    // Set computed address field
+    // 3. Compute full address
     const addressParts = [
       this.addressLine1,
       this.addressLine2,
@@ -109,25 +115,16 @@ customerSchema.pre("save", async function() {
     ].filter(Boolean);
     this.address = addressParts.join(', ');
 
-    await this.validate();
-    console.log("✅ Customer pre-save completed successfully");
-    
   } catch (error) {
-    console.error("❌ Error in customer pre-save hook:", error);
-    throw error;
+    console.error("❌ Pre-save logic failed:", error);
+    throw error; // Let Mongoose handle the error
   }
 });
 
-// Virtual for fullName (alternative to computed name field)
+// Virtual for formatted Name (Frontend convenience)
 customerSchema.virtual('fullName').get(function() {
   return `${this.salutation || ''} ${this.firstName || ''} ${this.lastName || ''}`.trim();
 });
 
-// Ensure virtuals are included in JSON/Object output
-customerSchema.set('toJSON', { virtuals: true });
-customerSchema.set('toObject', { virtuals: true });
-
-// Create or retrieve model (prevents model recompilation error in development)
 const Customer = mongoose.models.Customer || mongoose.model("Customer", customerSchema);
-
 export default Customer;

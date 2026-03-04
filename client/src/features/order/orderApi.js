@@ -1,222 +1,200 @@
+// frontend/src/features/orders/orderApi.js
 import API from "../../app/axios";
 
-// ===== 1. GET ALL ORDERS with filters =====
-export const getAllOrdersApi = async (params = {}) => {
-  const { 
-    page = 1, 
-    limit = 10, 
-    search = "", 
-    status = "", 
-    timeFilter = "all",
-    startDate = "",
-    endDate = "" 
-  } = params;
-  
-  const queryParams = new URLSearchParams({
-    page,
-    limit,
-    ...(search && { search }),
-    ...(status && status !== 'all' && { status }),
-    ...(timeFilter && { timeFilter }),
-    ...(startDate && { startDate }),
-    ...(endDate && { endDate })
-  }).toString();
+// ============================================
+// 📦 ORDER API - All API calls
+// ============================================
 
-  console.log("📡 Fetching orders with params:", params);
-  const response = await API.get(`/orders?${queryParams}`);
-  return response.data;
-};
+const ORDER_BASE = "/orders";
 
-// ===== 2. GET ORDER STATS =====
-export const getOrderStatsApi = async () => {
-  console.log("📊 Fetching order stats");
-  const response = await API.get("/orders/stats");
-  return response.data;
-};
-
-// ===== 3. GET ORDER BY ID (UPDATED - includes payments & works) =====
-export const getOrderByIdApi = async (id) => {
-  console.log(`📡 Fetching order: ${id}`);
-  const response = await API.get(`/orders/${id}`);
-  // Response includes: { order, payments, works }
-  return response.data;
-};
-
-// ===== 4. CREATE NEW ORDER (UPDATED - with payments) =====
-export const createOrderApi = async (orderData) => {
-  // 🔍 CRITICAL DEBUGGING
-  console.log("========== ORDER API DEBUG ==========");
-  console.log("📥 Received orderData type:", typeof orderData);
-  console.log("📥 Received orderData:", orderData);
-  console.log("📥 All keys:", Object.keys(orderData));
-  console.log("📥 createdBy value:", orderData.createdBy);
-  console.log("📥 createdBy type:", typeof orderData.createdBy);
-  console.log("📥 createdBy length:", orderData.createdBy?.length);
-  console.log("📥 customer value:", orderData.customer);
-  console.log("📥 payments value:", orderData.payments); // ✅ New
-  console.log("=====================================");
-  
-  // Create a clean copy of the data with payments
-  const dataToSend = {
-    customer: orderData.customer,
-    deliveryDate: orderData.deliveryDate,
-    specialNotes: orderData.specialNotes || "",
-    advancePayment: {
-      amount: Number(orderData.advancePayment?.amount) || 0,
-      method: orderData.advancePayment?.method || "cash",
-      date: orderData.advancePayment?.date || new Date().toISOString(),
-    },
-    priceSummary: {
-      totalMin: Number(orderData.priceSummary?.totalMin) || 0,
-      totalMax: Number(orderData.priceSummary?.totalMax) || 0,
-    },
-    balanceAmount: Number(orderData.balanceAmount) || 0,
-    createdBy: orderData.createdBy,
-    status: orderData.status || "draft",
-    orderDate: orderData.orderDate || new Date().toISOString(),
-    garments: orderData.garments || [],
-    // ✅ NEW: Include payments array if provided
-    payments: orderData.payments || [],
-  };
-
-  // Verify createdBy is still present
-  console.log("📤 Data being sent to backend:", {
-    ...dataToSend,
-    createdBy: dataToSend.createdBy || "❌ MISSING - THIS IS THE PROBLEM!",
-    paymentsCount: dataToSend.payments?.length || 0
-  });
-
-  if (!dataToSend.createdBy) {
-    console.error("❌ CRITICAL: createdBy is missing in dataToSend!");
-    throw new Error("createdBy is required but was not provided");
-  }
-
+/**
+ * Get order statistics for dashboard
+ * @returns {Promise} - Stats data
+ */
+export const getOrderStats = async () => {
   try {
-    const response = await API.post("/orders", dataToSend);
-    console.log("✅ Order created successfully:", response.data);
+    const response = await API.get(`${ORDER_BASE}/stats`);
     return response.data;
   } catch (error) {
-    console.error("❌ Order creation failed:", {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
+    console.error("❌ Error fetching order stats:", error);
     throw error;
   }
 };
 
-// ===== 5. UPDATE ORDER (UPDATED) =====
-export const updateOrderApi = async (id, orderData) => {
-  console.log(`========== UPDATE ORDER API DEBUG ==========`);
-  console.log(`📝 Updating order ${id}:`, orderData);
-  
-  const dataToSend = {
-    deliveryDate: orderData.deliveryDate,
-    specialNotes: orderData.specialNotes || "",
-    advancePayment: {
-      amount: Number(orderData.advancePayment?.amount) || 0,
-      method: orderData.advancePayment?.method || "cash",
-    },
-    priceSummary: {
-      totalMin: Number(orderData.priceSummary?.totalMin) || 0,
-      totalMax: Number(orderData.priceSummary?.totalMax) || 0,
-    },
-    balanceAmount: Number(orderData.balanceAmount) || 0,
-    status: orderData.status || "draft",
-    // ✅ Include new garments if any
-    newGarments: orderData.newGarments || [],
-  };
-
-  console.log("📤 Update data being sent:", dataToSend);
-  console.log("==========================================");
-
+/**
+ * Get dashboard data (today's orders, pending deliveries, collection)
+ * @returns {Promise} - Dashboard data
+ */
+export const getDashboardData = async () => {
   try {
-    const response = await API.put(`/orders/${id}`, dataToSend);
-    console.log("✅ Order updated successfully:", response.data);
+    const response = await API.get(`${ORDER_BASE}/dashboard`);
     return response.data;
   } catch (error) {
-    console.error("❌ Order update failed:", {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
+    console.error("❌ Error fetching dashboard data:", error);
     throw error;
   }
 };
 
-// ===== 6. UPDATE ORDER STATUS =====
-export const updateOrderStatusApi = async (id, status) => {
-  console.log(`🔄 Updating order ${id} status to:`, status);
-  const response = await API.patch(`/orders/${id}/status`, { status });
-  return response.data;
-};
-
-// ===== 7. DELETE ORDER =====
-export const deleteOrderApi = async (id) => {
-  console.log(`🗑️ Deleting order: ${id}`);
-  const response = await API.delete(`/orders/${id}`);
-  return response.data;
-};
-
-// ===== ✅ NEW: ADD PAYMENT TO ORDER =====
-export const addPaymentToOrderApi = async (orderId, paymentData) => {
-  console.log(`💰 Adding payment to order ${orderId}:`, paymentData);
-  
-  const dataToSend = {
-    amount: Number(paymentData.amount),
-    type: paymentData.type || 'advance',
-    method: paymentData.method || 'cash',
-    referenceNumber: paymentData.referenceNumber || '',
-    paymentDate: paymentData.paymentDate || new Date().toISOString().split('T')[0],
-    paymentTime: paymentData.paymentTime || new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-    notes: paymentData.notes || ''
-  };
-
+/**
+ * Create new order with payments
+ * @param {Object} orderData - Order data with payments array
+ * @returns {Promise} - Created order
+ */
+export const createOrder = async (orderData) => {
   try {
-    const response = await API.post(`/orders/${orderId}/payments`, dataToSend);
-    console.log("✅ Payment added successfully:", response.data);
+    console.log("📦 Creating order with data:", orderData);
+    const response = await API.post(ORDER_BASE, orderData);
     return response.data;
   } catch (error) {
-    console.error("❌ Add payment failed:", {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
+    console.error("❌ Error creating order:", error);
     throw error;
   }
 };
 
-// ===== ✅ NEW: GET ORDER PAYMENTS =====
-export const getOrderPaymentsApi = async (orderId) => {
-  console.log(`💰 Fetching payments for order: ${orderId}`);
-  
+/**
+ * Get all orders with filters
+ * @param {Object} params - Query params (page, limit, search, status, paymentStatus, timeFilter)
+ * @returns {Promise} - Paginated orders
+ */
+export const getAllOrders = async (params = {}) => {
   try {
-    const response = await API.get(`/orders/${orderId}/payments`);
-    console.log(`✅ Found ${response.data.payments?.length || 0} payments`);
+    const response = await API.get(ORDER_BASE, { params });
     return response.data;
   } catch (error) {
-    console.error("❌ Get payments failed:", {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
+    console.error("❌ Error fetching orders:", error);
     throw error;
   }
 };
 
-// ===== ✅ NEW: GET ORDER WITH PAYMENTS & WORKS =====
-export const getOrderWithDetailsApi = async (orderId) => {
-  console.log(`📦 Fetching order with details: ${orderId}`);
-  
+/**
+ * ✅ NEW: Get orders by customer ID
+ * @param {string} customerId - Customer ID
+ * @returns {Promise} - Customer's orders
+ */
+export const getOrdersByCustomer = async (customerId) => {
   try {
-    const response = await API.get(`/orders/${orderId}`);
-    return response.data; // Already includes payments and works
+    console.log(`🔍 Fetching orders for customer: ${customerId}`);
+    const response = await API.get(`${ORDER_BASE}/customer/${customerId}`);
+    return response.data;
   } catch (error) {
-    console.error("❌ Get order details failed:", {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
+    console.error(`❌ Error fetching orders for customer ${customerId}:`, error);
     throw error;
   }
 };
+
+/**
+ * Get single order by ID (includes payments & works)
+ * @param {string} id - Order ID
+ * @returns {Promise} - Order details
+ */
+export const getOrderById = async (id) => {
+  try {
+    const response = await API.get(`${ORDER_BASE}/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error fetching order ${id}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Update order details
+ * @param {string} id - Order ID
+ * @param {Object} updateData - Data to update
+ * @returns {Promise} - Updated order
+ */
+export const updateOrder = async (id, updateData) => {
+  try {
+    const response = await API.put(`${ORDER_BASE}/${id}`, updateData);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error updating order ${id}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Update order status only
+ * @param {string} id - Order ID
+ * @param {string} status - New status
+ * @returns {Promise} - Updated order
+ */
+export const updateOrderStatus = async (id, status) => {
+  try {
+    const response = await API.patch(`${ORDER_BASE}/${id}/status`, { status });
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error updating order status ${id}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Delete order (soft delete)
+ * @param {string} id - Order ID
+ * @returns {Promise} - Deletion confirmation
+ */
+export const deleteOrder = async (id) => {
+  try {
+    const response = await API.delete(`${ORDER_BASE}/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error deleting order ${id}:`, error);
+    throw error;
+  }
+};
+
+// ============================================
+// 💰 PAYMENT ROUTES (Specific to order)
+// ============================================
+
+/**
+ * Add payment to existing order
+ * @param {string} orderId - Order ID
+ * @param {Object} paymentData - Payment details
+ * @returns {Promise} - Created payment
+ */
+export const addPaymentToOrder = async (orderId, paymentData) => {
+  try {
+    console.log(`💰 Adding payment to order ${orderId}:`, paymentData);
+    const response = await API.post(`${ORDER_BASE}/${orderId}/payments`, paymentData);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error adding payment to order ${orderId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get all payments for an order
+ * @param {string} orderId - Order ID
+ * @returns {Promise} - List of payments
+ */
+export const getOrderPayments = async (orderId) => {
+  try {
+    const response = await API.get(`${ORDER_BASE}/${orderId}/payments`);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Error fetching payments for order ${orderId}:`, error);
+    throw error;
+  }
+};
+
+// ============================================
+// 📊 EXPORT ALL FUNCTIONS
+// ============================================
+const orderApi = {
+  getOrderStats,
+  getDashboardData,
+  createOrder,
+  getAllOrders,
+  getOrdersByCustomer, // ✅ Added new function
+  getOrderById,
+  updateOrder,
+  updateOrderStatus,
+  deleteOrder,
+  addPaymentToOrder,
+  getOrderPayments
+};
+
+export default orderApi;

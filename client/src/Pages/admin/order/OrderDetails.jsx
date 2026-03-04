@@ -25,8 +25,6 @@ import {
   X,
   Send,
   PackageCheck,
-  Hash,
-  TrendingUp,
   Wallet,
   Banknote,
   Smartphone,
@@ -35,17 +33,20 @@ import {
 } from "lucide-react";
 import {
   fetchOrderById,
-  deleteOrder,
-  updateOrderStatus,
+  deleteExistingOrder,
+  updateOrderStatusThunk,
+  clearCurrentOrder
 } from "../../../features/order/orderSlice";
 import { fetchGarmentsByOrder } from "../../../features/garment/garmentSlice";
 import {
   fetchOrderPayments,
   createPayment,
+  updatePayment,
   deletePayment,
+  clearPayments
 } from "../../../features/payment/paymentSlice";
 import OrderInvoice from "../../../components/OrderInvoice";
-import AddPaymentModal from "../../../components/AddPaymentModal"; // ✅ Import
+import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
 
 // ==================== IMAGE MODAL COMPONENT ====================
@@ -154,14 +155,63 @@ export default function OrderDetails() {
   const dispatch = useDispatch();
   const invoiceRef = useRef();
   
-  const { currentOrder, loading } = useSelector((state) => state.order);
-  const { garments } = useSelector((state) => state.garment);
-  const { payments = [], loading: paymentsLoading } = useSelector((state) => state.payment || { payments: [] });
-  const { user } = useSelector((state) => state.auth);
+  // 🔍 DEBUG: Log component mount and ID
+  console.log("🔍 OrderDetails mounted with ID:", id);
+  console.log("📍 Current URL:", window.location.href);
+  
+  // ✅ FIXED: Use state.order (singular) as shown in Redux state keys
+  const {
+    currentOrder,
+    currentPayments,
+    currentWorks,
+    loading,
+    error
+  } = useSelector((state) => {
+    // 🔍 DEBUG: Log available state keys
+    console.log("🔍 Redux state keys available:", Object.keys(state));
+    console.log("🔍 Order state (state.order):", state.order);
+    
+    return {
+      currentOrder: state.order?.currentOrder || null,
+      currentPayments: state.order?.currentPayments || [],
+      currentWorks: state.order?.currentWorks || [],
+      loading: state.order?.loading || false,
+      error: state.order?.error || null
+    };
+  });
+  
+  // Get garments state - check both singular and plural
+  const garments = useSelector((state) => {
+    const garmentsData = state.garment?.garments || state.garments?.garments || [];
+    console.log("🔍 Garments state:", { 
+      fromGarment: state.garment?.garments,
+      fromGarments: state.garments?.garments,
+      result: garmentsData 
+    });
+    return garmentsData;
+  });
+  
+  const garmentsLoading = useSelector((state) => state.garment?.loading || state.garments?.loading || false);
+  
+  // Get payments state - check both singular and plural
+  const payments = useSelector((state) => {
+    const paymentsData = state.payment?.payments || state.payments?.payments || [];
+    console.log("🔍 Payments state:", { 
+      fromPayment: state.payment?.payments,
+      fromPayments: state.payments?.payments,
+      result: paymentsData 
+    });
+    return paymentsData;
+  });
+  
+  const paymentsLoading = useSelector((state) => state.payment?.loading || state.payments?.loading || false);
+  
+  // Get auth state
+  const user = useSelector((state) => state.auth?.user || null);
 
   const [showStatusMenu, setShowStatusMenu] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false); // ✅ For Add Payment Modal
-  const [editingPayment, setEditingPayment] = useState(null); // ✅ For editing payments
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [editingPayment, setEditingPayment] = useState(null);
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [imageModal, setImageModal] = useState({
     isOpen: false,
@@ -169,7 +219,9 @@ export default function OrderDetails() {
     type: ''
   });
   const [expandedGarment, setExpandedGarment] = useState(null);
-  const [debug, setDebug] = useState({});
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [dataLoadTimeout, setDataLoadTimeout] = useState(false);
+  const [fetchAttempts, setFetchAttempts] = useState(0);
 
   const isAdmin = user?.role === "ADMIN";
   const isStoreKeeper = user?.role === "STORE_KEEPER";
@@ -180,61 +232,104 @@ export default function OrderDetails() {
                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
                    "/cuttingmaster";
 
+  // ✅ Set timeout for loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loading) {
+        setDataLoadTimeout(true);
+      }
+    }, 8000); // 8 seconds timeout
+    
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  // ✅ Fetch all data on mount
   useEffect(() => {
     if (id) {
-      console.log("🔍 Fetching order details for ID:", id);
-      dispatch(fetchOrderById(id));
-      dispatch(fetchGarmentsByOrder(id));
-      dispatch(fetchOrderPayments(id));
+      console.log("🔍 Fetching order details for ID:", id, "Attempt:", fetchAttempts + 1);
+      
+      const fetchData = async () => {
+        try {
+          setFetchAttempts(prev => prev + 1);
+          
+          // First fetch order details
+          console.log("📦 Fetching order by ID...");
+          const orderResult = await dispatch(fetchOrderById(id)).unwrap();
+          console.log("✅ Order data fetched:", orderResult);
+          
+          // Then fetch garments
+          console.log("👕 Fetching garments...");
+          const garmentsResult = await dispatch(fetchGarmentsByOrder(id)).unwrap();
+          console.log("✅ Garments fetched:", garmentsResult);
+          
+          // Then fetch payments
+          console.log("💰 Fetching payments...");
+          const paymentsResult = await dispatch(fetchOrderPayments(id)).unwrap();
+          console.log("✅ Payments fetched:", paymentsResult);
+          
+          console.log("🎉 All data fetched successfully!");
+          
+        } catch (error) {
+          console.error("❌ Error fetching data:", error);
+          showToast.error(error?.message || "Failed to load order details");
+        }
+      };
+      
+      fetchData();
     }
+
+    // Cleanup on unmount
+    return () => {
+      console.log("🧹 Cleaning up order details");
+      dispatch(clearCurrentOrder());
+      dispatch(clearPayments());
+    };
   }, [dispatch, id]);
 
-  // Debug: Log garments data
+  // ✅ Log state changes
   useEffect(() => {
-    if (garments) {
-      console.log("📦 ========== GARMENTS DATA RECEIVED ==========");
-      console.log("Raw garments data:", garments);
-      
-      garments.forEach((garment, index) => {
-        console.log(`\n📌 Garment ${index + 1}:`, {
-          id: garment._id,
-          name: garment.name,
-          referenceImagesCount: garment.referenceImages?.length || 0,
-          customerImagesCount: garment.customerImages?.length || 0,
-          customerClothImagesCount: garment.customerClothImages?.length || 0,
-        });
-      });
+    console.log("📊 Current state:", {
+      currentOrder: currentOrder?._id,
+      currentPaymentsCount: currentPayments?.length,
+      currentWorksCount: currentWorks?.length,
+      garmentsCount: garments?.length,
+      paymentsCount: payments?.length,
+      loading,
+      error,
+      fetchAttempts
+    });
+  }, [currentOrder, currentPayments, currentWorks, garments, payments, loading, error, fetchAttempts]);
 
-      setDebug({
-        garmentsCount: garments.length,
-        garmentsWithRefImages: garments.filter(g => g.referenceImages?.length > 0).length,
-        garmentsWithCustImages: garments.filter(g => g.customerImages?.length > 0).length,
-        garmentsWithClothImages: garments.filter(g => g.customerClothImages?.length > 0).length,
-      });
-    }
-  }, [garments]);
-
-  // ✅ Debug payments
+  // ✅ Handle error
   useEffect(() => {
-    if (payments?.length > 0) {
-      console.log("💰 ========== PAYMENTS DATA RECEIVED ==========");
-      console.log("Payments:", payments);
+    if (error) {
+      console.error("❌ Error in state:", error);
+      showToast.error(error);
     }
-  }, [payments]);
+  }, [error]);
 
-  // ✅ Calculate payment statistics
+  // ✅ Calculate payment statistics - use currentPayments if available, otherwise use payments
+  const displayPayments = currentPayments?.length > 0 ? currentPayments : payments;
+  
+  console.log("💰 Display payments:", {
+    currentPaymentsCount: currentPayments?.length,
+    paymentsCount: payments?.length,
+    displayCount: displayPayments?.length
+  });
+
   const paymentStats = {
-    totalPaid: payments?.reduce((sum, p) => sum + p.amount, 0) || 0,
-    totalPayments: payments?.length || 0,
-    lastPayment: payments?.length > 0 ? payments[0] : null,
-    advanceTotal: payments?.filter(p => p.type === 'advance').reduce((sum, p) => sum + p.amount, 0) || 0,
-    fullTotal: payments?.filter(p => p.type === 'full').reduce((sum, p) => sum + p.amount, 0) || 0,
-    extraTotal: payments?.filter(p => p.type === 'extra').reduce((sum, p) => sum + p.amount, 0) || 0,
+    totalPaid: displayPayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    totalPayments: displayPayments?.length || 0,
+    lastPayment: displayPayments?.length > 0 ? displayPayments[displayPayments.length - 1] : null,
+    advanceTotal: displayPayments?.filter(p => p.type === 'advance').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    fullTotal: displayPayments?.filter(p => p.type === 'full').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    partialTotal: displayPayments?.filter(p => p.type === 'partial').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+    extraTotal: displayPayments?.filter(p => p.type === 'extra').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     byMethod: {
-      cash: payments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + p.amount, 0) || 0,
-      upi: payments?.filter(p => p.method === 'upi').reduce((sum, p) => sum + p.amount, 0) || 0,
-      'bank-transfer': payments?.filter(p => p.method === 'bank-transfer').reduce((sum, p) => sum + p.amount, 0) || 0,
-      card: payments?.filter(p => p.method === 'card').reduce((sum, p) => sum + p.amount, 0) || 0
+      cash: displayPayments?.filter(p => p.method === 'cash').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      upi: displayPayments?.filter(p => p.method === 'upi').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      'bank-transfer': displayPayments?.filter(p => p.method === 'bank-transfer').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
+      card: displayPayments?.filter(p => p.method === 'card').reduce((sum, p) => sum + (p.amount || 0), 0) || 0
     }
   };
 
@@ -252,23 +347,33 @@ export default function OrderDetails() {
     }
   };
 
+  // ✅ Handle Delete
   const handleDelete = async () => {
     if (!canEdit) {
       showToast.error("You don't have permission to delete orders");
       return;
     }
 
-    if (window.confirm("Are you sure you want to delete this order?")) {
+    if (!isAdmin) {
+      showToast.error("Only admins can delete orders");
+      return;
+    }
+
+    if (window.confirm("Are you sure you want to delete this order? This action cannot be undone.")) {
+      setDeleteLoading(true);
       try {
-        await dispatch(deleteOrder(id)).unwrap();
+        await dispatch(deleteExistingOrder(id)).unwrap();
         showToast.success("Order deleted successfully");
         navigate(`${basePath}/orders`);
       } catch (error) {
-        showToast.error("Failed to delete order");
+        showToast.error(error?.message || "Failed to delete order");
+      } finally {
+        setDeleteLoading(false);
       }
     }
   };
 
+  // ✅ Handle Status Change
   const handleStatusChange = async (newStatus) => {
     if (!canEdit) {
       showToast.error("You don't have permission to update order status");
@@ -276,51 +381,70 @@ export default function OrderDetails() {
     }
 
     try {
-      await dispatch(updateOrderStatus({ id, status: newStatus })).unwrap();
+      await dispatch(updateOrderStatusThunk({ id, status: newStatus })).unwrap();
       showToast.success(`Order status updated to ${newStatus}`);
       setShowStatusMenu(false);
+      dispatch(fetchOrderById(id));
     } catch (error) {
-      showToast.error("Failed to update status");
+      showToast.error(error?.message || "Failed to update status");
     }
   };
 
-  // ✅ Handle Add Payment - Opens modal for new payment
+  // ✅ Handle Add Payment
   const handleAddPayment = () => {
-    setEditingPayment(null); // Ensure we're adding new, not editing
+    setEditingPayment(null);
     setShowPaymentModal(true);
   };
 
-  // ✅ Handle Edit Payment - Opens modal with payment data
+  // ✅ Handle Edit Payment
   const handleEditPayment = (payment) => {
     setEditingPayment(payment);
     setShowPaymentModal(true);
   };
 
-  // ✅ Handle Save Payment (for both new and edited)
+  // ✅ Handle Save Payment
   const handleSavePayment = async (paymentData) => {
     try {
       if (editingPayment) {
-        // Update existing payment
         await dispatch(updatePayment({
           id: editingPayment._id,
-          data: paymentData
+          data: {
+            amount: Number(paymentData.amount),
+            type: paymentData.type || 'advance',
+            method: paymentData.method || 'cash',
+            referenceNumber: paymentData.referenceNumber || '',
+            paymentDate: paymentData.paymentDate || new Date(),
+            paymentTime: paymentData.paymentTime || new Date().toLocaleTimeString('en-US', { hour12: false }),
+            notes: paymentData.notes || ''
+          }
         })).unwrap();
         showToast.success("Payment updated successfully");
       } else {
-        // Create new payment
         await dispatch(createPayment({
           order: id,
           customer: currentOrder?.customer?._id,
-          ...paymentData
+          amount: Number(paymentData.amount),
+          type: paymentData.type || 'advance',
+          method: paymentData.method || 'cash',
+          referenceNumber: paymentData.referenceNumber || '',
+          paymentDate: paymentData.paymentDate || new Date(),
+          paymentTime: paymentData.paymentTime || new Date().toLocaleTimeString('en-US', { hour12: false }),
+          notes: paymentData.notes || ''
         })).unwrap();
         showToast.success("Payment added successfully");
       }
       
       setShowPaymentModal(false);
       setEditingPayment(null);
-      dispatch(fetchOrderPayments(id)); // Refresh payments
+      
+      // Refresh data
+      console.log("🔄 Refreshing data after payment save");
+      dispatch(fetchOrderById(id));
+      dispatch(fetchOrderPayments(id));
+      
     } catch (error) {
-      showToast.error(error.message || "Failed to save payment");
+      console.error("❌ Error saving payment:", error);
+      showToast.error(error?.message || "Failed to save payment");
     }
   };
 
@@ -335,9 +459,10 @@ export default function OrderDetails() {
       try {
         await dispatch(deletePayment(paymentId)).unwrap();
         showToast.success("Payment deleted successfully");
-        dispatch(fetchOrderPayments(id)); // Refresh payments
+        dispatch(fetchOrderById(id));
+        dispatch(fetchOrderPayments(id));
       } catch (error) {
-        showToast.error("Failed to delete payment");
+        showToast.error(error?.message || "Failed to delete payment");
       }
     }
   };
@@ -409,9 +534,9 @@ export default function OrderDetails() {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      draft: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Draft", icon: Clock },
-      confirmed: { bg: "bg-orange-100", text: "text-orange-700", label: "Confirmed", icon: CheckCircle },
-      "in-progress": { bg: "bg-blue-100", text: "text-blue-700", label: "In Progress", icon: AlertCircle },
+      draft: { bg: "bg-gray-100", text: "text-gray-700", label: "Draft", icon: Clock },
+      confirmed: { bg: "bg-blue-100", text: "text-blue-700", label: "Confirmed", icon: CheckCircle },
+      "in-progress": { bg: "bg-yellow-100", text: "text-yellow-700", label: "In Progress", icon: AlertCircle },
       delivered: { bg: "bg-green-100", text: "text-green-700", label: "Delivered", icon: CheckCircle },
       cancelled: { bg: "bg-red-100", text: "text-red-700", label: "Cancelled", icon: XCircle },
     };
@@ -445,19 +570,53 @@ export default function OrderDetails() {
     return `${formattedDate} at ${timeString || '00:00'}`;
   };
 
-  if (loading) {
+  // Loading state with timeout
+  if (loading && !dataLoadTimeout) {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-slate-600">Loading order details...</p>
+          <p className="text-sm text-slate-400 mt-2">Attempt {fetchAttempts}</p>
+        </div>
       </div>
     );
   }
 
+  // Timeout error
+  if (dataLoadTimeout && !currentOrder) {
+    return (
+      <div className="text-center py-16">
+        <Package size={64} className="mx-auto text-slate-300 mb-4" />
+        <h2 className="text-2xl font-bold text-slate-800">Taking too long to load</h2>
+        <p className="text-slate-500 mb-4">Order ID: {id}</p>
+        <p className="text-sm text-slate-400 mb-4">Attempts: {fetchAttempts}</p>
+        <div className="flex gap-4 justify-center">
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Retry
+          </button>
+          <button
+            onClick={handleBack}
+            className="bg-slate-200 text-slate-700 px-6 py-2 rounded-lg hover:bg-slate-300"
+          >
+            Back to Orders
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Order not found
   if (!currentOrder) {
     return (
       <div className="text-center py-16">
         <Package size={64} className="mx-auto text-slate-300 mb-4" />
         <h2 className="text-2xl font-bold text-slate-800">Order Not Found</h2>
+        <p className="text-slate-500 mb-4">Order ID: {id}</p>
+        <p className="text-sm text-slate-400 mb-4">Attempts: {fetchAttempts}</p>
         <button
           onClick={handleBack}
           className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
@@ -471,7 +630,6 @@ export default function OrderDetails() {
   const statusBadge = getStatusBadge(currentOrder.status);
   const StatusIcon = statusBadge.icon;
   const customer = currentOrder.customer || {};
-  const advancePayment = currentOrder.advancePayment || {};
   const priceSummary = currentOrder.priceSummary || { totalMin: 0, totalMax: 0 };
   const totalAmount = priceSummary.totalMax || 0;
   const balanceAmount = totalAmount - paymentStats.totalPaid;
@@ -486,7 +644,7 @@ export default function OrderDetails() {
         onClose={closeImageModal}
       />
 
-      {/* ✅ Add Payment Modal - UPDATED with correct props */}
+      {/* Add Payment Modal */}
       <AddPaymentModal
         isOpen={showPaymentModal}
         onClose={() => {
@@ -507,29 +665,37 @@ export default function OrderDetails() {
           ref={invoiceRef}
           order={currentOrder}
           garments={garments}
-          payments={payments}
+          payments={displayPayments}
         />
       </div>
 
       {/* Debug Panel */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-40">
+        <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-60">
           <div className="flex justify-between items-center mb-2">
             <span className="font-bold">🔍 DEBUG INFO</span>
             <button 
-              onClick={() => {
-                console.clear();
-                console.log("🧹 Console cleared");
-              }} 
+              onClick={() => console.clear()} 
               className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
             >
               Clear Console
             </button>
           </div>
           <div className="space-y-1">
-            <div className="text-yellow-300">Garments: {garments?.length || 0}</div>
-            <div className="text-blue-300">Payments: {payments?.length || 0}</div>
-            <div className="text-green-300">Total Paid: {formatCurrency(paymentStats.totalPaid)}</div>
+            <div>Order ID: {currentOrder?.orderId}</div>
+            <div>Order _id: {currentOrder?._id}</div>
+            <div>State Keys: {Object.keys(currentOrder || {}).join(', ')}</div>
+            <div>Garments: {garments?.length || 0}</div>
+            <div>Current Payments: {currentPayments?.length || 0}</div>
+            <div>Payments from store: {payments?.length || 0}</div>
+            <div>Display Payments: {displayPayments?.length || 0}</div>
+            <div>Total Paid: {formatCurrency(paymentStats.totalPaid)}</div>
+            <div>Balance: {formatCurrency(balanceAmount)}</div>
+            <div>Can Edit: {canEdit ? 'Yes' : 'No'}</div>
+            <div>Role: {user?.role}</div>
+            <div>Loading: {loading ? 'Yes' : 'No'}</div>
+            <div>Error: {error || 'None'}</div>
+            <div>Fetch Attempts: {fetchAttempts}</div>
           </div>
         </div>
       )}
@@ -581,15 +747,21 @@ export default function OrderDetails() {
                 Edit
               </button>
 
-              <button
-                onClick={handleDelete}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"
-              >
-                <Trash2 size={18} />
-                Delete
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={handleDelete}
+                  disabled={deleteLoading}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50"
+                >
+                  {deleteLoading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 size={18} />
+                  )}
+                  Delete
+                </button>
+              )}
 
-              {/* ✅ Add Payment Button */}
               <button
                 onClick={handleAddPayment}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"
@@ -973,6 +1145,12 @@ export default function OrderDetails() {
                       <span className="font-bold text-blue-600">{formatCurrency(paymentStats.advanceTotal)}</span>
                     </div>
                   )}
+                  {paymentStats.partialTotal > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-slate-600">Partial</span>
+                      <span className="font-bold text-orange-600">{formatCurrency(paymentStats.partialTotal)}</span>
+                    </div>
+                  )}
                   {paymentStats.fullTotal > 0 && (
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-slate-600">Full</span>
@@ -1073,21 +1251,21 @@ export default function OrderDetails() {
               </div>
 
               {/* Payment History Toggle */}
-              {payments?.length > 0 && (
+              {displayPayments?.length > 0 && (
                 <button
                   onClick={togglePaymentHistory}
                   className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm"
                 >
                   <Receipt size={16} />
-                  {showPaymentHistory ? 'Hide' : 'Show'} Payment History ({payments.length})
+                  {showPaymentHistory ? 'Hide' : 'Show'} Payment History ({displayPayments.length})
                 </button>
               )}
 
               {/* Payment History List */}
-              {showPaymentHistory && payments?.length > 0 && (
+              {showPaymentHistory && displayPayments?.length > 0 && (
                 <div className="bg-slate-50 rounded-xl p-3 max-h-60 overflow-y-auto">
                   <div className="space-y-2">
-                    {payments.map((payment, index) => (
+                    {displayPayments.map((payment, index) => (
                       <div key={payment._id || index} className="bg-white p-3 rounded-lg border border-slate-200">
                         <div className="flex items-start justify-between">
                           <div>
@@ -1119,20 +1297,18 @@ export default function OrderDetails() {
                             )}
                           </div>
                           {canEdit && (
-                            <div className="flex gap-1">
+                            <div className="flex gap-2">
                               <button
                                 onClick={() => handleEditPayment(payment)}
-                                className="text-blue-500 hover:text-blue-700"
-                                title="Edit"
+                                className="text-xs text-blue-500 hover:text-blue-700 font-medium"
                               >
                                 Edit
                               </button>
                               <button
                                 onClick={() => handleDeletePayment(payment._id)}
-                                className="text-red-500 hover:text-red-700"
-                                title="Delete"
+                                className="text-xs text-red-500 hover:text-red-700 font-medium"
                               >
-                                <X size={14} />
+                                Delete
                               </button>
                             </div>
                           )}
