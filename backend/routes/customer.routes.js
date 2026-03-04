@@ -23,10 +23,19 @@ import {
   getCustomerPayments,
   getCustomerOrders,
   getCustomerPaymentStats,
-  getCustomerPaymentTrends, // ✅ Now this exists in your controller
+  getCustomerPaymentTrends,
   
   // Statistics function
-  getCustomerStats
+  getCustomerStats,
+  
+  // ✅ NEW: Measurement template functions
+  saveMeasurementTemplate,
+  getCustomerTemplates,
+  getTemplateById,
+  updateTemplate,
+  deleteTemplate,
+  useTemplate
+  
 } from "../controllers/customer.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
 
@@ -71,6 +80,26 @@ router.get("/:id/payment-stats", authorize("ADMIN", "STORE_KEEPER"), getCustomer
 // 📈 Get payment trends for a customer
 router.get("/:id/payment-trends", authorize("ADMIN"), getCustomerPaymentTrends);
 
+// ==================== MEASUREMENT TEMPLATE ROUTES ====================
+
+// 📏 Save measurement template from garment
+router.post("/:customerId/templates", authorize("ADMIN", "STORE_KEEPER"), saveMeasurementTemplate);
+
+// 📋 Get all templates for a customer
+router.get("/:customerId/templates", authorize("ADMIN", "STORE_KEEPER"), getCustomerTemplates);
+
+// 🔍 Get single template by ID
+router.get("/templates/:templateId", authorize("ADMIN", "STORE_KEEPER"), getTemplateById);
+
+// ✏️ Update template
+router.put("/templates/:templateId", authorize("ADMIN", "STORE_KEEPER"), updateTemplate);
+
+// ❌ Delete template
+router.delete("/templates/:templateId", authorize("ADMIN", "STORE_KEEPER"), deleteTemplate);
+
+// 📊 Use template (increment usage count)
+router.post("/templates/:templateId/use", authorize("ADMIN", "STORE_KEEPER"), useTemplate);
+
 // ==================== SINGLE CUSTOMER ROUTES ====================
 
 // 👤 Get customer by MongoDB ID (with payments and orders)
@@ -95,6 +124,12 @@ console.log("      💰 GET  /:id/payments");
 console.log("      📦 GET  /:id/orders");
 console.log("      📊 GET  /:id/payment-stats");
 console.log("      📈 GET  /:id/payment-trends");
+console.log("      📏 POST /:customerId/templates   ✅ NEW");
+console.log("      📋 GET  /:customerId/templates    ✅ NEW");
+console.log("      🔍 GET  /templates/:templateId    ✅ NEW");
+console.log("      ✏️ PUT  /templates/:templateId    ✅ NEW");
+console.log("      ❌ DEL  /templates/:templateId    ✅ NEW");
+console.log("      📊 POST /templates/:templateId/use ✅ NEW");
 console.log("      👤 GET  /:id");
 console.log("      🆕 POST /create");
 console.log("      ✏️ PUT  /:id");

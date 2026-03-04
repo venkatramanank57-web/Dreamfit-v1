@@ -8,30 +8,33 @@ import {
   IndianRupee, CreditCard, TrendingUp, Eye, Ruler, 
   Receipt, Clock, Download, Filter, Banknote, Smartphone, 
   Landmark, Package, ChevronLeft as ChevronLeftIcon,
-  ChevronRight
+  ChevronRight, Bookmark, ChevronDown, ChevronUp, Scissors
 } from "lucide-react";
 import { 
   fetchCustomerById, 
   updateCustomer, 
   deleteCustomer,
   fetchCustomerPayments,
-  fetchCustomerOrders 
+  fetchCustomerOrders,
+  fetchCustomerTemplates
 } from "../../../features/customer/customerSlice";
 import showToast from "../../../utils/toast";
-import { exportPaymentsToExcel } from "../../../utils/exportHelpers"; // We'll create this
+import { exportPaymentsToExcel } from "../../../utils/exportHelpers";
+import MeasurementPreviewModal from "../../../components/MeasurementPreviewModal"; // ✅ Import the modal
 
 export default function CustomerDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   
-  // ✅ FIXED: State selectors with fallbacks
-  const { currentCustomer, customerPayments, customerOrders, loading } = useSelector((state) => {
+  // State selectors with customerTemplates
+  const { currentCustomer, customerPayments, customerOrders, customerTemplates, loading } = useSelector((state) => {
     console.log("🔍 Customer state:", state.customer);
     return {
       currentCustomer: state.customer?.currentCustomer || null,
       customerPayments: state.customer?.customerPayments || [],
       customerOrders: state.customer?.customerOrders || [],
+      customerTemplates: state.customer?.customerTemplates || [],
       loading: state.customer?.loading || false
     };
   });
@@ -44,6 +47,14 @@ export default function CustomerDetails() {
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [ordersPage, setOrdersPage] = useState(1);
+  const [templatesPage, setTemplatesPage] = useState(1);
+  const [expandedTemplate, setExpandedTemplate] = useState(null);
+  
+  // ✅ New state for measurement preview modal
+  const [showMeasurementPreview, setShowMeasurementPreview] = useState(false);
+  const [previewMeasurements, setPreviewMeasurements] = useState(null);
+  const [previewTemplateName, setPreviewTemplateName] = useState("");
+  
   const itemsPerPage = 5;
   
   const [formData, setFormData] = useState({
@@ -78,6 +89,7 @@ export default function CustomerDetails() {
       dispatch(fetchCustomerById(id));
       dispatch(fetchCustomerPayments(id));
       dispatch(fetchCustomerOrders(id));
+      dispatch(fetchCustomerTemplates(id));
     }
   }, [id, dispatch]);
 
@@ -102,11 +114,11 @@ export default function CustomerDetails() {
     }
   }, [currentCustomer]);
 
-  // ✅ FIXED: Payment statistics with correct field names (type and method)
+  // Payment statistics
   const paymentStats = {
     totalPaid: customerPayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     totalPayments: customerPayments?.length || 0,
-    lastPayment: customerPayments?.length > 0 ? customerPayments[customerPayments.length - 1] : null, // ✅ Fixed: Show latest, not oldest
+    lastPayment: customerPayments?.length > 0 ? customerPayments[customerPayments.length - 1] : null,
     advancePayments: customerPayments?.filter(p => p.type === 'advance').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     fullPayments: customerPayments?.filter(p => p.type === 'full').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
     partialPayments: customerPayments?.filter(p => p.type === 'partial').reduce((sum, p) => sum + (p.amount || 0), 0) || 0,
@@ -120,31 +132,42 @@ export default function CustomerDetails() {
     }
   };
 
-  // ✅ FIXED: Filter payments using correct field name 'type'
+  // Filter payments
   const filteredPayments = customerPayments?.filter(p => {
     if (paymentFilter === "all") return true;
     if (paymentFilter === "final") return p.type === "final-settlement";
     return p.type === paymentFilter;
   }) || [];
 
-  // ✅ Pagination for payments
+  // Pagination for payments
   const totalPaymentPages = Math.ceil(filteredPayments.length / itemsPerPage);
   const paymentStartIndex = (currentPage - 1) * itemsPerPage;
   const paymentEndIndex = paymentStartIndex + itemsPerPage;
   const currentPayments = filteredPayments.slice(paymentStartIndex, paymentEndIndex);
 
-  // ✅ Pagination for orders
+  // Pagination for orders
   const totalOrderPages = Math.ceil((customerOrders?.length || 0) / itemsPerPage);
   const orderStartIndex = (ordersPage - 1) * itemsPerPage;
   const orderEndIndex = orderStartIndex + itemsPerPage;
   const currentOrders = customerOrders?.slice(orderStartIndex, orderEndIndex) || [];
 
-  // Handle Back
+  // Pagination for templates
+  const totalTemplatePages = Math.ceil((customerTemplates?.length || 0) / itemsPerPage);
+  const templateStartIndex = (templatesPage - 1) * itemsPerPage;
+  const templateEndIndex = templateStartIndex + itemsPerPage;
+  const currentTemplates = customerTemplates?.slice(templateStartIndex, templateEndIndex) || [];
+
+  // ✅ Handler for preview measurements
+  const handlePreviewMeasurements = (template) => {
+    setPreviewMeasurements(template.measurements);
+    setPreviewTemplateName(template.name);
+    setShowMeasurementPreview(true);
+  };
+
   const handleBack = () => {
     navigate(`${rolePath}/customers`);
   };
 
-  // Handle Create Order
   const handleCreateOrder = () => {
     const customerData = {
       _id: currentCustomer._id,
@@ -161,22 +184,18 @@ export default function CustomerDetails() {
     });
   };
 
-  // Handle View Order
   const handleViewOrder = (orderId) => {
     navigate(`${rolePath}/orders/${orderId}`);
   };
 
-  // Handle View Payment
   const handleViewPayment = (paymentId) => {
     navigate(`${rolePath}/payments/${paymentId}`);
   };
 
-  // Handle View Measurements
   const handleViewMeasurements = () => {
     navigate(`${rolePath}/customer-size/${currentCustomer._id}`);
   };
 
-  // ✅ Handle Export
   const handleExportPayments = () => {
     const customerInfo = {
       customerId: currentCustomer?.customerId,
@@ -331,6 +350,11 @@ export default function CustomerDetails() {
   };
 
   const age = calculateAge(currentCustomer?.dateOfBirth);
+
+  // Toggle template expansion
+  const toggleTemplate = (templateId) => {
+    setExpandedTemplate(expandedTemplate === templateId ? null : templateId);
+  };
 
   if (loading && !currentCustomer) {
     return (
@@ -718,7 +742,7 @@ export default function CustomerDetails() {
                   }`}
                 >
                   <Ruler size={16} className="inline mr-2" />
-                  Measurements
+                  Measurements ({customerTemplates?.length || 0})
                 </button>
               </div>
             </div>
@@ -818,7 +842,7 @@ export default function CustomerDetails() {
                 </div>
               )}
 
-              {/* PAYMENTS TAB - FIXED */}
+              {/* PAYMENTS TAB */}
               {activeTab === "payments" && (
                 <div>
                   <div className="flex items-center justify-between mb-6">
@@ -914,7 +938,6 @@ export default function CustomerDetails() {
                             className="bg-white p-5 rounded-xl border border-slate-200 hover:shadow-lg transition-all cursor-pointer"
                             onClick={() => handleViewPayment(payment._id)}
                           >
-                            {/* Header - Amount & Type */}
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex items-center gap-3">
                                 <span className="font-black text-2xl text-green-600">
@@ -932,7 +955,6 @@ export default function CustomerDetails() {
                                 </span>
                               </div>
 
-                              {/* Order ID */}
                               {payment.order && (
                                 <div className="bg-indigo-50 px-3 py-1.5 rounded-lg">
                                   <span className="text-xs font-bold text-indigo-600">Order:</span>
@@ -943,9 +965,7 @@ export default function CustomerDetails() {
                               )}
                             </div>
 
-                            {/* Details Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                              {/* Date & Time */}
                               <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg">
                                 <Calendar size={14} className="text-blue-500" />
                                 <div>
@@ -956,7 +976,6 @@ export default function CustomerDetails() {
                                 </div>
                               </div>
 
-                              {/* Payment Method */}
                               <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg">
                                 {payment.method === 'cash' && <Banknote size={14} className="text-green-600" />}
                                 {payment.method === 'upi' && <Smartphone size={14} className="text-blue-600" />}
@@ -968,7 +987,6 @@ export default function CustomerDetails() {
                                 </div>
                               </div>
 
-                              {/* Reference Number */}
                               {payment.referenceNumber && (
                                 <div className="flex items-center gap-2 bg-purple-50 p-2 rounded-lg">
                                   <Hash size={14} className="text-purple-500" />
@@ -981,7 +999,6 @@ export default function CustomerDetails() {
                                 </div>
                               )}
 
-                              {/* Received By */}
                               {payment.receivedBy && (
                                 <div className="flex items-center gap-2 bg-blue-50 p-2 rounded-lg">
                                   <User size={14} className="text-blue-500" />
@@ -995,14 +1012,12 @@ export default function CustomerDetails() {
                               )}
                             </div>
 
-                            {/* Notes */}
                             {payment.notes && (
                               <div className="mt-3 p-2 bg-amber-50 rounded-lg">
                                 <p className="text-xs text-amber-600 italic">"{payment.notes}"</p>
                               </div>
                             )}
 
-                            {/* View Button */}
                             <div className="mt-3 flex justify-end">
                               <button className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1">
                                 <Eye size={14} />
@@ -1013,7 +1028,6 @@ export default function CustomerDetails() {
                         ))}
                       </div>
 
-                      {/* Pagination */}
                       {totalPaymentPages > 1 && (
                         <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
                           <p className="text-xs text-slate-500">
@@ -1130,7 +1144,6 @@ export default function CustomerDetails() {
                         ))}
                       </div>
 
-                      {/* Pagination for Orders */}
                       {totalOrderPages > 1 && (
                         <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
                           <p className="text-xs text-slate-500">
@@ -1164,27 +1177,152 @@ export default function CustomerDetails() {
                 </div>
               )}
 
-              {/* MEASUREMENTS TAB */}
+              {/* ✅ UPDATED MEASUREMENTS TAB - With Preview Icon */}
               {activeTab === "measurements" && (
                 <div>
-                  <div className="text-center py-12 bg-slate-50 rounded-xl">
-                    <Ruler size={48} className="text-slate-300 mx-auto mb-4" />
-                    <p className="text-slate-400 font-black text-lg">Measurement Profiles</p>
-                    <p className="text-slate-300 mt-2">View and manage customer measurements</p>
-                    <button
-                      onClick={handleViewMeasurements}
-                      className="mt-4 bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-xl font-bold inline-flex items-center gap-2"
-                    >
-                      <Ruler size={18} />
-                      Go to Measurements
-                    </button>
-                  </div>
+                  {customerTemplates?.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-xl">
+                      <Ruler size={48} className="text-slate-300 mx-auto mb-4" />
+                      <p className="text-slate-400 font-black text-lg">No Saved Templates</p>
+                      <p className="text-slate-300 mt-2">This customer hasn't saved any measurement templates yet.</p>
+                      <p className="text-xs text-slate-400 mt-4">
+                        Templates can be saved when creating garments using the "Save as Template" button.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-4">
+                        {currentTemplates.map((template) => (
+                          <div
+                            key={template._id}
+                            className="bg-white border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-all"
+                          >
+                            {/* Template Header with Preview Icon */}
+                            <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 flex items-center justify-between">
+                              <div className="flex items-center gap-3 flex-1">
+                                <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center text-white">
+                                  <Bookmark size={18} />
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="font-bold text-slate-800">{template.name}</h4>
+                                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                                    <span>Used {template.usageCount || 1} times</span>
+                                    <span>•</span>
+                                    <span>Last used: {formatDate(template.lastUsed || template.createdAt)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-2">
+                                {/* 👁️ Preview Icon Button - Shows only measurements */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePreviewMeasurements(template);
+                                  }}
+                                  className="p-2 bg-white hover:bg-purple-100 text-purple-600 rounded-lg transition-all shadow-sm"
+                                  title="Preview Measurements"
+                                >
+                                  <Eye size={18} />
+                                </button>
+                                
+                                {/* Expand/Collapse Button */}
+                                <button
+                                  onClick={() => toggleTemplate(template._id)}
+                                  className="p-2 bg-white hover:bg-purple-100 text-purple-600 rounded-lg transition-all shadow-sm"
+                                >
+                                  {expandedTemplate === template._id ? (
+                                    <ChevronUp size={18} />
+                                  ) : (
+                                    <ChevronDown size={18} />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Template Details - Expandable */}
+                            {expandedTemplate === template._id && (
+                              <div className="p-4 border-t border-slate-200 bg-slate-50">
+                                <h5 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                  <Scissors size={14} className="text-purple-600" />
+                                  Measurements
+                                </h5>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                  {template.measurements && Object.entries(template.measurements).map(([key, value]) => (
+                                    <div key={key} className="bg-white p-3 rounded-lg border border-slate-200">
+                                      <p className="text-xs text-slate-500 capitalize mb-1">{key}</p>
+                                      <p className="text-sm font-bold text-purple-700">{value} <span className="text-xs font-normal text-slate-400">inches</span></p>
+                                    </div>
+                                  ))}
+                                </div>
+                                
+                                {template.notes && (
+                                  <div className="mt-4 p-3 bg-amber-50 rounded-lg">
+                                    <p className="text-xs text-amber-600 font-bold mb-1">Notes</p>
+                                    <p className="text-sm text-amber-800 italic">"{template.notes}"</p>
+                                  </div>
+                                )}
+
+                                {template.garmentReference && (
+                                  <div className="mt-3 text-xs text-purple-600">
+                                    <span className="font-medium">From garment:</span> {template.garmentReference}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Pagination for Templates */}
+                      {totalTemplatePages > 1 && (
+                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
+                          <p className="text-xs text-slate-500">
+                            Showing {templateStartIndex + 1} to {Math.min(templateEndIndex, customerTemplates.length)} of {customerTemplates.length} templates
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setTemplatesPage(p => Math.max(1, p - 1))}
+                              disabled={templatesPage === 1}
+                              className="px-3 py-1 rounded bg-slate-100 disabled:opacity-50 flex items-center gap-1"
+                            >
+                              <ChevronLeftIcon size={14} />
+                              Prev
+                            </button>
+                            <span className="px-3 py-1 bg-blue-600 text-white rounded text-sm">
+                              {templatesPage} / {totalTemplatePages}
+                            </span>
+                            <button
+                              onClick={() => setTemplatesPage(p => Math.min(totalTemplatePages, p + 1))}
+                              disabled={templatesPage === totalTemplatePages}
+                              className="px-3 py-1 rounded bg-slate-100 disabled:opacity-50 flex items-center gap-1"
+                            >
+                              Next
+                              <ChevronRight size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Measurement Preview Modal */}
+      <MeasurementPreviewModal
+        isOpen={showMeasurementPreview}
+        onClose={() => {
+          setShowMeasurementPreview(false);
+          setPreviewMeasurements(null);
+          setPreviewTemplateName("");
+        }}
+        measurements={previewMeasurements}
+        templateName={previewTemplateName}
+      />
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (

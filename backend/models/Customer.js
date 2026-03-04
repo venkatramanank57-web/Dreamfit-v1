@@ -64,6 +64,12 @@ const customerSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // ✅ NEW: Reference to measurement templates
+  measurementTemplates: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "CustomerMeasurementTemplate"
+  }],
+  
   // Computed fields (Stored in DB for fast searching)
   name: {
     type: String,
@@ -88,7 +94,7 @@ const customerSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// ✅ MODERN ASYNC PRE-SAVE (Fixed 'next is not a function' error)
+// ✅ MODERN ASYNC PRE-SAVE
 customerSchema.pre("save", async function() {
   try {
     console.log("🔧 Processing customer data for:", this.firstName);
@@ -117,11 +123,11 @@ customerSchema.pre("save", async function() {
 
   } catch (error) {
     console.error("❌ Pre-save logic failed:", error);
-    throw error; // Let Mongoose handle the error
+    throw error;
   }
 });
 
-// Virtual for formatted Name (Frontend convenience)
+// Virtual for formatted Name
 customerSchema.virtual('fullName').get(function() {
   return `${this.salutation || ''} ${this.firstName || ''} ${this.lastName || ''}`.trim();
 });
