@@ -12,7 +12,8 @@
 //   Camera,
 //   Scissors,
 //   Save,
-//   BookmarkPlus
+//   BookmarkPlus,
+//   Eye
 // } from "lucide-react";
 // import { fetchAllCategories } from "../../../features/category/categorySlice";
 // import { fetchItems } from "../../../features/item/itemSlice";
@@ -25,7 +26,7 @@
 // } from "../../../features/customer/customerSlice";
 // import showToast from "../../../utils/toast";
 
-// export default function GarmentForm({ onClose, onSave, editingGarment }) {
+// export default function GarmentForm({ onClose, onSave, editingGarment, customerId }) {
 //   const dispatch = useDispatch();
   
 //   const { categories } = useSelector((state) => state.category);
@@ -41,6 +42,9 @@
 //   const isAdmin = userRole === "ADMIN";
 //   const isStoreKeeper = userRole === "STORE_KEEPER";
 //   const canEdit = isAdmin || isStoreKeeper;
+
+//   // ✅ Determine which customer ID to use (prop takes priority)
+//   const effectiveCustomerId = customerId || currentCustomer?._id;
 
 //   const [formData, setFormData] = useState({
 //     name: "",
@@ -87,12 +91,13 @@
 //     dispatch(fetchAllFabrics());
 //   }, [dispatch]);
 
-//   // ✅ Load customer templates when customer changes
+//   // ✅ Load customer templates when effectiveCustomerId changes
 //   useEffect(() => {
-//     if (currentCustomer?._id) {
-//       dispatch(fetchCustomerTemplates(currentCustomer._id));
+//     if (effectiveCustomerId) {
+//       console.log(`📋 Fetching templates for customer: ${effectiveCustomerId}`);
+//       dispatch(fetchCustomerTemplates(effectiveCustomerId));
 //     }
-//   }, [dispatch, currentCustomer?._id]);
+//   }, [dispatch, effectiveCustomerId]);
 
 //   // Load items when category changes
 //   useEffect(() => {
@@ -413,7 +418,7 @@
 
 //   // ==================== TEMPLATE HANDLERS ====================
 //   const handleSaveAsTemplate = () => {
-//     if (!currentCustomer) {
+//     if (!effectiveCustomerId) {
 //       showToast.error("No customer selected to save template");
 //       return;
 //     }
@@ -450,6 +455,12 @@
 //       return;
 //     }
 
+//     if (!effectiveCustomerId) {
+//       showToast.error("Customer ID missing");
+//       setShowSaveTemplateModal(false);
+//       return;
+//     }
+
 //     // Get current measurements
 //     let currentMeasurements = {};
     
@@ -477,7 +488,7 @@
 
 //     try {
 //       await dispatch(saveMeasurementTemplate({
-//         customerId: currentCustomer._id,
+//         customerId: effectiveCustomerId,
 //         templateData
 //       })).unwrap();
       
@@ -486,7 +497,7 @@
 //       showToast.success(`✅ Template "${templateName}" saved successfully!`);
       
 //       // Refresh templates list
-//       dispatch(fetchCustomerTemplates(currentCustomer._id));
+//       dispatch(fetchCustomerTemplates(effectiveCustomerId));
 //     } catch (error) {
 //       console.error("❌ Error saving template:", error);
 //     }
@@ -958,7 +969,7 @@
 //               <div className="flex items-center justify-between mb-4">
 //                 <h3 className="font-black text-slate-800">Measurements</h3>
                 
-//                 {currentCustomer && (
+//                 {effectiveCustomerId && (
 //                   <button
 //                     type="button"
 //                     onClick={handleSaveAsTemplate}
@@ -1022,7 +1033,11 @@
 //                   <label className="block text-xs font-black uppercase text-slate-500 mb-2">
 //                     Select Saved Template
 //                   </label>
-//                   {templatesLoading ? (
+//                   {!effectiveCustomerId ? (
+//                     <p className="text-sm text-amber-600 italic p-3 bg-amber-50 rounded-lg">
+//                       Please select a customer first to view saved templates
+//                     </p>
+//                   ) : templatesLoading ? (
 //                     <div className="flex items-center gap-2 p-3 bg-slate-100 rounded-lg">
 //                       <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
 //                       <span className="text-sm text-slate-600">Loading templates...</span>
@@ -1419,6 +1434,9 @@
 //   );
 // }
 
+
+
+
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -1488,6 +1506,10 @@ export default function GarmentForm({ onClose, onSave, editingGarment, customerI
     selectedFabric: "",
     fabricMeters: "",
     fabricPrice: 0,
+    
+    // ✅ New fields for storing names
+    categoryName: "",
+    itemName: "",
   });
 
   const [selectedFields, setSelectedFields] = useState({});
@@ -1527,16 +1549,30 @@ export default function GarmentForm({ onClose, onSave, editingGarment, customerI
     }
   }, [dispatch, formData.category]);
 
-  // Auto-fill price range when item is selected
+  // ✅ Auto-fill category name when category changes
   useEffect(() => {
-    if (formData.item) {
-      const selectedItem = items?.find(item => item._id === formData.item);
-      if (selectedItem?.priceRange) {
+    if (formData.category && categories) {
+      const selectedCategory = categories.find(cat => cat._id === formData.category);
+      if (selectedCategory) {
         setFormData(prev => ({
           ...prev,
+          categoryName: selectedCategory.name || selectedCategory.categoryName || ""
+        }));
+      }
+    }
+  }, [formData.category, categories]);
+
+  // ✅ Auto-fill item name and price range when item is selected
+  useEffect(() => {
+    if (formData.item && items) {
+      const selectedItem = items.find(item => item._id === formData.item);
+      if (selectedItem) {
+        setFormData(prev => ({
+          ...prev,
+          itemName: selectedItem.name || selectedItem.itemName || "",
           priceRange: {
-            min: selectedItem.priceRange.min || "",
-            max: selectedItem.priceRange.max || "",
+            min: selectedItem.priceRange?.min || "",
+            max: selectedItem.priceRange?.max || "",
           }
         }));
       }
@@ -1630,13 +1666,15 @@ export default function GarmentForm({ onClose, onSave, editingGarment, customerI
     }
   }, [selectedCustomerTemplate, customerTemplates]);
 
-  // Load editing data
+  // ✅ Load editing data with category and item names
   useEffect(() => {
     if (editingGarment) {
       setFormData({
         name: editingGarment.name || "",
         category: editingGarment.category?._id || editingGarment.category || "",
         item: editingGarment.item?._id || editingGarment.item || "",
+        categoryName: editingGarment.categoryName || editingGarment.category?.name || "",
+        itemName: editingGarment.itemName || editingGarment.item?.name || "",
         measurementTemplate: editingGarment.measurementTemplate?._id || editingGarment.measurementTemplate || "",
         measurementSource: editingGarment.measurementSource || "template",
         measurements: editingGarment.measurements || [],
@@ -2013,10 +2051,12 @@ export default function GarmentForm({ onClose, onSave, editingGarment, customerI
       // Create FormData
       const formDataToSend = new FormData();
 
-      // Add text fields
+      // Add text fields (including categoryName and itemName)
       formDataToSend.append("name", formData.name);
       formDataToSend.append("category", formData.category);
       formDataToSend.append("item", formData.item);
+      formDataToSend.append("categoryName", formData.categoryName || "");
+      formDataToSend.append("itemName", formData.itemName || "");
       formDataToSend.append("measurementTemplate", formData.measurementTemplate || "");
       formDataToSend.append("measurementSource", formData.measurementSource);
       formDataToSend.append("measurements", JSON.stringify(finalMeasurements));
@@ -2143,7 +2183,8 @@ export default function GarmentForm({ onClose, onSave, editingGarment, customerI
                     onChange={(e) => setFormData({ 
                       ...formData, 
                       category: e.target.value,
-                      item: ""
+                      item: "",
+                      itemName: ""
                     })}
                     className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     required
@@ -2153,6 +2194,13 @@ export default function GarmentForm({ onClose, onSave, editingGarment, customerI
                       <option key={cat._id} value={cat._id}>{cat.name}</option>
                     ))}
                   </select>
+                  
+                  {/* ✅ Display selected category name */}
+                  {formData.categoryName && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Selected: {formData.categoryName}
+                    </p>
+                  )}
                 </div>
 
                 {/* Item */}
@@ -2174,6 +2222,13 @@ export default function GarmentForm({ onClose, onSave, editingGarment, customerI
                       </option>
                     ))}
                   </select>
+                  
+                  {/* ✅ Display selected item name */}
+                  {formData.itemName && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Selected: {formData.itemName}
+                    </p>
+                  )}
                 </div>
 
                 {/* Priority */}

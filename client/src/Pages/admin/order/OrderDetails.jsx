@@ -30,6 +30,8 @@
 //   Smartphone,
 //   Landmark,
 //   Receipt,
+//   Truck,
+//   Check
 // } from "lucide-react";
 // import {
 //   fetchOrderById,
@@ -373,7 +375,7 @@
 //     }
 //   };
 
-//   // ✅ Handle Status Change
+//   // ✅ Handle Status Change (UPDATED with ready-to-delivery)
 //   const handleStatusChange = async (newStatus) => {
 //     if (!canEdit) {
 //       showToast.error("You don't have permission to update order status");
@@ -382,7 +384,18 @@
 
 //     try {
 //       await dispatch(updateOrderStatusThunk({ id, status: newStatus })).unwrap();
-//       showToast.success(`Order status updated to ${newStatus}`);
+      
+//       // Show different messages based on status
+//       const statusMessages = {
+//         'ready-to-delivery': 'Order marked as ready for delivery',
+//         'delivered': 'Order marked as delivered',
+//         'cancelled': 'Order cancelled',
+//         'in-progress': 'Order status updated to in progress',
+//         'confirmed': 'Order confirmed',
+//         'draft': 'Order moved to draft'
+//       };
+      
+//       showToast.success(statusMessages[newStatus] || `Order status updated to ${newStatus}`);
 //       setShowStatusMenu(false);
 //       dispatch(fetchOrderById(id));
 //     } catch (error) {
@@ -491,9 +504,24 @@
 //     showToast.success("Acknowledgment sent to customer");
 //   };
 
-//   // Handle Ready for Pickup
+//   // Handle Ready for Pickup (UPDATED)
 //   const handleReadyForPickup = () => {
-//     showToast.success("Pickup notification sent to customer");
+//     if (currentOrder?.status === 'ready-to-delivery') {
+//       showToast.success("Order is already marked as ready for delivery");
+//     } else if (currentOrder?.status === 'in-progress') {
+//       handleStatusChange('ready-to-delivery');
+//     } else {
+//       showToast.error("Order must be in progress to mark as ready for delivery");
+//     }
+//   };
+
+//   // ✅ NEW: Handle Mark as Delivered
+//   const handleMarkDelivered = () => {
+//     if (currentOrder?.status === 'ready-to-delivery') {
+//       handleStatusChange('delivered');
+//     } else {
+//       showToast.error("Order must be ready for delivery first");
+//     }
 //   };
 
 //   const getImageUrl = (img) => {
@@ -532,21 +560,25 @@
 //     setShowPaymentHistory(!showPaymentHistory);
 //   };
 
+//   // ✅ UPDATED: Status badge generator with ready-to-delivery
 //   const getStatusBadge = (status) => {
 //     const statusConfig = {
 //       draft: { bg: "bg-gray-100", text: "text-gray-700", label: "Draft", icon: Clock },
 //       confirmed: { bg: "bg-blue-100", text: "text-blue-700", label: "Confirmed", icon: CheckCircle },
 //       "in-progress": { bg: "bg-yellow-100", text: "text-yellow-700", label: "In Progress", icon: AlertCircle },
+//       "ready-to-delivery": { bg: "bg-purple-100", text: "text-purple-700", label: "Ready to Delivery", icon: Truck },
 //       delivered: { bg: "bg-green-100", text: "text-green-700", label: "Delivered", icon: CheckCircle },
 //       cancelled: { bg: "bg-red-100", text: "text-red-700", label: "Cancelled", icon: XCircle },
 //     };
 //     return statusConfig[status] || statusConfig.draft;
 //   };
 
+//   // ✅ UPDATED: Status options with ready-to-delivery
 //   const statusOptions = [
 //     { value: "draft", label: "Draft" },
 //     { value: "confirmed", label: "Confirmed" },
 //     { value: "in-progress", label: "In Progress" },
+//     { value: "ready-to-delivery", label: "Ready to Delivery" },
 //     { value: "delivered", label: "Delivered" },
 //     { value: "cancelled", label: "Cancelled" },
 //   ];
@@ -696,6 +728,7 @@
 //             <div>Loading: {loading ? 'Yes' : 'No'}</div>
 //             <div>Error: {error || 'None'}</div>
 //             <div>Fetch Attempts: {fetchAttempts}</div>
+//             <div className="text-yellow-400">Status: {currentOrder?.status}</div>
 //           </div>
 //         </div>
 //       )}
@@ -769,6 +802,17 @@
 //                 <Wallet size={18} />
 //                 Add Payment
 //               </button>
+
+//               {/* ✅ NEW: Mark as Delivered button (only when ready-to-delivery) */}
+//               {currentOrder.status === 'ready-to-delivery' && (
+//                 <button
+//                   onClick={handleMarkDelivered}
+//                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"
+//                 >
+//                   <Check size={18} />
+//                   Mark Delivered
+//                 </button>
+//               )}
 //             </>
 //           )}
 
@@ -1319,7 +1363,7 @@
 //                 </div>
 //               )}
 
-//               {/* Order Timeline */}
+//               {/* Order Timeline (UPDATED with ready-to-delivery) */}
 //               <div className="bg-slate-50 p-4 rounded-xl">
 //                 <p className="text-xs font-black uppercase text-slate-500 mb-3">Order Timeline</p>
                 
@@ -1333,6 +1377,30 @@
 //                       </p>
 //                     </div>
 //                   </div>
+
+//                   {currentOrder.status === "in-progress" && (
+//                     <div className="flex items-center gap-3">
+//                       <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+//                       <div className="flex-1">
+//                         <p className="text-sm font-medium">In Progress</p>
+//                         <p className="text-xs text-slate-400">
+//                           {new Date(currentOrder.updatedAt).toLocaleString()}
+//                         </p>
+//                       </div>
+//                     </div>
+//                   )}
+
+//                   {currentOrder.status === "ready-to-delivery" && (
+//                     <div className="flex items-center gap-3">
+//                       <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+//                       <div className="flex-1">
+//                         <p className="text-sm font-medium">Ready to Delivery</p>
+//                         <p className="text-xs text-slate-400">
+//                           {new Date(currentOrder.updatedAt).toLocaleString()}
+//                         </p>
+//                       </div>
+//                     </div>
+//                   )}
 
 //                   {currentOrder.status === "delivered" && (
 //                     <div className="flex items-center gap-3">
@@ -1360,7 +1428,7 @@
 //                 </div>
 //               </div>
 
-//               {/* Action Buttons */}
+//               {/* Action Buttons (UPDATED) */}
 //               <div className="space-y-3 pt-2">
 //                 {canEdit && (
 //                   <button
@@ -1380,13 +1448,26 @@
 //                   Send Acknowledgment
 //                 </button>
 
-//                 <button
-//                   onClick={handleReadyForPickup}
-//                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
-//                 >
-//                   <PackageCheck size={18} />
-//                   Order Ready for Pickup
-//                 </button>
+//                 {/* Conditional Ready for Pickup button */}
+//                 {currentOrder.status === 'in-progress' && (
+//                   <button
+//                     onClick={handleReadyForPickup}
+//                     className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+//                   >
+//                     <Truck size={18} />
+//                     Mark Ready for Delivery
+//                   </button>
+//                 )}
+
+//                 {currentOrder.status === 'ready-to-delivery' && (
+//                   <button
+//                     onClick={handleMarkDelivered}
+//                     className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+//                   >
+//                     <Check size={18} />
+//                     Mark as Delivered
+//                   </button>
+//                 )}
 
 //                 <button
 //                   onClick={handleDownloadInvoice}
@@ -1741,6 +1822,15 @@ export default function OrderDetails() {
     }
   };
 
+  // ✅ Calculate price summary from currentOrder
+  const priceSummary = currentOrder?.priceSummary || { totalMin: 0, totalMax: 0 };
+  
+  // ✅ Calculate balance with price range
+  const balanceAmount = {
+    min: priceSummary.totalMin - paymentStats.totalPaid,
+    max: priceSummary.totalMax - paymentStats.totalPaid
+  };
+
   // ✅ Handle Back
   const handleBack = () => {
     navigate(`${basePath}/orders`);
@@ -2068,9 +2158,6 @@ export default function OrderDetails() {
   const statusBadge = getStatusBadge(currentOrder.status);
   const StatusIcon = statusBadge.icon;
   const customer = currentOrder.customer || {};
-  const priceSummary = currentOrder.priceSummary || { totalMin: 0, totalMax: 0 };
-  const totalAmount = priceSummary.totalMax || 0;
-  const balanceAmount = totalAmount - paymentStats.totalPaid;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 p-6">
@@ -2082,7 +2169,7 @@ export default function OrderDetails() {
         onClose={closeImageModal}
       />
 
-      {/* Add Payment Modal */}
+      {/* Add Payment Modal - UPDATED with orderTotalMin and orderTotalMax */}
       <AddPaymentModal
         isOpen={showPaymentModal}
         onClose={() => {
@@ -2090,7 +2177,8 @@ export default function OrderDetails() {
           setEditingPayment(null);
         }}
         onSave={handleSavePayment}
-        orderTotal={totalAmount}
+        orderTotalMin={priceSummary.totalMin}
+        orderTotalMax={priceSummary.totalMax}
         orderId={id}
         customerId={currentOrder?.customer?._id}
         initialData={editingPayment}
@@ -2122,19 +2210,16 @@ export default function OrderDetails() {
           <div className="space-y-1">
             <div>Order ID: {currentOrder?.orderId}</div>
             <div>Order _id: {currentOrder?._id}</div>
-            <div>State Keys: {Object.keys(currentOrder || {}).join(', ')}</div>
+            <div>Price Summary Min: ₹{priceSummary.totalMin}</div>
+            <div>Price Summary Max: ₹{priceSummary.totalMax}</div>
             <div>Garments: {garments?.length || 0}</div>
-            <div>Current Payments: {currentPayments?.length || 0}</div>
-            <div>Payments from store: {payments?.length || 0}</div>
-            <div>Display Payments: {displayPayments?.length || 0}</div>
+            <div>Payments: {displayPayments?.length || 0}</div>
             <div>Total Paid: {formatCurrency(paymentStats.totalPaid)}</div>
-            <div>Balance: {formatCurrency(balanceAmount)}</div>
+            <div>Balance Min: {formatCurrency(balanceAmount.min)}</div>
+            <div>Balance Max: {formatCurrency(balanceAmount.max)}</div>
             <div>Can Edit: {canEdit ? 'Yes' : 'No'}</div>
             <div>Role: {user?.role}</div>
-            <div>Loading: {loading ? 'Yes' : 'No'}</div>
-            <div>Error: {error || 'None'}</div>
-            <div>Fetch Attempts: {fetchAttempts}</div>
-            <div className="text-yellow-400">Status: {currentOrder?.status}</div>
+            <div>Status: {currentOrder?.status}</div>
           </div>
         </div>
       )}
@@ -2559,13 +2644,13 @@ export default function OrderDetails() {
           </div>
         </div>
 
-        {/* Right Column - Payment Summary */}
+        {/* Right Column - Payment Summary - UPDATED with Price Range Balance */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sticky top-6">
             <h2 className="text-lg font-black text-slate-800 mb-4">Payment Summary</h2>
             
             <div className="space-y-4">
-              {/* Total Amount */}
+              {/* Total Amount - Price Range */}
               <div className="bg-blue-50 p-4 rounded-xl">
                 <p className="text-xs text-blue-600 font-black uppercase mb-1">Total Amount</p>
                 <p className="text-2xl font-black text-blue-700">
@@ -2686,16 +2771,19 @@ export default function OrderDetails() {
                 </div>
               )}
 
-              {/* Balance Amount */}
+              {/* ✅ UPDATED: Balance Amount with Price Range */}
               <div className="bg-orange-50 p-4 rounded-xl">
                 <p className="text-xs text-orange-600 font-black uppercase mb-1">Balance Amount</p>
                 <p className="text-xl font-black text-orange-700">
-                  {formatCurrency(balanceAmount)}
+                  {formatCurrency(balanceAmount.min)} - {formatCurrency(balanceAmount.max)}
                 </p>
-                {balanceAmount < 0 && (
-                  <p className="text-xs text-green-600 mt-1">(Overpaid by {formatCurrency(Math.abs(balanceAmount))})</p>
+                {balanceAmount.min <= 0 && balanceAmount.max <= 0 && (
+                  <p className="text-xs text-green-600 mt-1">✅ Fully paid (Overpaid by {formatCurrency(Math.abs(balanceAmount.min))})</p>
                 )}
-                {balanceAmount > 0 && (
+                {balanceAmount.min <= 0 && balanceAmount.max > 0 && (
+                  <p className="text-xs text-orange-600 mt-1">⚠️ Minimum reached, maximum pending</p>
+                )}
+                {balanceAmount.min > 0 && (
                   <p className="text-xs text-orange-600 mt-1">Pending payment</p>
                 )}
               </div>

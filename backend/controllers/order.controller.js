@@ -553,24 +553,181 @@
 // };
 
 // // ============================================
-// // ✅ 6. UPDATE ORDER STATUS
+// // ✅ 6. UPDATE ORDER STATUS (UPDATED WITH ready-to-delivery)
 // // ============================================
 // export const updateOrderStatus = async (req, res) => {
 //   console.log(`\n🔄 ===== UPDATE ORDER STATUS: ${req.params.id} =====`);
+//   console.log("New Status:", req.body.status);
   
 //   try {
 //     const { status } = req.body;
-//     const order = await Order.findByIdAndUpdate(
-//       req.params.id, 
-//       { status }, 
-//       { new: true, runValidators: true }
-//     );
-
+//     const { id } = req.params;
+//     const userId = req.user?._id || req.user?.id;
+    
+//     // ✅ Validate status
+//     const validStatuses = ["draft", "confirmed", "in-progress", "ready-to-delivery", "delivered", "cancelled"];
+//     if (!validStatuses.includes(status)) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+//       });
+//     }
+    
+//     // ✅ Find order with population
+//     const order = await Order.findById(id)
+//       .populate('customer', 'name phone')
+//       .populate('garments');
+      
 //     if (!order) {
 //       return res.status(404).json({ success: false, message: "Order not found" });
 //     }
-
-//     res.json({ success: true, message: "Order status updated", order });
+    
+//     // ✅ Check valid transition
+//     const validTransitions = {
+//       'draft': ['confirmed', 'cancelled'],
+//       'confirmed': ['in-progress', 'cancelled'],
+//       'in-progress': ['ready-to-delivery', 'cancelled'],
+//       'ready-to-delivery': ['delivered', 'cancelled'],
+//       'delivered': [],
+//       'cancelled': []
+//     };
+    
+//     if (!validTransitions[order.status]?.includes(status)) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         message: `Cannot transition from ${order.status} to ${status}` 
+//       });
+//     }
+    
+//     // Store old status
+//     const oldStatus = order.status;
+    
+//     // ✅ Update status
+//     order.status = status;
+//     await order.save();
+    
+//     console.log(`✅ Status updated: ${oldStatus} → ${status}`);
+    
+//     // ============================================
+//     // ✅ NOTIFICATIONS BASED ON STATUS
+//     // ============================================
+    
+//     // 1. READY-TO-DELIVERY - Notify Store Keepers
+//     if (status === 'ready-to-delivery') {
+//       console.log("📦 Order ready for delivery - Sending notifications");
+      
+//       const storeKeepers = await StoreKeeper.find({ isActive: true }).lean();
+      
+//       storeKeepers.forEach(keeper => {
+//         createNotification({
+//           type: 'delivery-ready',
+//           recipient: keeper._id,
+//           title: '📦 Order Ready for Delivery',
+//           message: `Order #${order.orderId} for ${order.customer?.name || 'Customer'} is ready for delivery`,
+//           reference: {
+//             orderId: order._id,
+//             orderNumber: order.orderId,
+//             customerName: order.customer?.name
+//           },
+//           priority: 'high'
+//         }).catch(() => {});
+//       });
+      
+//       console.log(`📢 Notified ${storeKeepers.length} store keepers`);
+//     }
+    
+//     // 2. DELIVERED - Update payment & notify
+//     else if (status === 'delivered') {
+//       console.log("✅ Order delivered - Updating records");
+      
+//       // Update payment summary
+//       await updateOrderPaymentSummary(order._id);
+      
+//       const storeKeepers = await StoreKeeper.find({ isActive: true }).lean();
+      
+//       storeKeepers.forEach(keeper => {
+//         createNotification({
+//           type: 'order-delivered',
+//           recipient: keeper._id,
+//           title: '✅ Order Delivered',
+//           message: `Order #${order.orderId} has been delivered to ${order.customer?.name || 'Customer'}`,
+//           reference: {
+//             orderId: order._id,
+//             orderNumber: order.orderId
+//           },
+//           priority: 'medium'
+//         }).catch(() => {});
+//       });
+//     }
+    
+//     // 3. CANCELLED - Update related records
+//     else if (status === 'cancelled') {
+//       console.log("❌ Order cancelled - Updating related works");
+      
+//       // Cancel all associated works
+//       await Work.updateMany(
+//         { order: order._id, status: { $ne: 'completed' } },
+//         { status: 'cancelled', isActive: false }
+//       );
+      
+//       const storeKeepers = await StoreKeeper.find({ isActive: true }).lean();
+      
+//       storeKeepers.forEach(keeper => {
+//         createNotification({
+//           type: 'order-cancelled',
+//           recipient: keeper._id,
+//           title: '❌ Order Cancelled',
+//           message: `Order #${order.orderId} for ${order.customer?.name || 'Customer'} has been cancelled`,
+//           reference: {
+//             orderId: order._id,
+//             orderNumber: order.orderId
+//           },
+//           priority: 'high'
+//         }).catch(() => {});
+//       });
+//     }
+    
+//     // ============================================
+//     // ✅ UPDATE RELATED WORKS
+//     // ============================================
+    
+//     try {
+//       if (status === 'in-progress') {
+//         // Update pending works to in-progress
+//         await Work.updateMany(
+//           { order: order._id, status: 'pending' },
+//           { status: 'in-progress' }
+//         );
+//         console.log("🔨 Updated related works to in-progress");
+//       }
+//       else if (status === 'delivered') {
+//         // Mark all works as completed
+//         await Work.updateMany(
+//           { order: order._id, status: { $ne: 'completed' } },
+//           { status: 'completed' }
+//         );
+//         console.log("✅ Updated related works to completed");
+//       }
+//       else if (status === 'ready-to-delivery') {
+//         // Update works to ready status if you have that
+//         console.log("📦 Works ready for delivery");
+//       }
+//     } catch (workErr) {
+//       console.log("Work update error:", workErr.message);
+//       // Don't fail the main operation
+//     }
+    
+//     // ✅ Get updated order
+//     const updatedOrder = await Order.findById(id)
+//       .populate('customer', 'name phone customerId')
+//       .populate('garments');
+    
+//     res.json({ 
+//       success: true, 
+//       message: `Order status updated from ${oldStatus} to ${status}`,
+//       order: updatedOrder 
+//     });
+    
 //   } catch (error) {
 //     console.error("❌ Update status error:", error);
 //     res.status(500).json({ success: false, message: error.message });
@@ -683,10 +840,16 @@
 //       isActive: true
 //     }).populate('customer', 'name');
 
-//     // Pending deliveries
+//     // Pending deliveries - UPDATED to include ready-to-delivery
 //     const pendingDeliveries = await Order.find({
 //       deliveryDate: { $lt: new Date() },
 //       status: { $nin: ['delivered', 'cancelled'] },
+//       isActive: true
+//     }).populate('customer', 'name phone');
+
+//     // Orders ready for delivery - NEW
+//     const readyForDelivery = await Order.find({
+//       status: 'ready-to-delivery',
 //       isActive: true
 //     }).populate('customer', 'name phone');
 
@@ -715,6 +878,10 @@
 //           count: pendingDeliveries.length,
 //           orders: pendingDeliveries
 //         },
+//         readyForDelivery: {
+//           count: readyForDelivery.length,
+//           orders: readyForDelivery
+//         },
 //         recentOrders,
 //         todayCollection
 //       }
@@ -725,13 +892,9 @@
 //   }
 // };
 
-// // Add this to your order.controller.js file
-
-// /**
-//  * @desc    Get all orders for a specific customer
-//  * @route   GET /api/orders/customer/:customerId
-//  * @access  Private (Admin, Store Keeper, Cutting Master)
-//  */
+// // ============================================
+// // ✅ 11. GET ORDERS BY CUSTOMER
+// // ============================================
 // export const getOrdersByCustomer = async (req, res) => {
 //   try {
 //     const { customerId } = req.params;
@@ -764,6 +927,34 @@
 //   }
 // };
 
+// // ============================================
+// // ✅ 12. GET READY TO DELIVERY ORDERS (NEW)
+// // ============================================
+// export const getReadyToDeliveryOrders = async (req, res) => {
+//   console.log("\n📦 ===== GET READY TO DELIVERY ORDERS =====");
+  
+//   try {
+//     const orders = await Order.find({ 
+//       status: 'ready-to-delivery',
+//       isActive: true 
+//     })
+//     .populate('customer', 'name phone')
+//     .populate('garments')
+//     .sort({ updatedAt: -1 });
+    
+//     res.json({
+//       success: true,
+//       count: orders.length,
+//       orders
+//     });
+//   } catch (error) {
+//     console.error("❌ Get ready to delivery error:", error);
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
+
+
 
 
 // controllers/order.controller.js
@@ -776,6 +967,16 @@ import CuttingMaster from "../models/CuttingMaster.js";
 import Tailor from "../models/Tailor.js";
 import StoreKeeper from "../models/StoreKeeper.js";
 import { createNotification } from "./notification.controller.js";
+
+// ============================================
+// 🔍 DEBUG HELPER FOR NOTIFICATIONS
+// ============================================
+const debugNotification = (stage, data) => {
+  console.log("\n🔔🔔🔔 NOTIFICATION DEBUG 🔔🔔🔔");
+  console.log(`Stage: ${stage}`);
+  console.log("Data:", JSON.stringify(data, null, 2));
+  console.log("🔔🔔🔔🔔🔔🔔🔔🔔🔔🔔🔔🔔🔔🔔🔔\n");
+};
 
 // ============================================
 // ✅ HELPER: UPDATE ORDER PAYMENT SUMMARY
@@ -843,10 +1044,21 @@ const createWorksForOrder = async (orderId, garments, creatorId) => {
     
     // Get all garments in ONE query
     const garmentDocs = await Garment.find({ _id: { $in: garments } }).lean();
+    console.log(`📦 Found ${garmentDocs.length} garments`);
     
-    // Get cutting masters for notifications - ONE query
+    // 🔍 DEBUG: Get cutting masters
+    console.log("🔍 Searching for active cutting masters...");
     const cuttingMasters = await CuttingMaster.find({ isActive: true }).lean();
     
+    debugNotification("CUTTING_MASTERS_FOUND", {
+      count: cuttingMasters.length,
+      masters: cuttingMasters.map(m => ({ 
+        id: m._id, 
+        name: m.name,
+        email: m.email 
+      }))
+    });
+
     // Create all works in PARALLEL
     const workPromises = garmentDocs.map(garment => {
       const workId = `WRK-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -871,27 +1083,80 @@ const createWorksForOrder = async (orderId, garments, creatorId) => {
     );
     await Promise.all(updatePromises);
     
-    // Send notifications (fire and forget - don't await)
-    if (works.length > 0 && cuttingMasters.length > 0) {
-      cuttingMasters.forEach(master => {
-        createNotification({
-          type: 'work-available',
-          recipient: master._id,
-          title: '🔔 New Work Available',
-          message: `${works.length} new work(s) are waiting for acceptance`,
-          reference: {
-            orderId: orderId,
-            workCount: works.length,
-            workIds: works.map(w => w._id)
-          },
-          priority: 'high'
-        }).catch(() => {});
-      });
+    // 🔍 DEBUG: Send notifications
+    if (works.length > 0) {
+      console.log(`📢 Attempting to send notifications...`);
+      console.log(`   Works count: ${works.length}`);
+      console.log(`   Cutting masters count: ${cuttingMasters.length}`);
+      
+      if (cuttingMasters.length === 0) {
+        console.warn("⚠️ No cutting masters found in database!");
+        console.warn("   Please add cutting masters to receive notifications.");
+      } else {
+        console.log(`   Sending to ${cuttingMasters.length} cutting masters`);
+        
+        // Test one notification first
+        try {
+          const testMaster = cuttingMasters[0];
+          console.log(`   Testing notification to: ${testMaster.name} (${testMaster._id})`);
+          
+          const testResult = await createNotification({
+            type: 'work-available',
+            recipient: testMaster._id,
+            title: '🔔 TEST: New Work Available',
+            message: `TEST: ${works.length} new work(s) are waiting`,
+            reference: {
+              orderId: orderId,
+              workCount: works.length,
+              workIds: works.map(w => w._id)
+            },
+            priority: 'high'
+          });
+          
+          console.log(`   ✅ Test notification sent successfully:`, testResult);
+        } catch (testError) {
+          console.error(`   ❌ Test notification failed:`, testError.message);
+          debugNotification("TEST_NOTIFICATION_ERROR", {
+            error: testError.message,
+            stack: testError.stack
+          });
+        }
+        
+        // Send to all cutting masters
+        cuttingMasters.forEach((master, index) => {
+          console.log(`   📨 Sending to master ${index + 1}/${cuttingMasters.length}: ${master.name}`);
+          
+          createNotification({
+            type: 'work-available',
+            recipient: master._id,
+            title: '🔔 New Work Available',
+            message: `${works.length} new work(s) are waiting for acceptance`,
+            reference: {
+              orderId: orderId,
+              workCount: works.length,
+              workIds: works.map(w => w._id)
+            },
+            priority: 'high'
+          })
+          .then(result => {
+            console.log(`      ✅ Notification sent to ${master.name}`);
+          })
+          .catch(err => {
+            console.error(`      ❌ Failed to send to ${master.name}:`, err.message);
+          });
+        });
+      }
+    } else {
+      console.log("⚠️ No works created, skipping notifications");
     }
     
     return { success: true, works };
   } catch (error) {
     console.error("\n❌ ERROR CREATING WORKS:", error);
+    debugNotification("CREATE_WORKS_ERROR", {
+      error: error.message,
+      stack: error.stack
+    });
     return { success: false, error: error.message };
   }
 };
@@ -1050,7 +1315,7 @@ export const createOrder = async (req, res) => {
     // ✅ PARALLEL OPERATIONS - Create payments and works simultaneously
     const promises = [];
 
-    // 1. Create payments in PARALLEL - ✅ STORE FIELD REMOVED
+    // 1. Create payments in PARALLEL
     if (allPayments.length > 0) {
       console.log(`💰 Creating ${allPayments.length} payments in parallel...`);
       
@@ -1066,7 +1331,6 @@ export const createOrder = async (req, res) => {
           paymentTime: paymentData.paymentTime || new Date().toLocaleTimeString('en-US', { hour12: false }),
           notes: paymentData.notes || '',
           receivedBy: creatorId
-          // ✅ STORE FIELD REMOVED - No more 'store' field!
         })
       );
       
@@ -1385,6 +1649,7 @@ export const updateOrderStatus = async (req, res) => {
       console.log("📦 Order ready for delivery - Sending notifications");
       
       const storeKeepers = await StoreKeeper.find({ isActive: true }).lean();
+      console.log(`🔍 Found ${storeKeepers.length} store keepers`);
       
       storeKeepers.forEach(keeper => {
         createNotification({
@@ -1412,6 +1677,7 @@ export const updateOrderStatus = async (req, res) => {
       await updateOrderPaymentSummary(order._id);
       
       const storeKeepers = await StoreKeeper.find({ isActive: true }).lean();
+      console.log(`🔍 Found ${storeKeepers.length} store keepers`);
       
       storeKeepers.forEach(keeper => {
         createNotification({
@@ -1439,6 +1705,7 @@ export const updateOrderStatus = async (req, res) => {
       );
       
       const storeKeepers = await StoreKeeper.find({ isActive: true }).lean();
+      console.log(`🔍 Found ${storeKeepers.length} store keepers`);
       
       storeKeepers.forEach(keeper => {
         createNotification({
@@ -1530,7 +1797,7 @@ export const deleteOrder = async (req, res) => {
 };
 
 // ============================================
-// ✅ 8. ADD PAYMENT TO ORDER - ✅ STORE FIELD REMOVED
+// ✅ 8. ADD PAYMENT TO ORDER
 // ============================================
 export const addPaymentToOrder = async (req, res) => {
   console.log(`\n💰 ===== ADD PAYMENT TO ORDER: ${req.params.id} =====`);
@@ -1546,7 +1813,7 @@ export const addPaymentToOrder = async (req, res) => {
     
     const creatorId = req.user?._id || req.user?.id;
     
-    // Create payment - ✅ STORE FIELD REMOVED
+    // Create payment
     const payment = await Payment.create({
       order: order._id,
       customer: order.customer,
@@ -1558,7 +1825,6 @@ export const addPaymentToOrder = async (req, res) => {
       paymentTime: paymentData.paymentTime || new Date().toLocaleTimeString('en-US', { hour12: false }),
       notes: paymentData.notes || '',
       receivedBy: creatorId
-      // ✅ STORE FIELD REMOVED - No more 'store' field!
     });
     
     // Update order payment summary
@@ -1608,14 +1874,14 @@ export const getDashboardData = async (req, res) => {
       isActive: true
     }).populate('customer', 'name');
 
-    // Pending deliveries - UPDATED to include ready-to-delivery
+    // Pending deliveries
     const pendingDeliveries = await Order.find({
       deliveryDate: { $lt: new Date() },
       status: { $nin: ['delivered', 'cancelled'] },
       isActive: true
     }).populate('customer', 'name phone');
 
-    // Orders ready for delivery - NEW
+    // Orders ready for delivery
     const readyForDelivery = await Order.find({
       status: 'ready-to-delivery',
       isActive: true
@@ -1676,7 +1942,7 @@ export const getOrdersByCustomer = async (req, res) => {
     })
     .populate('customer', 'name phone email customerId')
     .populate('garments')
-    .sort('-createdAt'); // Most recent first
+    .sort('-createdAt');
     
     console.log(`✅ Found ${orders.length} orders for customer ${customerId}`);
     
@@ -1696,7 +1962,7 @@ export const getOrdersByCustomer = async (req, res) => {
 };
 
 // ============================================
-// ✅ 12. GET READY TO DELIVERY ORDERS (NEW)
+// ✅ 12. GET READY TO DELIVERY ORDERS
 // ============================================
 export const getReadyToDeliveryOrders = async (req, res) => {
   console.log("\n📦 ===== GET READY TO DELIVERY ORDERS =====");
