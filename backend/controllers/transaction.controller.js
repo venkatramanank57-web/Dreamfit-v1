@@ -1667,3 +1667,247 @@ export const getTodayTransactions = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+// ============================================
+// ✅ GET DAILY REVENUE STATS FOR CHART (NEW)
+// ============================================
+export const getDailyRevenueStats = async (req, res) => {
+  try {
+    const { period, startDate, endDate } = req.query;
+    
+    console.log('📊 Getting daily revenue stats with:', { period, startDate, endDate });
+    
+    // Build date filter based on period or custom dates
+    let start, end;
+    const today = new Date();
+    
+    if (period === 'today') {
+      start = new Date(today.setHours(0, 0, 0, 0));
+      end = new Date(today.setHours(23, 59, 59, 999));
+    } 
+    else if (period === 'week') {
+      start = new Date(today);
+      start.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
+      start.setHours(0, 0, 0, 0);
+      
+      end = new Date(start);
+      end.setDate(start.getDate() + 7);
+      end.setHours(23, 59, 59, 999);
+    } 
+    else if (period === 'month') {
+      start = new Date(today.getFullYear(), today.getMonth(), 1);
+      end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
+    } 
+    else if (startDate && endDate) {
+      start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      
+      end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+    } else {
+      // Default to current month
+      start = new Date(today.getFullYear(), today.getMonth(), 1);
+      end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
+    }
+    
+    console.log('📅 Date range:', { start, end });
+
+    // Get transactions grouped by date
+    const transactions = await Transaction.aggregate([
+      {
+        $match: {
+          transactionDate: { $gte: start, $lte: end },
+          status: 'completed'
+        }
+      },
+      {
+        $group: {
+          _id: {
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$transactionDate' } },
+            type: '$type'
+          },
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { '_id.date': 1 } }
+    ]);
+
+    console.log('📊 Aggregated transactions:', transactions);
+
+    // Prepare chart data based on period
+    let chartData = [];
+
+    if (period === 'today') {
+      // Hourly data for today
+      const hourlyData = {};
+      
+      // Initialize hours
+      for (let i = 9; i <= 20; i++) {
+        const hourKey = i < 10 ? `0${i}:00` : `${i}:00`;
+        hourlyData[hourKey] = { revenue: 0, expense: 0 };
+      }
+
+      // Fill with actual data
+      transactions.forEach(item => {
+        const date = new Date(item._id.date);
+        const hour = date.getHours();
+        if (hour >= 9 && hour <= 20) {
+          const hourKey = hour < 10 ? `0${hour}:00` : `${hour}:00`;
+          if (item._id.type === 'income') {
+            hourlyData[hourKey].revenue = item.total;
+          } else {
+            hourlyData[hourKey].expense = item.total;
+          }
+        }
+      });
+
+      // Convert to array
+      for (let i = 9; i <= 20; i++) {
+        const hourKey = i < 10 ? `0${i}:00` : `${i}:00`;
+        chartData.push({
+          time: `${i} AM`,
+          revenue: hourlyData[hourKey].revenue || 0,
+          expense: hourlyData[hourKey].expense || 0
+        });
+      }
+    } 
+    else if (period === 'week') {
+      // Daily data for week
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const dailyMap = new Map();
+      
+      // Initialize days
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+        dailyMap.set(dateStr, { 
+          day: days[date.getDay()],
+          revenue: 0, 
+          expense: 0 
+        });
+      }
+
+      // Fill with actual data
+      transactions.forEach(item => {
+        const dateStr = item._id.date;
+        if (dailyMap.has(dateStr)) {
+          const entry = dailyMap.get(dateStr);
+          if (item._id.type === 'income') {
+            entry.revenue = item.total;
+          } else {
+            entry.expense = item.total;
+          }
+        }
+      });
+
+      // Convert to array
+      chartData = Array.from(dailyMap.values());
+    }
+    else {
+      // Monthly/Period data - group by week or day
+      const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays <= 7) {
+        // Daily data for short periods
+        const dailyMap = new Map();
+        
+        // Initialize all dates in range
+        for (let i = 0; i <= diffDays; i++) {
+          const date = new Date(start);
+          date.setDate(start.getDate() + i);
+          const dateStr = date.toISOString().split('T')[0];
+          dailyMap.set(dateStr, { 
+            day: date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+            revenue: 0, 
+            expense: 0 
+          });
+        }
+
+        // Fill with actual data
+        transactions.forEach(item => {
+          const dateStr = item._id.date;
+          if (dailyMap.has(dateStr)) {
+            const entry = dailyMap.get(dateStr);
+            if (item._id.type === 'income') {
+              entry.revenue = item.total;
+            } else {
+              entry.expense = item.total;
+            }
+          }
+        });
+
+        chartData = Array.from(dailyMap.values());
+      } else {
+        // Weekly data for longer periods
+        const weeks = Math.ceil(diffDays / 7);
+        const weeklyData = [];
+
+        for (let w = 0; w < weeks; w++) {
+          const weekStart = new Date(start);
+          weekStart.setDate(start.getDate() + (w * 7));
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+
+          let weekRevenue = 0;
+          let weekExpense = 0;
+
+          transactions.forEach(item => {
+            const itemDate = new Date(item._id.date);
+            if (itemDate >= weekStart && itemDate <= weekEnd) {
+              if (item._id.type === 'income') {
+                weekRevenue += item.total;
+              } else {
+                weekExpense += item.total;
+              }
+            }
+          });
+
+          weeklyData.push({
+            day: `Week ${w + 1}`,
+            revenue: weekRevenue,
+            expense: weekExpense
+          });
+        }
+
+        chartData = weeklyData;
+      }
+    }
+
+    console.log('✅ Chart data prepared:', chartData);
+
+    // Calculate totals
+    const totalRevenue = chartData.reduce((sum, item) => sum + (item.revenue || 0), 0);
+    const totalExpense = chartData.reduce((sum, item) => sum + (item.expense || 0), 0);
+
+    res.json({
+      success: true,
+      data: {
+        chartData,
+        summary: {
+          totalRevenue,
+          totalExpense,
+          netProfit: totalRevenue - totalExpense,
+          period,
+          dateRange: { start, end }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error in getDailyRevenueStats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch daily revenue stats',
+      error: error.message
+    });
+  }
+};

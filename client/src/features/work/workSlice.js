@@ -581,7 +581,351 @@
 
     //version-2
 
-// features/work/workSlice.js
+// // features/work/workSlice.js
+// import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+// import showToast from '../../utils/toast';
+// import * as workApi from './workApi';
+
+// const initialState = {
+//   works: [],
+//   myWorks: [], // For cutting master
+//   tailorWorks: [], // For tailor
+//   currentWork: null,
+//   stats: {
+//     totalWorks: 0,
+//     pendingWorks: 0,
+//     acceptedWorks: 0,
+//     cuttingStarted: 0,
+//     cuttingCompleted: 0,
+//     sewingStarted: 0,
+//     sewingCompleted: 0,
+//     ironing: 0,
+//     readyToDeliver: 0,
+//     todayWorks: 0,
+//     overdueWorks: 0
+//   },
+//   pagination: {
+//     page: 1,
+//     limit: 20,
+//     total: 0,
+//     pages: 0
+//   },
+//   loading: false,
+//   error: null,
+//   filters: {
+//     status: '',
+//     search: '',
+//     startDate: '',
+//     endDate: '',
+//     page: 1,
+//     limit: 20
+//   }
+// };
+
+// // Async Thunks
+// export const fetchWorks = createAsyncThunk(
+//   'work/fetchWorks',
+//   async (filters = {}, { rejectWithValue, getState }) => {
+//     console.log('📋 [fetchWorks] called with filters:', filters);
+//     try {
+//       const { work } = getState();
+//       const currentFilters = { ...work.filters, ...filters };
+//       console.log('📋 [fetchWorks] current filters:', currentFilters);
+      
+//       const response = await workApi.getWorks(currentFilters);
+//       console.log('📋 [fetchWorks] response:', response);
+//       return response.data;
+//     } catch (error) {
+//       console.error('❌ [fetchWorks] error:', error);
+//       return rejectWithValue(error.response?.data?.message || 'Failed to fetch works');
+//     }
+//   }
+// );
+
+// export const fetchMyWorks = createAsyncThunk(
+//   'work/fetchMyWorks',
+//   async (filters = {}, { rejectWithValue }) => {
+//     console.log('📋 [fetchMyWorks] called with filters:', filters);
+//     try {
+//       const response = await workApi.getMyWorks(filters);
+//       console.log('📋 [fetchMyWorks] response:', response);
+//       return response.data;
+//     } catch (error) {
+//       console.error('❌ [fetchMyWorks] error:', error);
+//       return rejectWithValue(error.response?.data?.message || 'Failed to fetch your works');
+//     }
+//   }
+// );
+
+// export const fetchWorkById = createAsyncThunk(
+//   'work/fetchWorkById',
+//   async (id, { rejectWithValue }) => {
+//     console.log('📋 [fetchWorkById] called with id:', id);
+//     try {
+//       const response = await workApi.getWorkById(id);
+//       console.log('📋 [fetchWorkById] response:', response);
+//       return response.data;
+//     } catch (error) {
+//       console.error('❌ [fetchWorkById] error:', error);
+//       return rejectWithValue(error.response?.data?.message || 'Failed to fetch work');
+//     }
+//   }
+// );
+
+// export const fetchWorkStats = createAsyncThunk(
+//   'work/fetchWorkStats',
+//   async (_, { rejectWithValue }) => {
+//     console.log('📊 [fetchWorkStats] called');
+//     try {
+//       const response = await workApi.getWorkStats();
+//       console.log('📊 [fetchWorkStats] response:', response);
+//       return response.data;
+//     } catch (error) {
+//       console.error('❌ [fetchWorkStats] error:', error);
+//       return rejectWithValue(error.response?.data?.message || 'Failed to fetch stats');
+//     }
+//   }
+// );
+
+// // ✅ FIXED: acceptWorkById - Removed fetchWorks (which causes 403)
+// export const acceptWorkById = createAsyncThunk(
+//   'work/acceptWorkById',
+//   async (id, { rejectWithValue, dispatch }) => {
+//     console.log('✅ [acceptWorkById] called with id:', id);
+//     try {
+//       const response = await workApi.acceptWork(id);
+//       console.log('✅ [acceptWorkById] response:', response);
+      
+//       showToast.success('Work accepted successfully');
+      
+//       // ✅ ONLY refresh cutting master's works and current work
+//       await dispatch(fetchMyWorks());
+//       await dispatch(fetchWorkById(id));
+      
+//       return response.data;
+//     } catch (error) {
+//       console.error('❌ [acceptWorkById] error:', error);
+//       showToast.error(error.response?.data?.message || 'Failed to accept work');
+//       return rejectWithValue(error.response?.data?.message);
+//     }
+//   }
+// );
+
+// export const assignTailorToWork = createAsyncThunk(
+//   'work/assignTailorToWork',
+//   async ({ id, tailorId }, { rejectWithValue, dispatch }) => {
+//     console.log('👔 [assignTailorToWork] called with:', { id, tailorId });
+//     try {
+//       const response = await workApi.assignTailor(id, tailorId);
+//       console.log('👔 [assignTailorToWork] response:', response);
+      
+//       showToast.success('Tailor assigned successfully');
+//       dispatch(fetchMyWorks());
+//       dispatch(fetchWorkById(id));
+//       return response.data;
+//     } catch (error) {
+//       console.error('❌ [assignTailorToWork] error:', error);
+//       showToast.error(error.response?.data?.message || 'Failed to assign tailor');
+//       return rejectWithValue(error.response?.data?.message);
+//     }
+//   }
+// );
+
+// export const updateWorkStatusById = createAsyncThunk(
+//   'work/updateWorkStatusById',
+//   async ({ id, status, notes }, { rejectWithValue, dispatch }) => {
+//     console.log('\n🔄 ===== UPDATE WORK STATUS THUNK STARTED =====');
+//     console.log('📦 Input values:', { 
+//       id, 
+//       status, 
+//       notes: notes || '(empty)'
+//     });
+    
+//     if (!id) {
+//       console.error('❌ No work ID provided');
+//       showToast.error('Work ID is missing');
+//       return rejectWithValue('Work ID is required');
+//     }
+    
+//     if (!status) {
+//       console.error('❌ No status provided');
+//       showToast.error('Please select a status');
+//       return rejectWithValue('Status is required');
+//     }
+    
+//     try {
+//       console.log('📤 Calling workApi.updateWorkStatus with:', { 
+//         id, 
+//         statusData: { 
+//           status: status, 
+//           notes: notes || '' 
+//         } 
+//       });
+      
+//       const response = await workApi.updateWorkStatus(id, { 
+//         status: status, 
+//         notes: notes || '' 
+//       });
+      
+//       console.log('✅ API Response:', response);
+      
+//       if (response && response.success) {
+//         const statusDisplay = status.replace(/-/g, ' ');
+//         showToast.success(`Work status updated to ${statusDisplay}`);
+//       }
+      
+//       // Refresh data
+//       await dispatch(fetchMyWorks());
+//       await dispatch(fetchWorkById(id));
+      
+//       return response.data;
+      
+//     } catch (error) {
+//       console.error('❌ [updateWorkStatusById] error:', error);
+//       const errorMessage = error.response?.data?.message || error.message || 'Failed to update status';
+//       showToast.error(errorMessage);
+//       return rejectWithValue(errorMessage);
+//     }
+//   }
+// );
+
+// export const deleteWorkById = createAsyncThunk(
+//   'work/deleteWorkById',
+//   async (id, { rejectWithValue, dispatch }) => {
+//     console.log('🗑️ [deleteWorkById] called with id:', id);
+//     try {
+//       const response = await workApi.deleteWork(id);
+//       console.log('🗑️ [deleteWorkById] response:', response);
+      
+//       showToast.success('Work deleted successfully');
+//       dispatch(fetchWorks());
+//       return id;
+//     } catch (error) {
+//       console.error('❌ [deleteWorkById] error:', error);
+//       showToast.error(error.response?.data?.message || 'Failed to delete work');
+//       return rejectWithValue(error.response?.data?.message);
+//     }
+//   }
+// );
+
+// // ✅ NEW: Assign cutting master thunk
+// export const assignCuttingMasterToWork = createAsyncThunk(
+//   'work/assignCuttingMasterToWork',
+//   async ({ id, cuttingMasterId }, { rejectWithValue, dispatch }) => {
+//     console.log('✂️ [assignCuttingMasterToWork] called with:', { id, cuttingMasterId });
+//     try {
+//       const response = await workApi.assignCuttingMaster(id, cuttingMasterId);
+//       console.log('✂️ [assignCuttingMasterToWork] response:', response);
+      
+//       showToast.success('Cutting master assigned successfully');
+//       dispatch(fetchMyWorks());
+//       dispatch(fetchWorkById(id));
+//       return response.data;
+//     } catch (error) {
+//       console.error('❌ [assignCuttingMasterToWork] error:', error);
+//       showToast.error(error.response?.data?.message || 'Failed to assign cutting master');
+//       return rejectWithValue(error.response?.data?.message);
+//     }
+//   }
+// );
+
+// const workSlice = createSlice({
+//   name: 'work',
+//   initialState,
+//   reducers: {
+//     setFilters: (state, action) => {
+//       console.log('🎯 [setFilters]', action.payload);
+//       state.filters = { ...state.filters, ...action.payload };
+//     },
+//     resetFilters: (state) => {
+//       console.log('🔄 [resetFilters]');
+//       state.filters = initialState.filters;
+//     },
+//     clearCurrentWork: (state) => {
+//       console.log('🧹 [clearCurrentWork]');
+//       state.currentWork = null;
+//     }
+//   },
+//   extraReducers: (builder) => {
+//     builder
+//       // Fetch Works
+//       .addCase(fetchWorks.pending, (state) => {
+//         state.loading = true;
+//       })
+//       .addCase(fetchWorks.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.works = action.payload.works || [];
+//         state.pagination = action.payload.pagination || initialState.pagination;
+//         if (action.payload.statusCounts) {
+//           state.stats = { ...state.stats, ...action.payload.statusCounts };
+//         }
+//       })
+//       .addCase(fetchWorks.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+      
+//       // Fetch My Works (Cutting Master)
+//       .addCase(fetchMyWorks.pending, (state) => {
+//         state.loading = true;
+//       })
+//       .addCase(fetchMyWorks.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.myWorks = action.payload.works || [];
+//         state.pagination = action.payload.pagination || initialState.pagination;
+//       })
+//       .addCase(fetchMyWorks.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+      
+//       // Fetch Work By ID
+//       .addCase(fetchWorkById.pending, (state) => {
+//         state.loading = true;
+//       })
+//       .addCase(fetchWorkById.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.currentWork = action.payload;
+//       })
+//       .addCase(fetchWorkById.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+      
+//       // Fetch Work Stats
+//       .addCase(fetchWorkStats.fulfilled, (state, action) => {
+//         state.stats = { ...state.stats, ...action.payload };
+//       })
+      
+//       // Accept Work
+//       .addCase(acceptWorkById.fulfilled, (state, action) => {
+//         // Update the work in myWorks if present
+//         if (action.payload && state.myWorks.length > 0) {
+//           const index = state.myWorks.findIndex(w => w._id === action.payload._id);
+//           if (index !== -1) {
+//             state.myWorks[index] = action.payload;
+//           }
+//         }
+//       });
+//   }
+// });
+
+// export const { setFilters, resetFilters, clearCurrentWork } = workSlice.actions;
+
+// // Selectors
+// export const selectAllWorks = (state) => state.work.works;
+// export const selectMyWorks = (state) => state.work.myWorks;
+// export const selectCurrentWork = (state) => state.work.currentWork;
+// export const selectWorkStats = (state) => state.work.stats;
+// export const selectWorkPagination = (state) => state.work.pagination;
+// export const selectWorkFilters = (state) => state.work.filters;
+// export const selectWorkLoading = (state) => state.work.loading;
+
+// export default workSlice.reducer;
+
+
+
+// features/work/workSlice.js - UPDATED WITH DASHBOARD FUNCTIONS
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import showToast from '../../utils/toast';
 import * as workApi from './workApi';
@@ -591,6 +935,38 @@ const initialState = {
   myWorks: [], // For cutting master
   tailorWorks: [], // For tailor
   currentWork: null,
+  
+  // ✅ NEW: Dashboard specific states
+  dashboardStats: {
+    total: 0,
+    pending: 0,
+    inProgress: 0,
+    completed: 0,
+    cancelled: 0,
+    todayWorks: 0,
+    overdueWorks: 0,
+    details: {
+      pending: 0,
+      accepted: 0,
+      cuttingStarted: 0,
+      cuttingCompleted: 0,
+      sewingStarted: 0,
+      sewingCompleted: 0,
+      ironing: 0,
+      readyToDeliver: 0
+    },
+    loading: false
+  },
+  
+  recentWorks: [], // ✅ NEW: For dashboard recent works list
+  
+  statusBreakdown: {
+    breakdown: [],
+    pieData: [],
+    total: 0,
+    loading: false
+  },
+  
   stats: {
     totalWorks: 0,
     pendingWorks: 0,
@@ -604,14 +980,17 @@ const initialState = {
     todayWorks: 0,
     overdueWorks: 0
   },
+  
   pagination: {
     page: 1,
     limit: 20,
     total: 0,
     pages: 0
   },
+  
   loading: false,
   error: null,
+  
   filters: {
     status: '',
     search: '',
@@ -622,7 +1001,62 @@ const initialState = {
   }
 };
 
-// Async Thunks
+// ============================================
+// ✅ DASHBOARD THUNKS (NEW)
+// ============================================
+
+// Fetch work stats for dashboard (with date filters)
+export const fetchDashboardWorkStats = createAsyncThunk(
+  'work/fetchDashboardWorkStats',
+  async (params = {}, { rejectWithValue }) => {
+    console.log('📊 [fetchDashboardWorkStats] called with params:', params);
+    try {
+      const response = await workApi.getDashboardWorkStats(params);
+      console.log('📊 [fetchDashboardWorkStats] response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('❌ [fetchDashboardWorkStats] error:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch work stats');
+    }
+  }
+);
+
+// Fetch recent works for dashboard
+export const fetchRecentWorks = createAsyncThunk(
+  'work/fetchRecentWorks',
+  async (params = {}, { rejectWithValue }) => {
+    console.log('📋 [fetchRecentWorks] called with params:', params);
+    try {
+      const response = await workApi.getRecentWorks(params);
+      console.log('📋 [fetchRecentWorks] response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('❌ [fetchRecentWorks] error:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch recent works');
+    }
+  }
+);
+
+// Fetch work status breakdown for pie chart
+export const fetchWorkStatusBreakdown = createAsyncThunk(
+  'work/fetchWorkStatusBreakdown',
+  async (params = {}, { rejectWithValue }) => {
+    console.log('🥧 [fetchWorkStatusBreakdown] called with params:', params);
+    try {
+      const response = await workApi.getWorkStatusBreakdown(params);
+      console.log('🥧 [fetchWorkStatusBreakdown] response:', response);
+      return response.data;
+    } catch (error) {
+      console.error('❌ [fetchWorkStatusBreakdown] error:', error);
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch status breakdown');
+    }
+  }
+);
+
+// ============================================
+// ✅ EXISTING THUNKS
+// ============================================
+
 export const fetchWorks = createAsyncThunk(
   'work/fetchWorks',
   async (filters = {}, { rejectWithValue, getState }) => {
@@ -687,7 +1121,6 @@ export const fetchWorkStats = createAsyncThunk(
   }
 );
 
-// ✅ FIXED: acceptWorkById - Removed fetchWorks (which causes 403)
 export const acceptWorkById = createAsyncThunk(
   'work/acceptWorkById',
   async (id, { rejectWithValue, dispatch }) => {
@@ -698,7 +1131,6 @@ export const acceptWorkById = createAsyncThunk(
       
       showToast.success('Work accepted successfully');
       
-      // ✅ ONLY refresh cutting master's works and current work
       await dispatch(fetchMyWorks());
       await dispatch(fetchWorkById(id));
       
@@ -808,7 +1240,6 @@ export const deleteWorkById = createAsyncThunk(
   }
 );
 
-// ✅ NEW: Assign cutting master thunk
 export const assignCuttingMasterToWork = createAsyncThunk(
   'work/assignCuttingMasterToWork',
   async ({ id, cuttingMasterId }, { rejectWithValue, dispatch }) => {
@@ -829,6 +1260,9 @@ export const assignCuttingMasterToWork = createAsyncThunk(
   }
 );
 
+// ============================================
+// ✅ WORK SLICE
+// ============================================
 const workSlice = createSlice({
   name: 'work',
   initialState,
@@ -844,10 +1278,76 @@ const workSlice = createSlice({
     clearCurrentWork: (state) => {
       console.log('🧹 [clearCurrentWork]');
       state.currentWork = null;
+    },
+    // ✅ NEW: Clear dashboard data
+    clearDashboardData: (state) => {
+      state.dashboardStats = initialState.dashboardStats;
+      state.recentWorks = [];
+      state.statusBreakdown = initialState.statusBreakdown;
     }
   },
   extraReducers: (builder) => {
     builder
+      // ============================================
+      // ✅ DASHBOARD REDUCERS
+      // ============================================
+      
+      // Fetch Dashboard Work Stats
+      .addCase(fetchDashboardWorkStats.pending, (state) => {
+        state.dashboardStats.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchDashboardWorkStats.fulfilled, (state, action) => {
+        state.dashboardStats.loading = false;
+        state.dashboardStats = {
+          ...state.dashboardStats,
+          ...action.payload,
+          loading: false
+        };
+        console.log('✅ Dashboard work stats updated:', state.dashboardStats);
+      })
+      .addCase(fetchDashboardWorkStats.rejected, (state, action) => {
+        state.dashboardStats.loading = false;
+        state.error = action.payload;
+        console.error('❌ Dashboard work stats rejected:', action.payload);
+      })
+      
+      // Fetch Recent Works
+      .addCase(fetchRecentWorks.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchRecentWorks.fulfilled, (state, action) => {
+        state.loading = false;
+        state.recentWorks = action.payload.works || [];
+        console.log('✅ Recent works updated:', state.recentWorks.length);
+      })
+      .addCase(fetchRecentWorks.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      
+      // Fetch Status Breakdown
+      .addCase(fetchWorkStatusBreakdown.pending, (state) => {
+        state.statusBreakdown.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchWorkStatusBreakdown.fulfilled, (state, action) => {
+        state.statusBreakdown.loading = false;
+        state.statusBreakdown.breakdown = action.payload.breakdown || [];
+        state.statusBreakdown.pieData = action.payload.pieData || [];
+        state.statusBreakdown.total = action.payload.total || 0;
+        console.log('✅ Status breakdown updated:', state.statusBreakdown);
+      })
+      .addCase(fetchWorkStatusBreakdown.rejected, (state, action) => {
+        state.statusBreakdown.loading = false;
+        state.error = action.payload;
+      })
+      
+      // ============================================
+      // ✅ EXISTING REDUCERS
+      // ============================================
+      
       // Fetch Works
       .addCase(fetchWorks.pending, (state) => {
         state.loading = true;
@@ -910,9 +1410,21 @@ const workSlice = createSlice({
   }
 });
 
-export const { setFilters, resetFilters, clearCurrentWork } = workSlice.actions;
+// ============================================
+// ✅ EXPORT ACTIONS
+// ============================================
+export const { 
+  setFilters, 
+  resetFilters, 
+  clearCurrentWork,
+  clearDashboardData 
+} = workSlice.actions;
 
-// Selectors
+// ============================================
+// ✅ SELECTORS
+// ============================================
+
+// Existing selectors
 export const selectAllWorks = (state) => state.work.works;
 export const selectMyWorks = (state) => state.work.myWorks;
 export const selectCurrentWork = (state) => state.work.currentWork;
@@ -920,5 +1432,10 @@ export const selectWorkStats = (state) => state.work.stats;
 export const selectWorkPagination = (state) => state.work.pagination;
 export const selectWorkFilters = (state) => state.work.filters;
 export const selectWorkLoading = (state) => state.work.loading;
+
+// ✅ NEW: Dashboard selectors
+export const selectDashboardWorkStats = (state) => state.work.dashboardStats;
+export const selectRecentWorks = (state) => state.work.recentWorks;
+export const selectWorkStatusBreakdown = (state) => state.work.statusBreakdown;
 
 export default workSlice.reducer;

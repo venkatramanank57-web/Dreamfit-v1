@@ -4611,3 +4611,437 @@ const generateMeasurementPdf = async (garment) => {
   // For now, return a placeholder URL
   return `https://storage.example.com/measurements/${garment.garmentId}.pdf`;
 };
+
+
+// ============================================
+// ✅ DASHBOARD: GET WORK STATS WITH DATE FILTERS
+// ============================================
+// @desc    Get work statistics for dashboard (with date filters)
+// @route   GET /api/works/stats/dashboard
+// @access  Private (Admin, Store Keeper)
+export const getDashboardWorkStats = async (req, res) => {
+  try {
+    const { period, startDate, endDate } = req.query;
+    
+    console.log('📊 Getting work stats for dashboard with:', { period, startDate, endDate });
+    
+    // Build date filter
+    let dateFilter = {};
+    const now = new Date();
+    
+    if (period === 'today') {
+      const today = new Date(now.setHours(0, 0, 0, 0));
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      dateFilter = {
+        createdAt: {
+          $gte: today,
+          $lt: tomorrow
+        }
+      };
+    } else if (period === 'week') {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 7);
+      
+      dateFilter = {
+        createdAt: {
+          $gte: startOfWeek,
+          $lt: endOfWeek
+        }
+      };
+    } else if (period === 'month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      endOfMonth.setHours(23, 59, 59, 999);
+      
+      dateFilter = {
+        createdAt: {
+          $gte: startOfMonth,
+          $lte: endOfMonth
+        }
+      };
+    } else if (startDate && endDate) {
+      dateFilter = {
+        createdAt: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate + 'T23:59:59.999Z')
+        }
+      };
+    }
+    
+    console.log('📅 Work date filter:', dateFilter);
+    
+    // Aggregate work statistics by status
+    const stats = await Work.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          pending: {
+            $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
+          },
+          accepted: {
+            $sum: { $cond: [{ $eq: ['$status', 'accepted'] }, 1, 0] }
+          },
+          cuttingStarted: {
+            $sum: { $cond: [{ $eq: ['$status', 'cutting-started'] }, 1, 0] }
+          },
+          cuttingCompleted: {
+            $sum: { $cond: [{ $eq: ['$status', 'cutting-completed'] }, 1, 0] }
+          },
+          sewingStarted: {
+            $sum: { $cond: [{ $eq: ['$status', 'sewing-started'] }, 1, 0] }
+          },
+          sewingCompleted: {
+            $sum: { $cond: [{ $eq: ['$status', 'sewing-completed'] }, 1, 0] }
+          },
+          ironing: {
+            $sum: { $cond: [{ $eq: ['$status', 'ironing'] }, 1, 0] }
+          },
+          readyToDeliver: {
+            $sum: { $cond: [{ $eq: ['$status', 'ready-to-deliver'] }, 1, 0] }
+          },
+          cancelled: {
+            $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] }
+          }
+        }
+      }
+    ]);
+
+    // Get today's works (separate from filter)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayWorks = await Work.countDocuments({
+      createdAt: { $gte: today }
+    });
+
+    // Get overdue works (estimated delivery passed and not ready)
+    const overdueWorks = await Work.countDocuments({
+      estimatedDelivery: { $lt: new Date() },
+      status: { $ne: 'ready-to-deliver' },
+      ...dateFilter // Apply date filter to estimated delivery
+    });
+
+    const result = stats[0] || {
+      total: 0,
+      pending: 0,
+      accepted: 0,
+      cuttingStarted: 0,
+      cuttingCompleted: 0,
+      sewingStarted: 0,
+      sewingCompleted: 0,
+      ironing: 0,
+      readyToDeliver: 0,
+      cancelled: 0
+    };
+
+    // Combine similar statuses for easier frontend use
+    const workStats = {
+      total: result.total,
+      pending: result.pending + result.accepted, // Pending includes accepted
+      inProgress: result.cuttingStarted + result.cuttingCompleted + 
+                  result.sewingStarted + result.sewingCompleted + result.ironing,
+      completed: result.readyToDeliver,
+      cancelled: result.cancelled,
+      todayWorks,
+      overdueWorks,
+      // Detailed breakdown (optional)
+      details: {
+        pending: result.pending,
+        accepted: result.accepted,
+        cuttingStarted: result.cuttingStarted,
+        cuttingCompleted: result.cuttingCompleted,
+        sewingStarted: result.sewingStarted,
+        sewingCompleted: result.sewingCompleted,
+        ironing: result.ironing,
+        readyToDeliver: result.readyToDeliver
+      },
+      filter: {
+        period,
+        startDate: dateFilter.createdAt?.$gte,
+        endDate: dateFilter.createdAt?.$lte
+      }
+    };
+
+    console.log('✅ Work stats for dashboard:', workStats);
+
+    res.json({
+      success: true,
+      data: workStats
+    });
+
+  } catch (error) {
+    console.error('❌ Get dashboard work stats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch work statistics',
+      error: error.message 
+    });
+  }
+};
+
+// ============================================
+// ✅ DASHBOARD: GET RECENT WORKS
+// ============================================
+// @desc    Get recent works for dashboard
+// @route   GET /api/works/recent
+// @access  Private (Admin, Store Keeper)
+export const getRecentWorks = async (req, res) => {
+  try {
+    const { limit = 5, period, startDate, endDate } = req.query;
+    
+    console.log('📋 Getting recent works with:', { limit, period, startDate, endDate });
+    
+    // Build date filter
+    let dateFilter = {};
+    const now = new Date();
+    
+    if (period === 'today') {
+      const today = new Date(now.setHours(0, 0, 0, 0));
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      dateFilter = {
+        createdAt: {
+          $gte: today,
+          $lt: tomorrow
+        }
+      };
+    } else if (period === 'week') {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 7);
+      
+      dateFilter = {
+        createdAt: {
+          $gte: startOfWeek,
+          $lt: endOfWeek
+        }
+      };
+    } else if (period === 'month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      endOfMonth.setHours(23, 59, 59, 999);
+      
+      dateFilter = {
+        createdAt: {
+          $gte: startOfMonth,
+          $lte: endOfMonth
+        }
+      };
+    } else if (startDate && endDate) {
+      dateFilter = {
+        createdAt: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate + 'T23:59:59.999Z')
+        }
+      };
+    }
+    
+    const recentWorks = await Work.find(dateFilter)
+      .populate({
+        path: 'order',
+        select: 'orderId customer',
+        populate: {
+          path: 'customer',
+          select: 'name phone'
+        }
+      })
+      .populate({
+        path: 'garment',
+        select: 'name garmentId'
+      })
+      .populate('cuttingMaster', 'name')
+      .populate('tailor', 'name')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit));
+
+    // Format for dashboard display
+    const formattedWorks = recentWorks.map(work => ({
+      _id: work._id,
+      workId: work.workId,
+      status: work.status,
+      garment: work.garment ? {
+        name: work.garment.name,
+        id: work.garment.garmentId
+      } : null,
+      order: work.order ? {
+        orderId: work.order.orderId,
+        customer: work.order.customer
+      } : null,
+      cuttingMaster: work.cuttingMaster?.name,
+      tailor: work.tailor?.name,
+      createdAt: work.createdAt,
+      estimatedDelivery: work.estimatedDelivery
+    }));
+
+    console.log(`✅ Found ${formattedWorks.length} recent works`);
+
+    res.json({
+      success: true,
+      data: {
+        works: formattedWorks,
+        count: formattedWorks.length,
+        filter: { period, startDate, endDate }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get recent works error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch recent works',
+      error: error.message 
+    });
+  }
+};
+
+// ============================================
+// ✅ DASHBOARD: GET WORK STATUS BREAKDOWN
+// ============================================
+// @desc    Get work status breakdown for pie chart
+// @route   GET /api/works/status-breakdown
+// @access  Private (Admin, Store Keeper)
+export const getWorkStatusBreakdown = async (req, res) => {
+  try {
+    const { period, startDate, endDate } = req.query;
+    
+    // Build date filter (same as above)
+    let dateFilter = {};
+    const now = new Date();
+    
+    if (period === 'today') {
+      const today = new Date(now.setHours(0, 0, 0, 0));
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      dateFilter = {
+        createdAt: {
+          $gte: today,
+          $lt: tomorrow
+        }
+      };
+    } else if (period === 'week') {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 7);
+      
+      dateFilter = {
+        createdAt: {
+          $gte: startOfWeek,
+          $lt: endOfWeek
+        }
+      };
+    } else if (period === 'month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      endOfMonth.setHours(23, 59, 59, 999);
+      
+      dateFilter = {
+        createdAt: {
+          $gte: startOfMonth,
+          $lte: endOfMonth
+        }
+      };
+    } else if (startDate && endDate) {
+      dateFilter = {
+        createdAt: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate + 'T23:59:59.999Z')
+        }
+      };
+    }
+    
+    // Group by status
+    const breakdown = await Work.aggregate([
+      { $match: dateFilter },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Status colors for frontend
+    const statusColors = {
+      'pending': '#f59e0b',
+      'accepted': '#f59e0b',
+      'cutting-started': '#3b82f6',
+      'cutting-completed': '#3b82f6',
+      'sewing-started': '#3b82f6',
+      'sewing-completed': '#3b82f6',
+      'ironing': '#3b82f6',
+      'ready-to-deliver': '#10b981',
+      'cancelled': '#ef4444'
+    };
+
+    // Map status to display names
+    const statusNames = {
+      'pending': 'Pending',
+      'accepted': 'Accepted',
+      'cutting-started': 'Cutting Started',
+      'cutting-completed': 'Cutting Done',
+      'sewing-started': 'Sewing Started',
+      'sewing-completed': 'Sewing Done',
+      'ironing': 'Ironing',
+      'ready-to-deliver': 'Ready',
+      'cancelled': 'Cancelled'
+    };
+
+    // For pie chart, we want to combine similar statuses
+    const pieData = [
+      { name: 'Pending', value: 0, color: '#f59e0b' },
+      { name: 'In Progress', value: 0, color: '#3b82f6' },
+      { name: 'Ready', value: 0, color: '#10b981' },
+      { name: 'Cancelled', value: 0, color: '#ef4444' }
+    ];
+
+    breakdown.forEach(item => {
+      if (['pending', 'accepted'].includes(item._id)) {
+        pieData[0].value += item.count; // Pending
+      } else if (['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing'].includes(item._id)) {
+        pieData[1].value += item.count; // In Progress
+      } else if (item._id === 'ready-to-deliver') {
+        pieData[2].value = item.count; // Ready
+      } else if (item._id === 'cancelled') {
+        pieData[3].value = item.count; // Cancelled
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        breakdown: breakdown.map(item => ({
+          status: item._id,
+          name: statusNames[item._id] || item._id,
+          count: item.count,
+          color: statusColors[item._id] || '#94a3b8'
+        })),
+        pieData: pieData.filter(item => item.value > 0),
+        total: breakdown.reduce((sum, item) => sum + item.count, 0)
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get work status breakdown error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch work status breakdown',
+      error: error.message 
+    });
+  }
+};
