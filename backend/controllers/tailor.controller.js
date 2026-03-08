@@ -1354,3 +1354,146 @@ export const fixAllTailorStats = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+
+// Add to controllers/tailor.controller.js after getTailorStats
+
+// ============================================
+// ✅ GET TOP PERFORMING TAILORS (NEW)
+// ============================================
+export const getTopTailors = async (req, res) => {
+  try {
+    const { limit = 5 } = req.query;
+
+    // Get all active tailors
+    const tailors = await Tailor.find({ isActive: true })
+      .select('name tailorId specialization experience workStats isAvailable leaveStatus')
+      .lean();
+
+    // Get all works with status for completion calculation
+    const works = await Work.find({ 
+      isActive: true,
+      tailor: { $ne: null }
+    })
+      .select('tailor status')
+      .lean();
+
+    // Calculate completed orders per tailor
+    const completedCounts = {};
+    works.forEach(work => {
+      if (work.tailor && work.status === 'ready-to-delivery') {
+        const tailorId = work.tailor.toString();
+        completedCounts[tailorId] = (completedCounts[tailorId] || 0) + 1;
+      }
+    });
+
+    // Calculate average completion time (mock for now - implement based on your data)
+    // You can add createdAt and completedAt fields to works for accurate calculation
+
+    // Enhance tailors with calculated data
+    const enhancedTailors = tailors.map(tailor => ({
+      _id: tailor._id,
+      name: tailor.name,
+      tailorId: tailor.tailorId,
+      specialization: tailor.specialization || 'General',
+      experience: tailor.experience || 0,
+      completedOrders: completedCounts[tailor._id.toString()] || 0,
+      totalAssigned: tailor.workStats?.totalAssigned || 0,
+      isAvailable: tailor.isAvailable,
+      leaveStatus: tailor.leaveStatus
+    }));
+
+    // Sort by completed orders and take top performers
+    const topTailors = enhancedTailors
+      .sort((a, b) => b.completedOrders - a.completedOrders)
+      .slice(0, parseInt(limit));
+
+    // Calculate average completion time (placeholder)
+    const avgCompletionTime = "4.5 days"; // You can calculate this from actual data
+
+    res.json({
+      success: true,
+      topTailors,
+      summary: {
+        averageCompletionTime: avgCompletionTime,
+        totalActiveTailors: tailors.length,
+        totalCompletedOrders: Object.values(completedCounts).reduce((a, b) => a + b, 0)
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Get top tailors error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+};
+
+// ============================================
+// ✅ GET TAILOR PERFORMANCE REPORT (NEW)
+// ============================================
+export const getTailorPerformance = async (req, res) => {
+  try {
+    const { period = 'month' } = req.query;
+
+    let startDate = new Date();
+    const endDate = new Date();
+    
+    if (period === 'month') {
+      startDate.setMonth(startDate.getMonth() - 1);
+    } else if (period === 'quarter') {
+      startDate.setMonth(startDate.getMonth() - 3);
+    } else if (period === 'year') {
+      startDate.setFullYear(startDate.getFullYear() - 1);
+    }
+
+    // Get works completed in the period
+    const completedWorks = await Work.find({
+      status: 'ready-to-delivery',
+      updatedAt: { $gte: startDate, $lte: endDate },
+      tailor: { $ne: null }
+    })
+      .populate('tailor', 'name tailorId')
+      .lean();
+
+    // Group by tailor
+    const performance = {};
+    completedWorks.forEach(work => {
+      if (work.tailor) {
+        const tailorId = work.tailor._id.toString();
+        if (!performance[tailorId]) {
+          performance[tailorId] = {
+            tailor: work.tailor,
+            completedCount: 0,
+            works: []
+          };
+        }
+        performance[tailorId].completedCount++;
+        performance[tailorId].works.push({
+          workId: work.workId,
+          completedAt: work.updatedAt
+        });
+      }
+    });
+
+    const performanceArray = Object.values(performance)
+      .sort((a, b) => b.completedCount - a.completedCount);
+
+    res.json({
+      success: true,
+      period,
+      dateRange: { start: startDate, end: endDate },
+      performance: performanceArray
+    });
+
+  } catch (error) {
+    console.error("❌ Get tailor performance error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+};

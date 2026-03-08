@@ -1,6 +1,452 @@
-// controllers/transaction.controller.js
+// // controllers/transaction.controller.js
+// import Transaction from '../models/Transaction.js';
+// import Customer from '../models/Customer.js';
+
+// // Define allowed regular categories (without 'other' options)
+// const INCOME_CATEGORIES = [
+//   'customer-advance', 
+//   'full-payment', 
+//   'fabric-sale', 
+//   'project-payment'
+// ];
+
+// const EXPENSE_CATEGORIES = [
+//   'salary', 
+//   'electricity', 
+//   'travel', 
+//   'material-purchase', 
+//   'rent', 
+//   'maintenance'
+// ];
+
+// // @desc    Create a new transaction (income/expense)
+// // @route   POST /api/transactions
+// // @access  Private (Admin, Store Keeper)
+// export const createTransaction = async (req, res) => {
+//   try {
+//     const {
+//       type,
+//       category,
+//       customCategory,
+//       amount,
+//       paymentMethod,
+//       customer,
+//       description,
+//       transactionDate,
+//       referenceNumber
+//     } = req.body;
+
+//     console.log('📥 Creating transaction:', { type, category, customCategory, amount, paymentMethod });
+
+//     // Validation
+//     if (!type || !category || !amount || !paymentMethod) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Please fill all required fields'
+//       });
+//     }
+
+//     // Handle "other" categories
+//     let isOtherCategory = false;
+//     let finalCategory = category;
+//     let finalCustomCategory = null;
+
+//     // Income category validation
+//     if (type === 'income') {
+//       if (category === 'other-income') {
+//         isOtherCategory = true;
+//         finalCategory = 'other-income';
+//         finalCustomCategory = customCategory;
+        
+//         if (!customCategory) {
+//           return res.status(400).json({
+//             success: false,
+//             message: 'Please specify the income category'
+//           });
+//         }
+//       } else if (!INCOME_CATEGORIES.includes(category)) {
+//         return res.status(400).json({
+//           success: false,
+//           message: 'Invalid income category'
+//         });
+//       }
+//     }
+
+//     // Expense category validation
+//     if (type === 'expense') {
+//       if (category === 'other-expense') {
+//         isOtherCategory = true;
+//         finalCategory = 'other-expense';
+//         finalCustomCategory = customCategory;
+        
+//         if (!customCategory) {
+//           return res.status(400).json({
+//             success: false,
+//             message: 'Please specify the expense category'
+//           });
+//         }
+//       } else if (!EXPENSE_CATEGORIES.includes(category)) {
+//         return res.status(400).json({
+//           success: false,
+//           message: 'Invalid expense category'
+//         });
+//       }
+//     }
+
+//     // Set account type based on payment method
+//     const accountType = paymentMethod === 'cash' ? 'hand-cash' : 'bank';
+
+//     // Get customer details if customer ID is provided
+//     let customerDetails = null;
+//     if (customer) {
+//       const customerData = await Customer.findById(customer).select('firstName lastName phone customerId');
+//       if (customerData) {
+//         customerDetails = {
+//           name: `${customerData.firstName || ''} ${customerData.lastName || ''}`.trim() || 'Unknown',
+//           phone: customerData.phone,
+//           id: customerData.customerId || customerData._id
+//         };
+//       }
+//     }
+
+//     // Create transaction data object
+//     const transactionData = {
+//       type,
+//       category: finalCategory,
+//       amount: Number(amount),
+//       paymentMethod,
+//       accountType,
+//       description: description || '',
+//       transactionDate: transactionDate || Date.now(),
+//       referenceNumber: referenceNumber || '',
+//       createdBy: req.user._id,
+//       status: 'completed'
+//     };
+
+//     // Add optional fields
+//     if (isOtherCategory) {
+//       transactionData.isOtherCategory = true;
+//       transactionData.customCategory = finalCustomCategory;
+//     }
+
+//     if (customer) {
+//       transactionData.customer = customer;
+//       transactionData.customerDetails = customerDetails;
+//     }
+
+//     // Create transaction
+//     const transaction = await Transaction.create(transactionData);
+
+//     // Populate references
+//     const populatedTransaction = await Transaction.findById(transaction._id)
+//       .populate('customer', 'firstName lastName phone')
+//       .populate('createdBy', 'name');
+
+//     console.log('✅ Transaction created successfully:', transaction._id);
+
+//     res.status(201).json({
+//       success: true,
+//       message: `${type === 'income' ? 'Income' : 'Expense'} added successfully`,
+//       data: populatedTransaction
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Transaction creation error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to create transaction',
+//       error: error.message
+//     });
+//   }
+// };
+
+// // @desc    Get all transactions with filters
+// // @route   GET /api/transactions
+// // @access  Private
+// export const getTransactions = async (req, res) => {
+//   try {
+//     const {
+//       type,
+//       accountType,
+//       category,
+//       startDate,
+//       endDate,
+//       page = 1,
+//       limit = 20,
+//       sortBy = 'transactionDate',
+//       sortOrder = 'desc'
+//     } = req.query;
+
+//     // Build filter
+//     const filter = { status: 'completed' };
+
+//     if (type) filter.type = type;
+//     if (accountType) filter.accountType = accountType;
+//     if (category) filter.category = category;
+
+//     // Date range filter
+//     if (startDate || endDate) {
+//       filter.transactionDate = {};
+//       if (startDate) {
+//         const start = new Date(startDate);
+//         start.setHours(0, 0, 0, 0);
+//         filter.transactionDate.$gte = start;
+//       }
+//       if (endDate) {
+//         const end = new Date(endDate);
+//         end.setHours(23, 59, 59, 999);
+//         filter.transactionDate.$lte = end;
+//       }
+//     }
+
+//     // Pagination
+//     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+//     // Get transactions
+//     const transactions = await Transaction.find(filter)
+//       .populate('customer', 'firstName lastName phone')
+//       .populate('createdBy', 'name')
+//       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
+//       .skip(skip)
+//       .limit(parseInt(limit));
+
+//     // Get total count
+//     const total = await Transaction.countDocuments(filter);
+
+//     // Calculate totals
+//     const totals = await Transaction.aggregate([
+//       { $match: filter },
+//       {
+//         $group: {
+//           _id: null,
+//           totalIncome: {
+//             $sum: {
+//               $cond: [{ $eq: ['$type', 'income'] }, '$amount', 0]
+//             }
+//           },
+//           totalExpense: {
+//             $sum: {
+//               $cond: [{ $eq: ['$type', 'expense'] }, '$amount', 0]
+//             }
+//           },
+//           handCashIncome: {
+//             $sum: {
+//               $cond: [
+//                 { $and: [{ $eq: ['$accountType', 'hand-cash'] }, { $eq: ['$type', 'income'] }] },
+//                 '$amount',
+//                 0
+//               ]
+//             }
+//           },
+//           handCashExpense: {
+//             $sum: {
+//               $cond: [
+//                 { $and: [{ $eq: ['$accountType', 'hand-cash'] }, { $eq: ['$type', 'expense'] }] },
+//                 '$amount',
+//                 0
+//               ]
+//             }
+//           },
+//           bankIncome: {
+//             $sum: {
+//               $cond: [
+//                 { $and: [{ $eq: ['$accountType', 'bank'] }, { $eq: ['$type', 'income'] }] },
+//                 '$amount',
+//                 0
+//               ]
+//             }
+//           },
+//           bankExpense: {
+//             $sum: {
+//               $cond: [
+//                 { $and: [{ $eq: ['$accountType', 'bank'] }, { $eq: ['$type', 'expense'] }] },
+//                 '$amount',
+//                 0
+//               ]
+//             }
+//           }
+//         }
+//       }
+//     ]);
+
+//     const summary = totals[0] || {
+//       totalIncome: 0,
+//       totalExpense: 0,
+//       handCashIncome: 0,
+//       handCashExpense: 0,
+//       bankIncome: 0,
+//       bankExpense: 0
+//     };
+
+//     // Calculate balances
+//     const handCashBalance = summary.handCashIncome - summary.handCashExpense;
+//     const bankBalance = summary.bankIncome - summary.bankExpense;
+
+//     res.json({
+//       success: true,
+//       data: {
+//         transactions,
+//         summary: {
+//           totalIncome: summary.totalIncome,
+//           totalExpense: summary.totalExpense,
+//           netBalance: summary.totalIncome - summary.totalExpense,
+//           handCash: {
+//             income: summary.handCashIncome,
+//             expense: summary.handCashExpense,
+//             balance: handCashBalance
+//           },
+//           bank: {
+//             income: summary.bankIncome,
+//             expense: summary.bankExpense,
+//             balance: bankBalance
+//           },
+//           totalBalance: handCashBalance + bankBalance
+//         },
+//         pagination: {
+//           page: parseInt(page),
+//           limit: parseInt(limit),
+//           total,
+//           pages: Math.ceil(total / parseInt(limit))
+//         }
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Get transactions error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to fetch transactions',
+//       error: error.message
+//     });
+//   }
+// };
+
+// // @desc    Get transaction summary for dashboard
+// // @route   GET /api/transactions/summary
+// // @access  Private
+// export const getTransactionSummary = async (req, res) => {
+//   try {
+//     const { period = 'month' } = req.query;
+
+//     let startDate = new Date();
+//     const endDate = new Date();
+//     endDate.setHours(23, 59, 59, 999);
+
+//     if (period === 'today') {
+//       startDate.setHours(0, 0, 0, 0);
+//     } else if (period === 'week') {
+//       startDate.setDate(startDate.getDate() - startDate.getDay());
+//       startDate.setHours(0, 0, 0, 0);
+//     } else if (period === 'month') {
+//       startDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+//       startDate.setHours(0, 0, 0, 0);
+//     } else if (period === 'year') {
+//       startDate = new Date(startDate.getFullYear(), 0, 1);
+//       startDate.setHours(0, 0, 0, 0);
+//     }
+
+//     const summary = await Transaction.aggregate([
+//       {
+//         $match: {
+//           transactionDate: { $gte: startDate, $lte: endDate },
+//           status: 'completed'
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: {
+//             type: '$type',
+//             accountType: '$accountType'
+//           },
+//           total: { $sum: '$amount' },
+//           count: { $sum: 1 }
+//         }
+//       }
+//     ]);
+
+//     // Format response
+//     const result = {
+//       handCash: { income: 0, expense: 0, count: 0 },
+//       bank: { income: 0, expense: 0, count: 0 },
+//       recentTransactions: await Transaction.find({
+//         transactionDate: { $gte: startDate, $lte: endDate },
+//         status: 'completed'
+//       })
+//         .populate('customer', 'firstName lastName phone')
+//         .sort({ transactionDate: -1 })
+//         .limit(10)
+//     };
+
+//     summary.forEach(item => {
+//       const account = item._id.accountType === 'hand-cash' ? 'handCash' : 'bank';
+//       const type = item._id.type;
+//       result[account][type] = item.total;
+//       result[account].count += item.count;
+//     });
+
+//     res.json({
+//       success: true,
+//       data: result
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Get summary error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to fetch summary',
+//       error: error.message
+//     });
+//   }
+// };
+
+// // @desc    Delete transaction
+// // @route   DELETE /api/transactions/:id
+// // @access  Private (Admin only)
+// export const deleteTransaction = async (req, res) => {
+//   try {
+//     const transaction = await Transaction.findById(req.params.id);
+
+//     if (!transaction) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Transaction not found'
+//       });
+//     }
+
+//     // Only admin can delete
+//     if (req.user.role !== 'ADMIN') {
+//       return res.status(403).json({
+//         success: false,
+//         message: 'Only admin can delete transactions'
+//       });
+//     }
+
+//     await transaction.deleteOne();
+
+//     console.log('✅ Transaction deleted:', req.params.id);
+
+//     res.json({
+//       success: true,
+//       message: 'Transaction deleted successfully'
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Delete transaction error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to delete transaction',
+//       error: error.message
+//     });
+//   }
+// };
+
+
+
+// controllers/transaction.controller.js - FIXED VERSION (Remove duplicate export at bottom)
+
 import Transaction from '../models/Transaction.js';
 import Customer from '../models/Customer.js';
+import Order from '../models/Order.js';
 
 // Define allowed regular categories (without 'other' options)
 const INCOME_CATEGORIES = [
@@ -19,9 +465,9 @@ const EXPENSE_CATEGORIES = [
   'maintenance'
 ];
 
-// @desc    Create a new transaction (income/expense)
-// @route   POST /api/transactions
-// @access  Private (Admin, Store Keeper)
+// ============================================
+// ✅ CREATE TRANSACTION
+// ============================================
 export const createTransaction = async (req, res) => {
   try {
     const {
@@ -31,12 +477,20 @@ export const createTransaction = async (req, res) => {
       amount,
       paymentMethod,
       customer,
+      order,
       description,
       transactionDate,
       referenceNumber
     } = req.body;
 
-    console.log('📥 Creating transaction:', { type, category, customCategory, amount, paymentMethod });
+    console.log('📥 Creating transaction:', { 
+      type, 
+      category, 
+      customCategory, 
+      amount, 
+      paymentMethod,
+      order: order || 'No order' 
+    });
 
     // Validation
     if (!type || !category || !amount || !paymentMethod) {
@@ -109,6 +563,33 @@ export const createTransaction = async (req, res) => {
       }
     }
 
+    // CHECK FOR DUPLICATE TRANSACTIONS
+    if (order && type === 'income') {
+      const existingTransaction = await Transaction.findOne({
+        order: order,
+        type: 'income',
+        amount: Number(amount),
+        paymentMethod: paymentMethod,
+        status: 'completed'
+      });
+      
+      if (existingTransaction) {
+        console.log('⚠️ Duplicate transaction detected for order:', order);
+        
+        const populatedExisting = await Transaction.findById(existingTransaction._id)
+          .populate('customer', 'firstName lastName phone')
+          .populate('createdBy', 'name')
+          .populate('order', 'orderId customer');
+          
+        return res.status(200).json({
+          success: true,
+          message: 'Transaction already exists for this order',
+          data: populatedExisting,
+          duplicate: true
+        });
+      }
+    }
+
     // Create transaction data object
     const transactionData = {
       type,
@@ -134,13 +615,18 @@ export const createTransaction = async (req, res) => {
       transactionData.customerDetails = customerDetails;
     }
 
+    if (order) {
+      transactionData.order = order;
+    }
+
     // Create transaction
     const transaction = await Transaction.create(transactionData);
 
     // Populate references
     const populatedTransaction = await Transaction.findById(transaction._id)
       .populate('customer', 'firstName lastName phone')
-      .populate('createdBy', 'name');
+      .populate('createdBy', 'name')
+      .populate('order', 'orderId customer totalAmount');
 
     console.log('✅ Transaction created successfully:', transaction._id);
 
@@ -160,9 +646,9 @@ export const createTransaction = async (req, res) => {
   }
 };
 
-// @desc    Get all transactions with filters
-// @route   GET /api/transactions
-// @access  Private
+// ============================================
+// ✅ GET ALL TRANSACTIONS WITH FILTERS
+// ============================================
 export const getTransactions = async (req, res) => {
   try {
     const {
@@ -171,6 +657,9 @@ export const getTransactions = async (req, res) => {
       category,
       startDate,
       endDate,
+      order,
+      customer,
+      search,
       page = 1,
       limit = 20,
       sortBy = 'transactionDate',
@@ -183,6 +672,16 @@ export const getTransactions = async (req, res) => {
     if (type) filter.type = type;
     if (accountType) filter.accountType = accountType;
     if (category) filter.category = category;
+    if (order) filter.order = order;
+    if (customer) filter.customer = customer;
+
+    // Search in description or reference
+    if (search) {
+      filter.$or = [
+        { description: { $regex: search, $options: 'i' } },
+        { referenceNumber: { $regex: search, $options: 'i' } }
+      ];
+    }
 
     // Date range filter
     if (startDate || endDate) {
@@ -204,8 +703,9 @@ export const getTransactions = async (req, res) => {
 
     // Get transactions
     const transactions = await Transaction.find(filter)
-      .populate('customer', 'firstName lastName phone')
+      .populate('customer', 'firstName lastName phone customerId')
       .populate('createdBy', 'name')
+      .populate('order', 'orderId customer totalAmount status')
       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -321,9 +821,308 @@ export const getTransactions = async (req, res) => {
   }
 };
 
-// @desc    Get transaction summary for dashboard
-// @route   GET /api/transactions/summary
-// @access  Private
+// ============================================
+// ✅ GET TRANSACTION BY ID
+// ============================================
+export const getTransactionById = async (req, res) => {
+  try {
+    const transaction = await Transaction.findById(req.params.id)
+      .populate('customer', 'firstName lastName phone customerId')
+      .populate('createdBy', 'name')
+      .populate('order', 'orderId customer totalAmount status deliveryDate');
+
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: transaction
+    });
+  } catch (error) {
+    console.error('❌ Get transaction error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch transaction',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ UPDATE TRANSACTION
+// ============================================
+export const updateTransaction = async (req, res) => {
+  try {
+    const {
+      category,
+      customCategory,
+      amount,
+      paymentMethod,
+      description,
+      transactionDate,
+      referenceNumber,
+      status
+    } = req.body;
+
+    const transaction = await Transaction.findById(req.params.id);
+
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    // Only admin can update
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admin can update transactions'
+      });
+    }
+
+    // Check if transaction is linked to an order
+    if (transaction.order && (amount || paymentMethod)) {
+      console.log('⚠️ Updating order-linked transaction:', transaction.order);
+    }
+
+    // Update fields
+    if (category) {
+      if (category === 'other-income' || category === 'other-expense') {
+        transaction.category = category;
+        transaction.isOtherCategory = true;
+        transaction.customCategory = customCategory;
+      } else {
+        transaction.category = category;
+        transaction.isOtherCategory = false;
+        transaction.customCategory = null;
+      }
+    }
+
+    if (amount) transaction.amount = Number(amount);
+    if (paymentMethod) {
+      transaction.paymentMethod = paymentMethod;
+      transaction.accountType = paymentMethod === 'cash' ? 'hand-cash' : 'bank';
+    }
+    if (description !== undefined) transaction.description = description;
+    if (transactionDate) transaction.transactionDate = transactionDate;
+    if (referenceNumber !== undefined) transaction.referenceNumber = referenceNumber;
+    if (status) transaction.status = status;
+
+    await transaction.save();
+
+    const updatedTransaction = await Transaction.findById(transaction._id)
+      .populate('customer', 'firstName lastName phone')
+      .populate('createdBy', 'name')
+      .populate('order', 'orderId');
+
+    res.json({
+      success: true,
+      message: 'Transaction updated successfully',
+      data: updatedTransaction
+    });
+  } catch (error) {
+    console.error('❌ Update transaction error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update transaction',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ DELETE TRANSACTION
+// ============================================
+export const deleteTransaction = async (req, res) => {
+  try {
+    const transaction = await Transaction.findById(req.params.id);
+
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found'
+      });
+    }
+
+    // Only admin can delete
+    if (req.user.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admin can delete transactions'
+      });
+    }
+
+    // Check if this transaction is linked to an order
+    if (transaction.order) {
+      console.log(`⚠️ Transaction ${req.params.id} is linked to order ${transaction.order}`);
+    }
+
+    await transaction.deleteOne();
+
+    console.log('✅ Transaction deleted:', req.params.id);
+
+    res.json({
+      success: true,
+      message: 'Transaction deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Delete transaction error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete transaction',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ GET TRANSACTIONS BY ORDER
+// ============================================
+export const getTransactionsByOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    // First get the order details
+    const order = await Order.findById(orderId).select('orderId customer totalAmount');
+    
+    const transactions = await Transaction.find({ 
+      order: orderId,
+      status: 'completed' 
+    })
+    .populate('customer', 'firstName lastName phone')
+    .populate('createdBy', 'name')
+    .sort('-transactionDate');
+    
+    const totalIncome = transactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const totalExpense = transactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    res.json({
+      success: true,
+      order: order ? {
+        id: order._id,
+        orderId: order.orderId,
+        totalAmount: order.totalAmount
+      } : null,
+      count: transactions.length,
+      summary: {
+        totalIncome,
+        totalExpense,
+        netAmount: totalIncome - totalExpense
+      },
+      transactions
+    });
+    
+  } catch (error) {
+    console.error('❌ Get by order error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch transactions',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ GET TRANSACTIONS BY CUSTOMER
+// ============================================
+export const getTransactionsByCustomer = async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    const { type, startDate, endDate, limit = 50 } = req.query;
+
+    const filter = { 
+      customer: customerId,
+      status: 'completed' 
+    };
+
+    if (type) filter.type = type;
+
+    if (startDate || endDate) {
+      filter.transactionDate = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        filter.transactionDate.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.transactionDate.$lte = end;
+      }
+    }
+
+    const transactions = await Transaction.find(filter)
+      .populate('order', 'orderId')
+      .populate('createdBy', 'name')
+      .sort('-transactionDate')
+      .limit(parseInt(limit));
+
+    // Calculate totals
+    const totalIncome = transactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalExpense = transactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Group by order
+    const byOrder = {};
+    transactions.forEach(t => {
+      if (t.order) {
+        const orderId = t.order.toString();
+        if (!byOrder[orderId]) {
+          byOrder[orderId] = {
+            orderId: orderId,
+            income: 0,
+            expense: 0,
+            count: 0
+          };
+        }
+        if (t.type === 'income') {
+          byOrder[orderId].income += t.amount;
+        } else {
+          byOrder[orderId].expense += t.amount;
+        }
+        byOrder[orderId].count++;
+      }
+    });
+
+    res.json({
+      success: true,
+      count: transactions.length,
+      summary: {
+        totalIncome,
+        totalExpense,
+        netBalance: totalIncome - totalExpense
+      },
+      byOrder: Object.values(byOrder),
+      transactions
+    });
+  } catch (error) {
+    console.error('❌ Get by customer error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch transactions',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ GET TRANSACTION SUMMARY
+// ============================================
 export const getTransactionSummary = async (req, res) => {
   try {
     const { period = 'month' } = req.query;
@@ -364,15 +1163,43 @@ export const getTransactionSummary = async (req, res) => {
       }
     ]);
 
+    // Get category breakdown
+    const categoryBreakdown = await Transaction.aggregate([
+      {
+        $match: {
+          transactionDate: { $gte: startDate, $lte: endDate },
+          status: 'completed'
+        }
+      },
+      {
+        $group: {
+          _id: {
+            type: '$type',
+            category: '$category'
+          },
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { total: -1 } }
+    ]);
+
     // Format response
     const result = {
+      period,
+      dateRange: {
+        start: startDate,
+        end: endDate
+      },
       handCash: { income: 0, expense: 0, count: 0 },
       bank: { income: 0, expense: 0, count: 0 },
+      categoryBreakdown,
       recentTransactions: await Transaction.find({
         transactionDate: { $gte: startDate, $lte: endDate },
         status: 'completed'
       })
         .populate('customer', 'firstName lastName phone')
+        .populate('order', 'orderId')
         .sort({ transactionDate: -1 })
         .limit(10)
     };
@@ -399,42 +1226,443 @@ export const getTransactionSummary = async (req, res) => {
   }
 };
 
-// @desc    Delete transaction
-// @route   DELETE /api/transactions/:id
-// @access  Private (Admin only)
-export const deleteTransaction = async (req, res) => {
+// ============================================
+// ✅ GET TRANSACTION STATS
+// ============================================
+export const getTransactionStats = async (req, res) => {
   try {
-    const transaction = await Transaction.findById(req.params.id);
+    const stats = await Transaction.aggregate([
+      { $match: { status: 'completed' } },
+      {
+        $group: {
+          _id: {
+            type: '$type',
+            category: '$category',
+            accountType: '$accountType'
+          },
+          totalAmount: { $sum: '$amount' },
+          count: { $sum: 1 },
+          avgAmount: { $avg: '$amount' },
+          maxAmount: { $max: '$amount' },
+          minAmount: { $min: '$amount' }
+        }
+      },
+      { $sort: { totalAmount: -1 } }
+    ]);
 
-    if (!transaction) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found'
-      });
-    }
+    // Get top income sources
+    const topIncomeSources = await Transaction.aggregate([
+      { $match: { type: 'income', status: 'completed' } },
+      {
+        $group: {
+          _id: {
+            category: '$category',
+            order: '$order'
+          },
+          totalAmount: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { totalAmount: -1 } },
+      { $limit: 10 }
+    ]);
 
-    // Only admin can delete
-    if (req.user.role !== 'ADMIN') {
-      return res.status(403).json({
-        success: false,
-        message: 'Only admin can delete transactions'
-      });
-    }
-
-    await transaction.deleteOne();
-
-    console.log('✅ Transaction deleted:', req.params.id);
+    // Get monthly trend
+    const monthlyTrend = await Transaction.aggregate([
+      { 
+        $match: { 
+          status: 'completed',
+          transactionDate: { $gte: new Date(new Date().getFullYear(), 0, 1) }
+        } 
+      },
+      {
+        $group: {
+          _id: {
+            month: { $month: '$transactionDate' },
+            year: { $year: '$transactionDate' },
+            type: '$type'
+          },
+          total: { $sum: '$amount' },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { '_id.year': 1, '_id.month': 1 } }
+    ]);
 
     res.json({
       success: true,
-      message: 'Transaction deleted successfully'
+      data: {
+        detailed: stats,
+        topIncomeSources,
+        monthlyTrend
+      }
     });
 
   } catch (error) {
-    console.error('❌ Delete transaction error:', error);
+    console.error('❌ Get stats error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete transaction',
+      message: 'Failed to fetch stats',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ BULK DELETE TRANSACTIONS
+// ============================================
+export const bulkDeleteTransactions = async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an array of transaction IDs'
+      });
+    }
+
+    // Check if any transactions are linked to orders
+    const orderLinkedTransactions = await Transaction.find({
+      _id: { $in: ids },
+      order: { $ne: null }
+    });
+
+    if (orderLinkedTransactions.length > 0) {
+      console.log('⚠️ Cannot delete order-linked transactions:', orderLinkedTransactions.map(t => t._id));
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete transactions linked to orders',
+        orderLinked: orderLinkedTransactions.map(t => t._id)
+      });
+    }
+
+    const result = await Transaction.deleteMany({
+      _id: { $in: ids }
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} transactions`,
+      deletedCount: result.deletedCount
+    });
+  } catch (error) {
+    console.error('❌ Bulk delete error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete transactions',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ EXPORT TRANSACTIONS
+// ============================================
+export const exportTransactions = async (req, res) => {
+  try {
+    const {
+      type,
+      startDate,
+      endDate,
+      accountType,
+      customerId
+    } = req.query;
+
+    const filter = { status: 'completed' };
+
+    if (type) filter.type = type;
+    if (accountType) filter.accountType = accountType;
+    if (customerId) filter.customer = customerId;
+
+    if (startDate || endDate) {
+      filter.transactionDate = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        filter.transactionDate.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.transactionDate.$lte = end;
+      }
+    }
+
+    const transactions = await Transaction.find(filter)
+      .populate('customer', 'firstName lastName phone')
+      .populate('order', 'orderId')
+      .populate('createdBy', 'name')
+      .sort('-transactionDate');
+
+    // Format for export
+    const exportData = transactions.map(t => ({
+      'Transaction ID': t._id,
+      'Type': t.type,
+      'Category': t.isOtherCategory ? t.customCategory : t.category,
+      'Amount': t.amount,
+      'Payment Method': t.paymentMethod,
+      'Account': t.accountType === 'hand-cash' ? 'Hand Cash' : 'Bank',
+      'Customer Name': t.customerDetails?.name || 'N/A',
+      'Customer Phone': t.customerDetails?.phone || 'N/A',
+      'Order ID': t.order?.orderId || 'N/A',
+      'Description': t.description || '',
+      'Reference Number': t.referenceNumber || '',
+      'Date': new Date(t.transactionDate).toLocaleDateString('en-IN'),
+      'Time': new Date(t.transactionDate).toLocaleTimeString('en-IN'),
+      'Created By': t.createdBy?.name || 'N/A',
+      'Status': t.status
+    }));
+
+    res.json({
+      success: true,
+      count: exportData.length,
+      data: exportData
+    });
+  } catch (error) {
+    console.error('❌ Export error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export transactions',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ GET TRANSACTIONS BY DATE RANGE
+// ============================================
+export const getTransactionsByDateRange = async (req, res) => {
+  try {
+    const { start, end } = req.params;
+    const { type, accountType } = req.query;
+
+    const startDate = new Date(start);
+    startDate.setHours(0, 0, 0, 0);
+
+    const endDate = new Date(end);
+    endDate.setHours(23, 59, 59, 999);
+
+    const filter = {
+      transactionDate: { $gte: startDate, $lte: endDate },
+      status: 'completed'
+    };
+
+    if (type) filter.type = type;
+    if (accountType) filter.accountType = accountType;
+
+    const transactions = await Transaction.find(filter)
+      .populate('customer', 'firstName lastName phone')
+      .populate('order', 'orderId')
+      .sort('transactionDate');
+
+    // Calculate daily summary
+    const dailySummary = {};
+    transactions.forEach(t => {
+      const date = t.transactionDate.toISOString().split('T')[0];
+      if (!dailySummary[date]) {
+        dailySummary[date] = {
+          date,
+          income: 0,
+          expense: 0,
+          count: 0
+        };
+      }
+      if (t.type === 'income') {
+        dailySummary[date].income += t.amount;
+      } else {
+        dailySummary[date].expense += t.amount;
+      }
+      dailySummary[date].count++;
+    });
+
+    res.json({
+      success: true,
+      dateRange: { start, end },
+      summary: {
+        totalTransactions: transactions.length,
+        totalIncome: transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
+        totalExpense: transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0),
+        netAmount: transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) - 
+                  transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+      },
+      dailySummary: Object.values(dailySummary),
+      transactions
+    });
+  } catch (error) {
+    console.error('❌ Date range error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch transactions',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ GET DASHBOARD DATA
+// ============================================
+export const getDashboardData = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const startOfYear = new Date(today.getFullYear(), 0, 1);
+
+    // Get today's transactions
+    const todayTransactions = await Transaction.find({
+      transactionDate: { $gte: today },
+      status: 'completed'
+    });
+
+    // Get this month's transactions
+    const monthTransactions = await Transaction.find({
+      transactionDate: { $gte: startOfMonth },
+      status: 'completed'
+    });
+
+    // Get this year's transactions
+    const yearTransactions = await Transaction.find({
+      transactionDate: { $gte: startOfYear },
+      status: 'completed'
+    });
+
+    // Calculate totals
+    const todayIncome = todayTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const todayExpense = todayTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    
+    const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const monthExpense = monthTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    
+    const yearIncome = yearTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const yearExpense = yearTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+
+    // Get recent transactions
+    const recentTransactions = await Transaction.find({ status: 'completed' })
+      .populate('customer', 'firstName lastName phone')
+      .populate('order', 'orderId')
+      .sort('-transactionDate')
+      .limit(10);
+
+    res.json({
+      success: true,
+      data: {
+        today: {
+          income: todayIncome,
+          expense: todayExpense,
+          net: todayIncome - todayExpense,
+          count: todayTransactions.length
+        },
+        thisMonth: {
+          income: monthIncome,
+          expense: monthExpense,
+          net: monthIncome - monthExpense,
+          count: monthTransactions.length
+        },
+        thisYear: {
+          income: yearIncome,
+          expense: yearExpense,
+          net: yearIncome - yearExpense,
+          count: yearTransactions.length
+        },
+        recentTransactions
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Dashboard error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dashboard data',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ NO DUPLICATE EXPORT AT THE BOTTOM - REMOVED!
+// ============================================
+// The functions are already exported with "export" keyword above
+
+
+
+
+// Add to transaction.controller.js after getDashboardData
+
+// ============================================
+// ✅ GET TODAY'S TRANSACTIONS (NEW)
+// ============================================
+export const getTodayTransactions = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const transactions = await Transaction.find({
+      transactionDate: { $gte: today, $lt: tomorrow },
+      status: 'completed'
+    })
+    .populate('customer', 'firstName lastName phone')
+    .populate('order', 'orderId')
+    .sort('-transactionDate');
+
+    // Calculate totals
+    const totalIncome = transactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const totalExpense = transactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Split by account type
+    const handCashIncome = transactions
+      .filter(t => t.type === 'income' && t.accountType === 'hand-cash')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const bankIncome = transactions
+      .filter(t => t.type === 'income' && t.accountType === 'bank')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const handCashExpense = transactions
+      .filter(t => t.type === 'expense' && t.accountType === 'hand-cash')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const bankExpense = transactions
+      .filter(t => t.type === 'expense' && t.accountType === 'bank')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    res.json({
+      success: true,
+      data: {
+        transactions,
+        summary: {
+          totalIncome,
+          totalExpense,
+          netAmount: totalIncome - totalExpense,
+          count: transactions.length,
+          handCash: {
+            income: handCashIncome,
+            expense: handCashExpense,
+            balance: handCashIncome - handCashExpense
+          },
+          bank: {
+            income: bankIncome,
+            expense: bankExpense,
+            balance: bankIncome - bankExpense
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get today transactions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch today\'s transactions',
       error: error.message
     });
   }

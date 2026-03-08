@@ -903,15 +903,15 @@ export default function MainLayout() {
       },
       
       // Reports - Admin and Store Keeper
-      { 
-        id: 'reports', 
-        icon: BarChart3, 
-        label: 'Reports', 
-        path: '#', 
-        show: canViewReports, 
-        isDropdown: true,
-        description: 'Analytics and reports'
-      },
+      // { 
+      //   id: 'reports', 
+      //   icon: BarChart3, 
+      //   label: 'Reports', 
+      //   path: '#', 
+      //   show: canViewReports, 
+      //   isDropdown: true,
+      //   description: 'Analytics and reports'
+      // },
       
       // Staff - Admin only
       { 
@@ -924,14 +924,14 @@ export default function MainLayout() {
       },
       
       // Settings - Admin only
-      { 
-        id: 'settings', 
-        icon: Settings, 
-        label: 'Settings', 
-        path: `/${rolePath}/settings`, 
-        show: canViewSettings,
-        description: 'System configuration'
-      },
+      // { 
+      //   id: 'settings', 
+      //   icon: Settings, 
+      //   label: 'Settings', 
+      //   path: `/${rolePath}/settings`, 
+      //   show: canViewSettings,
+      //   description: 'System configuration'
+      // },
     ];
     
     return items.filter(item => item.show);
