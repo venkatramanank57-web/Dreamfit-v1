@@ -140,15 +140,17 @@ import {
   updateOrder,
   updateOrderStatus,
   deleteOrder,
+  getOrderDates,
   
   // Customer & Payment related
   getOrdersByCustomer,
   addPaymentToOrder,
   getOrderPayments,
+
   
   // ===== ONLY THESE TWO FOR ADMIN DASHBOARD =====
   getOrderStatsForDashboard,  // For pie chart & KPI cards (GET /api/orders/stats)
-  getRecentOrders              // For recent orders table (GET /api/orders/recent)
+  getRecentOrders      ,      // For recent orders table (GET /api/orders/recent)
   
 } from "../controllers/order.controller.js";
 import { protect, authorize } from "../middleware/auth.middleware.js";
@@ -218,6 +220,13 @@ router.get("/", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getAllOrde
  */
 router.get("/customer/:customerId", authorize("ADMIN", "STORE_KEEPER", "CUTTING_MASTER"), getOrdersByCustomer);
 
+
+// ============================================
+// ✅ DELIVERY CALENDAR ROUTES
+// ============================================
+// ✅ SIMPLE: Get dates that have orders (for green dots)
+router.get('/order-dates', protect, getOrderDates);
+
 /**
  * @route   POST /api/orders/:id/payments
  * @desc    Add payment
@@ -259,5 +268,12 @@ router.patch("/:id/status", authorize("ADMIN", "STORE_KEEPER"), updateOrderStatu
  * @access  Admin ONLY
  */
 router.delete("/:id", authorize("ADMIN"), deleteOrder);
+
+
+
+
+
+
+
 
 export default router;

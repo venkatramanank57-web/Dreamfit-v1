@@ -3338,3 +3338,77 @@ export const getFilteredOrders = async (req, res) => {
 
 
 
+//Delivery Clander 
+
+
+// ============================================
+// ✅ SIMPLE: Get dates that have orders (just for green dots)
+// ============================================
+export const getOrderDates = async (req, res) => {
+  console.log("\n🟢 ===== GET ORDER DATES =====");
+  
+  try {
+    const { month, year } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Month and year are required" 
+      });
+    }
+
+    const monthNum = parseInt(month);
+    const yearNum = parseInt(year);
+
+    // Calculate date range
+    const startDate = new Date(yearNum, monthNum, 1);
+    const endDate = new Date(yearNum, monthNum + 1, 0, 23, 59, 59);
+
+    // Just get unique dates that have orders
+    const orderDates = await Order.aggregate([
+      {
+        $match: {
+          deliveryDate: { 
+            $gte: startDate, 
+            $lte: endDate 
+          },
+          status: { $ne: 'cancelled' },
+          isActive: true
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$deliveryDate" }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id"
+        }
+      },
+      { $sort: { date: 1 } }
+    ]);
+
+    // Return just array of dates
+    const dates = orderDates.map(item => item.date);
+
+    console.log(`✅ Found ${dates.length} dates with orders`);
+    
+    res.json({
+      success: true,
+      dates: dates,
+      month: monthNum,
+      year: yearNum
+    });
+
+  } catch (error) {
+    console.error("❌ Error in getOrderDates:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+};

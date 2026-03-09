@@ -1207,7 +1207,7 @@ import { fetchAllCustomers } from "../../../features/customer/customerSlice";
 import GarmentForm from "../garment/GarmentForm";
 import AddPaymentModal from "../../../components/AddPaymentModal";
 import showToast from "../../../utils/toast";
-
+import "./CalendarStyles.css"
 export default function EditOrder() {
   const { id } = useParams();
   const navigate = useNavigate();

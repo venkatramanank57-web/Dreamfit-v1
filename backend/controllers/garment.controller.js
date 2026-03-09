@@ -2033,3 +2033,94 @@ export const deleteGarmentImage = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// ============================================
+// 🟢 Get customer's order dates for garment calendar
+// ============================================
+export const getCustomerOrderDates = async (req, res) => {
+  console.log("\n🟢 ===== GET CUSTOMER ORDER DATES =====");
+  
+  try {
+    const { customerId } = req.params;
+    const { month, year } = req.query;
+    
+    // Validate inputs
+    if (!customerId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Customer ID is required" 
+      });
+    }
+
+    if (!month || !year) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Month and year are required" 
+      });
+    }
+
+    const monthNum = parseInt(month);
+    const yearNum = parseInt(year);
+
+    // Calculate date range for the month
+    const startDate = new Date(yearNum, monthNum, 1);
+    const endDate = new Date(yearNum, monthNum + 1, 0, 23, 59, 59);
+
+    console.log(`📅 Customer: ${customerId}, Range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+    // Import Order model at the top if not already imported
+    // Make sure you have: import Order from "../models/Order.js";
+
+    // Get unique delivery dates where this customer has orders
+    const orderDates = await Order.aggregate([
+      {
+        $match: {
+          customer: new mongoose.Types.ObjectId(customerId),
+          deliveryDate: { 
+            $gte: startDate, 
+            $lte: endDate 
+          },
+          status: { $ne: 'cancelled' },
+          isActive: true
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$deliveryDate" }
+          }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id"
+        }
+      },
+      { $sort: { date: 1 } }
+    ]);
+
+    // Extract just the dates array
+    const dates = orderDates.map(item => item.date);
+
+    console.log(`✅ Found ${dates.length} dates for customer ${customerId}`);
+    console.log(`📅 Dates:`, dates);
+    
+    res.status(200).json({
+      success: true,
+      dates: dates,
+      customerId,
+      month: monthNum,
+      year: yearNum
+    });
+
+  } catch (error) {
+    console.error("❌ Error in getCustomerOrderDates:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+};

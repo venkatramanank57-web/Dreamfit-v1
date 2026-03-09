@@ -52,6 +52,7 @@ import TailorDetails from "../Pages/admin/tailor/TailorDetails";
 import EditTailor from "../Pages/admin/tailor/EditTailor";
 
 // ✅ CUTTING MASTER COMPONENTS
+import CuttingMasterDashboard from "../Pages/CuttingMasterDashboard";
 import CuttingMasters from "../Pages/admin/cuttingMaster/CuttingMasters";
 import AddCuttingMaster from "../Pages/admin/cuttingMaster/AddCuttingMaster";
 import CuttingMasterDetails from "../Pages/admin/cuttingMaster/CuttingMasterDetails";
@@ -85,11 +86,7 @@ const StoreKeeperDashboard = () => (
   </div>
 );
 
-const CuttingMasterDashboard = () => (
-  <div className="p-8 font-black text-slate-800 uppercase italic">
-    Master Work List
-  </div>
-);
+
 
 const Work = () => (
   <div className="p-8 font-black text-slate-800 uppercase italic">

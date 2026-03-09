@@ -2768,7 +2768,981 @@
 // export default orderSlice.reducer;
 
 
-// frontend/src/features/orders/orderSlice.js - COMPLETE FIXED VERSION
+
+
+
+
+// // frontend/src/features/orders/orderSlice.js - COMPLETE FIXED VERSION
+// import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+// import * as orderApi from "./orderApi";
+
+// // ============================================
+// // 🔄 ASYNC THUNKS
+
+
+// // ============================================
+
+// // Get order stats - WITH DATE FILTER SUPPORT ✅
+// export const fetchOrderStats = createAsyncThunk(
+//   "orders/fetchStats",
+//   async (params = {}, { rejectWithValue }) => {
+//     try {
+//       // params can be { period: 'month' } or { startDate, endDate }
+//       console.log('📊 Fetching order stats with params:', params);
+//       const response = await orderApi.getOrderStats(params);
+      
+//       // Handle different response structures
+//       if (response.data) {
+//         return response.data; // If response has data wrapper
+//       } else if (response.stats) {
+//         return response.stats; // If response has stats wrapper
+//       }
+//       return response; // If response is directly the stats
+//     } catch (error) {
+//       console.error('❌ fetchOrderStats error:', error);
+//       return rejectWithValue(error.response?.data?.message || "Failed to fetch stats");
+//     }
+//   }
+// );
+
+// // Get dashboard data
+// export const fetchDashboardData = createAsyncThunk(
+//   "orders/fetchDashboard",
+//   async (_, { rejectWithValue }) => {
+//     try {
+//       const response = await orderApi.getDashboardData();
+//       return response.dashboard || response.data || response;
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to fetch dashboard");
+//     }
+//   }
+// );
+
+// // ✅ FIXED: fetchRecentOrders with date filter support
+// export const fetchRecentOrders = createAsyncThunk(
+//   "orders/fetchRecent",
+//   async (params = {}, { rejectWithValue }) => {
+//     try {
+//       // params can include: { limit, startDate, endDate, period }
+//       const { limit = 10, startDate, endDate, period } = params;
+      
+//       console.log('📋 Fetching recent orders with:', { limit, startDate, endDate, period });
+      
+//       const response = await orderApi.getRecentOrders({ 
+//         limit, 
+//         startDate, 
+//         endDate, 
+//         period 
+//       });
+      
+//       // Handle different response structures
+//       let orders = [];
+//       if (response.orders) {
+//         orders = response.orders;
+//       } else if (response.data) {
+//         orders = response.data;
+//       } else if (Array.isArray(response)) {
+//         orders = response;
+//       }
+      
+//       return {
+//         orders: orders,
+//         count: orders.length,
+//         filter: params
+//       };
+//     } catch (error) {
+//       console.error('❌ fetchRecentOrders error:', error);
+//       return rejectWithValue(error.response?.data?.message || "Failed to fetch recent orders");
+//     }
+//   }
+// );
+
+// // Get ready to delivery orders
+// export const fetchReadyToDeliveryOrders = createAsyncThunk(
+//   "orders/fetchReadyToDelivery",
+//   async (params = {}, { rejectWithValue }) => {
+//     try {
+//       const response = await orderApi.getReadyToDeliveryOrders(params);
+      
+//       let orders = [];
+//       if (response.orders) {
+//         orders = response.orders;
+//       } else if (response.data) {
+//         orders = response.data;
+//       } else if (Array.isArray(response)) {
+//         orders = response;
+//       }
+      
+//       return {
+//         orders: orders,
+//         count: orders.length
+//       };
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to fetch ready to delivery orders");
+//     }
+//   }
+// );
+
+// // Create new order
+// export const createNewOrder = createAsyncThunk(
+//   "orders/create",
+//   async (orderData, { rejectWithValue }) => {
+//     try {
+//       const response = await orderApi.createOrder(orderData);
+//       return response.order || response.data || response;
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to create order");
+//     }
+//   }
+// );
+
+// // Get all orders - WITH FILTER SUPPORT ✅
+// export const fetchOrders = createAsyncThunk(
+//   "orders/fetchAll",
+//   async (params = {}, { rejectWithValue }) => {
+//     try {
+//       // params can include: { page, limit, status, startDate, endDate, period }
+//       const response = await orderApi.getAllOrders(params);
+      
+//       let orders = [];
+//       let pagination = {
+//         page: params.page || 1,
+//         limit: params.limit || 10,
+//         total: 0,
+//         pages: 1
+//       };
+      
+//       if (response.orders) {
+//         orders = response.orders;
+//         pagination = response.pagination || pagination;
+//       } else if (response.data) {
+//         orders = response.data;
+//       } else if (Array.isArray(response)) {
+//         orders = response;
+//       }
+      
+//       return {
+//         orders: orders,
+//         pagination: pagination
+//       };
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to fetch orders");
+//     }
+//   }
+// );
+
+// // Get orders by customer ID
+// export const fetchOrdersByCustomer = createAsyncThunk(
+//   "orders/fetchByCustomer",
+//   async (customerId, { rejectWithValue }) => {
+//     try {
+//       const response = await orderApi.getOrdersByCustomer(customerId);
+      
+//       let orders = [];
+//       if (response.orders) {
+//         orders = response.orders;
+//       } else if (response.data) {
+//         orders = response.data;
+//       } else if (Array.isArray(response)) {
+//         orders = response;
+//       }
+      
+//       return {
+//         customerId,
+//         orders: orders
+//       };
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to fetch customer orders");
+//     }
+//   }
+// );
+
+// // Get single order
+// export const fetchOrderById = createAsyncThunk(
+//   "orders/fetchById",
+//   async (id, { rejectWithValue }) => {
+//     try {
+//       const response = await orderApi.getOrderById(id);
+      
+//       return {
+//         order: response.order || response.data || response,
+//         payments: response.payments || [],
+//         works: response.works || []
+//       };
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to fetch order");
+//     }
+//   }
+// );
+
+// // Update order
+// export const updateExistingOrder = createAsyncThunk(
+//   "orders/update",
+//   async ({ id, data }, { rejectWithValue }) => {
+//     try {
+//       const response = await orderApi.updateOrder(id, data);
+//       return response.order || response.data || response;
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to update order");
+//     }
+//   }
+// );
+
+// // Update order status
+// export const updateOrderStatusThunk = createAsyncThunk(
+//   "orders/updateStatus",
+//   async ({ id, status }, { rejectWithValue }) => {
+//     try {
+//       const response = await orderApi.updateOrderStatus(id, status);
+//       return response.order || response.data || response;
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to update status");
+//     }
+//   }
+// );
+
+// // Delete order
+// export const deleteExistingOrder = createAsyncThunk(
+//   "orders/delete",
+//   async (id, { rejectWithValue }) => {
+//     try {
+//       await orderApi.deleteOrder(id);
+//       return id;
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to delete order");
+//     }
+//   }
+// );
+
+// // Add payment to order
+// export const addPayment = createAsyncThunk(
+//   "orders/addPayment",
+//   async ({ orderId, paymentData }, { rejectWithValue }) => {
+//     try {
+//       const response = await orderApi.addPaymentToOrder(orderId, paymentData);
+//       return {
+//         orderId,
+//         payment: response.payment || response.data,
+//         updatedOrder: response.order || response
+//       };
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to add payment");
+//     }
+//   }
+// );
+
+// // Get order payments
+// export const fetchOrderPayments = createAsyncThunk(
+//   "orders/fetchPayments",
+//   async (orderId, { rejectWithValue }) => {
+//     try {
+//       const response = await orderApi.getOrderPayments(orderId);
+      
+//       let payments = [];
+//       if (response.payments) {
+//         payments = response.payments;
+//       } else if (response.data) {
+//         payments = response.data;
+//       } else if (Array.isArray(response)) {
+//         payments = response;
+//       }
+      
+//       return {
+//         orderId,
+//         payments: payments
+//       };
+//     } catch (error) {
+//       return rejectWithValue(error.response?.data?.message || "Failed to fetch payments");
+//     }
+//   }
+// );
+
+// // ============================================
+// // 📊 INITIAL STATE
+// // ============================================
+// const initialState = {
+//   // Main orders list
+//   orders: [],
+//   recentOrders: [], // ✅ For dashboard
+//   currentOrder: null,
+//   currentPayments: [],
+//   currentWorks: [],
+  
+//   // Customer-specific orders
+//   customerOrders: {}, // Store orders by customer ID
+  
+//   // Ready to delivery orders
+//   readyToDelivery: {
+//     orders: [],
+//     count: 0,
+//     loading: false
+//   },
+  
+//   // Statistics - MATCHES YOUR FRONTEND EXPECTATIONS
+//   stats: {
+//     total: 0,
+//     pending: 0,
+//     cutting: 0,
+//     stitching: 0,
+//     ready: 0,
+//     delivered: 0,
+//     cancelled: 0,
+//     draft: 0,
+//     confirmed: 0,
+//     'in-progress': 0,
+//     'ready-to-delivery': 0,
+//     today: 0,
+//     thisWeek: 0,
+//     thisMonth: 0,
+//     inProgress: 0,
+//     deliveries: {
+//       today: 0,
+//       tomorrow: 0,
+//       late: 0,
+//       total: 0
+//     },
+//     filterPeriod: 'month',
+//     startDate: null,
+//     endDate: null
+//   },
+  
+//   // Dashboard data
+//   dashboard: {
+//     todayOrders: { count: 0, orders: [] },
+//     pendingDeliveries: { count: 0, orders: [] },
+//     readyForDelivery: { count: 0, orders: [] },
+//     recentOrders: [],
+//     todayCollection: 0,
+//     totalIncomeToday: 0,
+//     incomeBreakdown: {
+//       handCash: 0,
+//       bank: 0
+//     }
+//   },
+  
+//   // Pagination
+//   pagination: {
+//     page: 1,
+//     limit: 10,
+//     total: 0,
+//     pages: 1
+//   },
+  
+//   // UI states
+//   loading: false,
+//   error: null,
+//   success: false,
+  
+//   // Filter info (for debugging)
+//   currentFilter: null
+// };
+
+// // ============================================
+// // 🎯 ORDER SLICE
+// // ============================================
+// const orderSlice = createSlice({
+//   name: "orders",
+//   initialState,
+//   reducers: {
+//     clearOrderError: (state) => {
+//       state.error = null;
+//     },
+//     clearCurrentOrder: (state) => {
+//       state.currentOrder = null;
+//       state.currentPayments = [];
+//       state.currentWorks = [];
+//     },
+//     clearCustomerOrders: (state, action) => {
+//       const { customerId } = action.payload || {};
+//       if (customerId) {
+//         delete state.customerOrders[customerId];
+//       } else {
+//         state.customerOrders = {};
+//       }
+//     },
+//     clearReadyToDelivery: (state) => {
+//       state.readyToDelivery = {
+//         orders: [],
+//         count: 0,
+//         loading: false
+//       };
+//     },
+//     setPagination: (state, action) => {
+//       state.pagination = { ...state.pagination, ...action.payload };
+//     },
+//     resetOrderState: () => initialState,
+    
+//     // ✅ Clear recent orders (useful when changing filters)
+//     clearRecentOrders: (state) => {
+//       state.recentOrders = [];
+//     },
+    
+//     // ✅ Set current filter (for debugging)
+//     setCurrentFilter: (state, action) => {
+//       state.currentFilter = action.payload;
+//     },
+    
+//     // ✅ Update stats manually (if needed)
+//     updateStats: (state, action) => {
+//       state.stats = { ...state.stats, ...action.payload };
+//     }
+//   },
+//   extraReducers: (builder) => {
+//     builder
+//       // ===== FETCH STATS =====
+//       .addCase(fetchOrderStats.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//         console.log('⏳ fetchOrderStats pending');
+//       })
+//       .addCase(fetchOrderStats.fulfilled, (state, action) => {
+//         state.loading = false;
+//         console.log('✅ fetchOrderStats fulfilled - payload:', action.payload);
+        
+//         // Merge with existing stats
+//         state.stats = {
+//           ...state.stats,
+//           ...action.payload,
+//           // Ensure all required fields exist
+//           total: action.payload.total || 0,
+//           pending: action.payload.pending || 0,
+//           cutting: action.payload.cutting || 0,
+//           stitching: action.payload.stitching || 0,
+//           ready: action.payload.ready || 0,
+//           delivered: action.payload.delivered || 0,
+//           cancelled: action.payload.cancelled || 0,
+//           draft: action.payload.draft || 0,
+//           confirmed: action.payload.confirmed || 0,
+//           'in-progress': action.payload['in-progress'] || 0,
+//           'ready-to-delivery': action.payload['ready-to-delivery'] || 0,
+//           today: action.payload.today || 0,
+//           thisWeek: action.payload.thisWeek || 0,
+//           thisMonth: action.payload.thisMonth || 0,
+//           inProgress: action.payload.inProgress || action.payload.cutting || 0
+//         };
+        
+//         console.log('📊 Updated stats in Redux:', state.stats);
+//       })
+//       .addCase(fetchOrderStats.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//         console.error('❌ fetchOrderStats rejected:', action.payload);
+//       })
+
+//       // ===== FETCH DASHBOARD =====
+//       .addCase(fetchDashboardData.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(fetchDashboardData.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.dashboard = {
+//           ...state.dashboard,
+//           ...action.payload
+//         };
+//       })
+//       .addCase(fetchDashboardData.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       // ===== FETCH RECENT ORDERS (FIXED) =====
+//       .addCase(fetchRecentOrders.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//         console.log('⏳ fetchRecentOrders pending');
+//       })
+//       .addCase(fetchRecentOrders.fulfilled, (state, action) => {
+//         state.loading = false;
+//         console.log('✅ fetchRecentOrders fulfilled - payload:', action.payload);
+        
+//         state.recentOrders = action.payload.orders || [];
+//         state.currentFilter = action.payload.filter || null;
+        
+//         // Also update dashboard.recentOrders for backward compatibility
+//         state.dashboard.recentOrders = action.payload.orders || [];
+        
+//         console.log('📋 Updated recentOrders in Redux:', state.recentOrders.length);
+//       })
+//       .addCase(fetchRecentOrders.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//         state.recentOrders = []; // Clear on error
+//         console.error('❌ fetchRecentOrders rejected:', action.payload);
+//       })
+
+//       // ===== FETCH READY TO DELIVERY ORDERS =====
+//       .addCase(fetchReadyToDeliveryOrders.pending, (state) => {
+//         state.readyToDelivery.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(fetchReadyToDeliveryOrders.fulfilled, (state, action) => {
+//         state.readyToDelivery.loading = false;
+//         state.readyToDelivery.orders = action.payload.orders || [];
+//         state.readyToDelivery.count = action.payload.count || 0;
+//       })
+//       .addCase(fetchReadyToDeliveryOrders.rejected, (state, action) => {
+//         state.readyToDelivery.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       // ===== CREATE ORDER =====
+//       .addCase(createNewOrder.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//         state.success = false;
+//       })
+//       .addCase(createNewOrder.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.orders.unshift(action.payload);
+//         state.recentOrders.unshift(action.payload); // ✅ Add to recent orders
+//         state.success = true;
+        
+//         // Update stats (increment counts)
+//         if (action.payload.status) {
+//           const status = action.payload.status;
+//           if (status === 'confirmed') state.stats.pending += 1;
+//           else if (status === 'in-progress') {
+//             state.stats.cutting += 1;
+//             state.stats.stitching += 1;
+//             state.stats.inProgress += 1;
+//           }
+//           else if (status === 'ready-to-delivery') state.stats.ready += 1;
+//           else if (status === 'delivered') state.stats.delivered += 1;
+//           else if (status === 'draft') state.stats.draft += 1;
+//         }
+//         state.stats.total += 1;
+        
+//         // Add to customerOrders if customer exists
+//         if (action.payload.customer) {
+//           const customerId = action.payload.customer._id || action.payload.customer;
+//           if (!state.customerOrders[customerId]) {
+//             state.customerOrders[customerId] = [];
+//           }
+//           state.customerOrders[customerId].unshift(action.payload);
+//         }
+
+//         // If order is ready-to-delivery, add to readyToDelivery list
+//         if (action.payload.status === 'ready-to-delivery') {
+//           state.readyToDelivery.orders.unshift(action.payload);
+//           state.readyToDelivery.count += 1;
+//         }
+//       })
+//       .addCase(createNewOrder.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//         state.success = false;
+//       })
+
+//       // ===== FETCH ALL ORDERS =====
+//       .addCase(fetchOrders.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(fetchOrders.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.orders = action.payload.orders || [];
+//         state.pagination = action.payload.pagination || state.pagination;
+//       })
+//       .addCase(fetchOrders.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       // ===== FETCH ORDERS BY CUSTOMER =====
+//       .addCase(fetchOrdersByCustomer.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(fetchOrdersByCustomer.fulfilled, (state, action) => {
+//         state.loading = false;
+//         const { customerId, orders } = action.payload;
+//         state.customerOrders[customerId] = orders || [];
+//       })
+//       .addCase(fetchOrdersByCustomer.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       // ===== FETCH ORDER BY ID =====
+//       .addCase(fetchOrderById.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(fetchOrderById.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.currentOrder = action.payload.order;
+//         state.currentPayments = action.payload.payments || [];
+//         state.currentWorks = action.payload.works || [];
+//       })
+//       .addCase(fetchOrderById.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       // ===== UPDATE ORDER =====
+//       .addCase(updateExistingOrder.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(updateExistingOrder.fulfilled, (state, action) => {
+//         state.loading = false;
+//         const updatedOrder = action.payload;
+        
+//         // Update in main orders array
+//         const index = state.orders.findIndex(o => o?._id === updatedOrder?._id);
+//         if (index !== -1) {
+//           state.orders[index] = updatedOrder;
+//         }
+        
+//         // Update in recent orders
+//         const recentIndex = state.recentOrders.findIndex(o => o?._id === updatedOrder?._id);
+//         if (recentIndex !== -1) {
+//           state.recentOrders[recentIndex] = updatedOrder;
+//         }
+        
+//         // Update in customerOrders if customer exists
+//         if (updatedOrder?.customer) {
+//           const customerId = updatedOrder.customer._id || updatedOrder.customer;
+//           if (state.customerOrders[customerId]) {
+//             const custIndex = state.customerOrders[customerId].findIndex(o => o?._id === updatedOrder?._id);
+//             if (custIndex !== -1) {
+//               state.customerOrders[customerId][custIndex] = updatedOrder;
+//             }
+//           }
+//         }
+        
+//         // Update in readyToDelivery list if needed
+//         const readyIndex = state.readyToDelivery.orders.findIndex(o => o?._id === updatedOrder?._id);
+//         if (updatedOrder?.status === 'ready-to-delivery') {
+//           if (readyIndex === -1) {
+//             state.readyToDelivery.orders.unshift(updatedOrder);
+//             state.readyToDelivery.count += 1;
+//           } else {
+//             state.readyToDelivery.orders[readyIndex] = updatedOrder;
+//           }
+//         } else if (readyIndex !== -1) {
+//           // If status changed from ready-to-delivery to something else, remove from list
+//           state.readyToDelivery.orders.splice(readyIndex, 1);
+//           state.readyToDelivery.count -= 1;
+//         }
+        
+//         // Update currentOrder if it's the same
+//         if (state.currentOrder?._id === updatedOrder?._id) {
+//           state.currentOrder = updatedOrder;
+//         }
+//         state.success = true;
+//       })
+//       .addCase(updateExistingOrder.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       // ===== UPDATE ORDER STATUS =====
+//       .addCase(updateOrderStatusThunk.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(updateOrderStatusThunk.fulfilled, (state, action) => {
+//         state.loading = false;
+//         const updatedOrder = action.payload;
+        
+//         // Update in main orders array
+//         const index = state.orders.findIndex(o => o?._id === updatedOrder?._id);
+//         if (index !== -1) {
+//           state.orders[index] = updatedOrder;
+//         }
+        
+//         // Update in recent orders
+//         const recentIndex = state.recentOrders.findIndex(o => o?._id === updatedOrder?._id);
+//         if (recentIndex !== -1) {
+//           state.recentOrders[recentIndex] = updatedOrder;
+//         }
+        
+//         // Update in customerOrders if customer exists
+//         if (updatedOrder?.customer) {
+//           const customerId = updatedOrder.customer._id || updatedOrder.customer;
+//           if (state.customerOrders[customerId]) {
+//             const custIndex = state.customerOrders[customerId].findIndex(o => o?._id === updatedOrder?._id);
+//             if (custIndex !== -1) {
+//               state.customerOrders[customerId][custIndex] = updatedOrder;
+//             }
+//           }
+//         }
+        
+//         // Update in readyToDelivery list based on status
+//         const readyIndex = state.readyToDelivery.orders.findIndex(o => o?._id === updatedOrder?._id);
+//         if (updatedOrder?.status === 'ready-to-delivery') {
+//           if (readyIndex === -1) {
+//             state.readyToDelivery.orders.unshift(updatedOrder);
+//             state.readyToDelivery.count += 1;
+//           } else {
+//             state.readyToDelivery.orders[readyIndex] = updatedOrder;
+//           }
+//         } else if (readyIndex !== -1) {
+//           // If status changed from ready-to-delivery to something else
+//           state.readyToDelivery.orders.splice(readyIndex, 1);
+//           state.readyToDelivery.count -= 1;
+//         }
+        
+//         // Update currentOrder if it's the same
+//         if (state.currentOrder?._id === updatedOrder?._id) {
+//           state.currentOrder = updatedOrder;
+//         }
+//       })
+//       .addCase(updateOrderStatusThunk.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       // ===== DELETE ORDER =====
+//       .addCase(deleteExistingOrder.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(deleteExistingOrder.fulfilled, (state, action) => {
+//         state.loading = false;
+//         const deletedId = action.payload;
+        
+//         // Remove from main orders array
+//         state.orders = state.orders.filter(o => o?._id !== deletedId);
+        
+//         // Remove from recent orders
+//         state.recentOrders = state.recentOrders.filter(o => o?._id !== deletedId);
+        
+//         // Remove from all customerOrders entries
+//         Object.keys(state.customerOrders).forEach(customerId => {
+//           state.customerOrders[customerId] = state.customerOrders[customerId].filter(
+//             o => o?._id !== deletedId
+//           );
+//         });
+        
+//         // Remove from readyToDelivery list
+//         const readyIndex = state.readyToDelivery.orders.findIndex(o => o?._id === deletedId);
+//         if (readyIndex !== -1) {
+//           state.readyToDelivery.orders.splice(readyIndex, 1);
+//           state.readyToDelivery.count -= 1;
+//         }
+        
+//         // Clear currentOrder if it's the deleted one
+//         if (state.currentOrder?._id === deletedId) {
+//           state.currentOrder = null;
+//           state.currentPayments = [];
+//           state.currentWorks = [];
+//         }
+        
+//         // Update stats
+//         state.stats.total = Math.max(0, state.stats.total - 1);
+//         state.success = true;
+//       })
+//       .addCase(deleteExistingOrder.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       // ===== ADD PAYMENT =====
+//       .addCase(addPayment.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(addPayment.fulfilled, (state, action) => {
+//         state.loading = false;
+//         const { orderId, payment, updatedOrder } = action.payload;
+        
+//         // Update currentOrder if it matches
+//         if (state.currentOrder?._id === orderId) {
+//           state.currentOrder = updatedOrder || state.currentOrder;
+//           state.currentPayments.push(payment);
+//         }
+        
+//         // Update in orders list
+//         const orderIndex = state.orders.findIndex(o => o?._id === orderId);
+//         if (orderIndex !== -1 && updatedOrder) {
+//           state.orders[orderIndex] = updatedOrder;
+//         }
+        
+//         // Update in recent orders
+//         const recentIndex = state.recentOrders.findIndex(o => o?._id === orderId);
+//         if (recentIndex !== -1 && updatedOrder) {
+//           state.recentOrders[recentIndex] = updatedOrder;
+//         }
+        
+//         state.success = true;
+//       })
+//       .addCase(addPayment.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       // ===== FETCH ORDER PAYMENTS =====
+//       .addCase(fetchOrderPayments.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(fetchOrderPayments.fulfilled, (state, action) => {
+//         state.loading = false;
+//         if (state.currentOrder?._id === action.payload.orderId) {
+//           state.currentPayments = action.payload.payments || [];
+//         }
+//       })
+//       .addCase(fetchOrderPayments.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       });
+//   }
+// });
+
+// // ============================================
+// // 📤 EXPORT ACTIONS & REDUCER
+// // ============================================
+// export const { 
+//   clearOrderError, 
+//   clearCurrentOrder,
+//   clearCustomerOrders,
+//   clearReadyToDelivery,
+//   clearRecentOrders,
+//   setCurrentFilter,
+//   setPagination, 
+//   resetOrderState,
+//   updateStats
+// } = orderSlice.actions;
+
+// // ============================================
+// // ✅ FIXED SELECTORS - Using 'order' (singular) to match store
+// // ============================================
+
+// // Helper to get order state (works with both 'order' and 'orders')
+// const getOrderState = (state) => {
+//   // Your store uses 'order' (singular)
+//   return state.order || state.orders || {};
+// };
+
+// export const selectAllOrders = (state) => {
+//   const orderState = getOrderState(state);
+//   return orderState.orders || [];
+// };
+
+// export const selectRecentOrders = (state) => {
+//   const orderState = getOrderState(state);
+//   console.log('🔍 Selector - orderState:', orderState);
+//   console.log('🔍 Selector - recentOrders:', orderState.recentOrders);
+//   return orderState.recentOrders || [];
+// };
+
+// export const selectOrderStats = (state) => {
+//   const orderState = getOrderState(state);
+//   const stats = orderState.stats || {};
+  
+//   // Return with defaults to prevent undefined errors
+//   return {
+//     total: stats.total || 0,
+//     pending: stats.pending || 0,
+//     cutting: stats.cutting || 0,
+//     stitching: stats.stitching || 0,
+//     ready: stats.ready || 0,
+//     delivered: stats.delivered || 0,
+//     cancelled: stats.cancelled || 0,
+//     draft: stats.draft || 0,
+//     confirmed: stats.confirmed || 0,
+//     'in-progress': stats['in-progress'] || 0,
+//     'ready-to-delivery': stats['ready-to-delivery'] || 0,
+//     today: stats.today || 0,
+//     thisWeek: stats.thisWeek || 0,
+//     thisMonth: stats.thisMonth || 0,
+//     inProgress: stats.inProgress || stats.cutting || 0,
+//     deliveries: stats.deliveries || {
+//       today: 0,
+//       tomorrow: 0,
+//       late: 0,
+//       total: 0
+//     },
+//     filterPeriod: stats.filterPeriod || 'month',
+//     startDate: stats.startDate || null,
+//     endDate: stats.endDate || null
+//   };
+// };
+
+// export const selectCurrentOrder = (state) => {
+//   const orderState = getOrderState(state);
+//   return orderState.currentOrder || null;
+// };
+
+// export const selectOrderLoading = (state) => {
+//   const orderState = getOrderState(state);
+//   return orderState.loading || false;
+// };
+
+// export const selectOrderError = (state) => {
+//   const orderState = getOrderState(state);
+//   return orderState.error || null;
+// };
+
+// export const selectReadyToDelivery = (state) => {
+//   const orderState = getOrderState(state);
+//   return orderState.readyToDelivery || {
+//     orders: [],
+//     count: 0,
+//     loading: false
+//   };
+// };
+
+// export const selectOrdersByCustomer = (customerId) => (state) => {
+//   const orderState = getOrderState(state);
+//   return orderState.customerOrders?.[customerId] || [];
+// };
+
+// export const selectOrderPagination = (state) => {
+//   const orderState = getOrderState(state);
+//   return orderState.pagination || {
+//     page: 1,
+//     limit: 10,
+//     total: 0,
+//     pages: 1
+//   };
+// };
+
+// export const selectDashboardData = (state) => {
+//   const orderState = getOrderState(state);
+//   return orderState.dashboard || {
+//     todayOrders: { count: 0, orders: [] },
+//     pendingDeliveries: { count: 0, orders: [] },
+//     readyForDelivery: { count: 0, orders: [] },
+//     recentOrders: [],
+//     todayCollection: 0,
+//     totalIncomeToday: 0,
+//     incomeBreakdown: {
+//       handCash: 0,
+//       bank: 0
+//     }
+//   };
+// };
+
+
+
+
+
+
+
+// // ============================================
+// // ✅ DEFAULT EXPORT
+// // ============================================
+// export default orderSlice.reducer;
+
+
+
+
+
+
+
+
+
+
+
+//add leander 
+
+//add leander 
+
+// frontend/src/features/orders/orderSlice.js - COMPLETE FIXED VERSION WITH GREEN CIRCLE CALENDAR
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import * as orderApi from "./orderApi";
 
@@ -3052,6 +4026,35 @@ export const fetchOrderPayments = createAsyncThunk(
 );
 
 // ============================================
+// 🟢 NEW: Get dates that have orders (simple array for calendar green dots)
+// ============================================
+export const fetchOrderDates = createAsyncThunk(
+  "orders/fetchOrderDates",
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const { month, year } = params;
+      
+      if (month === undefined || year === undefined) {
+        return rejectWithValue("Month and year are required");
+      }
+      
+      console.log(`🟢 Fetching order dates for month: ${month}, year: ${year}`);
+      
+      const response = await orderApi.getOrderDates({ month, year });
+      
+      return {
+        dates: response.dates || [],
+        month,
+        year
+      };
+    } catch (error) {
+      console.error('❌ fetchOrderDates error:', error);
+      return rejectWithValue(error.response?.data?.message || "Failed to fetch order dates");
+    }
+  }
+);
+
+// ============================================
 // 📊 INITIAL STATE
 // ============================================
 const initialState = {
@@ -3128,7 +4131,15 @@ const initialState = {
   success: false,
   
   // Filter info (for debugging)
-  currentFilter: null
+  currentFilter: null,
+  
+  // 📅 NEW: Calendar state for green dots
+  calendar: {
+    orderDates: [], // Array of dates with orders ["2026-03-19", "2026-03-23", "2026-03-29"]
+    loading: false,
+    month: null,
+    year: null
+  }
 };
 
 // ============================================
@@ -3179,6 +4190,21 @@ const orderSlice = createSlice({
     // ✅ Update stats manually (if needed)
     updateStats: (state, action) => {
       state.stats = { ...state.stats, ...action.payload };
+    },
+    
+    // 📅 NEW: Calendar reducers
+    clearCalendarData: (state) => {
+      state.calendar = {
+        orderDates: [],
+        loading: false,
+        month: null,
+        year: null
+      };
+    },
+    setCalendarMonth: (state, action) => {
+      const { month, year } = action.payload;
+      state.calendar.month = month;
+      state.calendar.year = year;
     }
   },
   extraReducers: (builder) => {
@@ -3582,6 +4608,27 @@ const orderSlice = createSlice({
       .addCase(fetchOrderPayments.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+
+      // ===== 🟢 FETCH ORDER DATES (SIMPLE) =====
+      .addCase(fetchOrderDates.pending, (state) => {
+        state.calendar.loading = true;
+        state.error = null;
+        console.log('⏳ fetchOrderDates pending');
+      })
+      .addCase(fetchOrderDates.fulfilled, (state, action) => {
+        state.calendar.loading = false;
+        console.log('✅ fetchOrderDates fulfilled - dates:', action.payload.dates);
+        
+        state.calendar.orderDates = action.payload.dates || [];
+        state.calendar.month = action.payload.month;
+        state.calendar.year = action.payload.year;
+      })
+      .addCase(fetchOrderDates.rejected, (state, action) => {
+        state.calendar.loading = false;
+        state.error = action.payload;
+        state.calendar.orderDates = [];
+        console.error('❌ fetchOrderDates rejected:', action.payload);
       });
   }
 });
@@ -3598,8 +4645,30 @@ export const {
   setCurrentFilter,
   setPagination, 
   resetOrderState,
-  updateStats
+  updateStats,
+  // 📅 NEW: Calendar actions
+  clearCalendarData,
+  setCalendarMonth
 } = orderSlice.actions;
+
+// ✅ Export all thunks - ONLY ONCE!
+// export {
+//   fetchOrderStats,
+//   fetchDashboardData,
+//   fetchRecentOrders,
+//   fetchReadyToDeliveryOrders,
+//   createNewOrder,
+//   fetchOrders,
+//   fetchOrdersByCustomer,
+//   fetchOrderById,
+//   updateExistingOrder,
+//   updateOrderStatusThunk,
+//   // deleteExistingOrder,
+//   // addPayment,
+//   // fetchOrderPayments,
+//   // 🟢 NEW: Export fetchOrderDates
+//   // fetchOrderDates
+// };
 
 // ============================================
 // ✅ FIXED SELECTORS - Using 'order' (singular) to match store
@@ -3708,6 +4777,28 @@ export const selectDashboardData = (state) => {
       handCash: 0,
       bank: 0
     }
+  };
+};
+
+// ============================================
+// 🟢 NEW: ORDER DATES SELECTORS - For Calendar Green Dots
+// ============================================
+
+export const selectOrderDates = (state) => {
+  const orderState = getOrderState(state);
+  return orderState.calendar?.orderDates || [];
+};
+
+export const selectCalendarLoading = (state) => {
+  const orderState = getOrderState(state);
+  return orderState.calendar?.loading || false;
+};
+
+export const selectCalendarMonth = (state) => {
+  const orderState = getOrderState(state);
+  return {
+    month: orderState.calendar?.month,
+    year: orderState.calendar?.year
   };
 };
 

@@ -1,3 +1,70 @@
+// import API from "../../app/axios";
+
+// // ===== 1. CREATE GARMENT (Supports 3-Type Images) =====
+// export const createGarmentApi = async (orderId, garmentData) => {
+//   console.log(`📤 Creating garment for order ${orderId}`);
+  
+//   // Debug: FormData content monitoring
+//   if (garmentData instanceof FormData) {
+//     for (let pair of garmentData.entries()) {
+//       console.log(`📤 Field: ${pair[0]} | Value:`, pair[1] instanceof File ? `File: ${pair[1].name}` : pair[1]);
+//     }
+//   }
+  
+//   const response = await API.post(`/garments/order/${orderId}`, garmentData, {
+//     headers: { 'Content-Type': 'multipart/form-data' },
+//   });
+//   return response.data;
+// };
+
+// // ===== 2. GET GARMENTS BY ORDER =====
+// export const getGarmentsByOrderApi = async (orderId) => {
+//   const response = await API.get(`/garments/order/${orderId}`);
+//   return response.data;
+// };
+
+// // ===== 3. GET GARMENT BY ID (Used for Notifications Redirect) =====
+// export const getGarmentByIdApi = async (id) => {
+//   const response = await API.get(`/garments/${id}`);
+//   return response.data;
+// };
+
+// // ===== 4. UPDATE GARMENT (Text & Details) =====
+// export const updateGarmentApi = async (id, garmentData) => {
+//   // If editing text data, it's JSON. If editing images, it's FormData.
+//   const isFormData = garmentData instanceof FormData;
+  
+//   const response = await API.put(`/garments/${id}`, garmentData, {
+//     headers: {
+//       'Content-Type': isFormData ? 'multipart/form-data' : 'application/json',
+//     },
+//   });
+//   return response.data;
+// };
+
+// // ===== 5. UPDATE GARMENT IMAGES (R2 Cloud Sync) =====
+// export const updateGarmentImagesApi = async (id, imageData) => {
+//   const response = await API.patch(`/garments/${id}/images`, imageData, {
+//     headers: { 'Content-Type': 'multipart/form-data' },
+//   });
+//   return response.data;
+// };
+
+// // ===== 6. DELETE GARMENT IMAGE =====
+// export const deleteGarmentImageApi = async (id, imageKey, imageType) => {
+//   // Axois DELETE method-la data anuppa 'data' property thevai
+//   const response = await API.delete(`/garments/${id}/images`, {
+//     data: { imageKey, imageType }
+//   });
+//   return response.data;
+// };
+
+// // ===== 7. DELETE GARMENT (Soft Delete) =====
+// export const deleteGarmentApi = async (id) => {
+//   const response = await API.delete(`/garments/${id}`);
+//   return response.data;
+// };
+
 import API from "../../app/axios";
 
 // ===== 1. CREATE GARMENT (Supports 3-Type Images) =====
@@ -63,4 +130,47 @@ export const deleteGarmentImageApi = async (id, imageKey, imageType) => {
 export const deleteGarmentApi = async (id) => {
   const response = await API.delete(`/garments/${id}`);
   return response.data;
+};
+
+// ============================================
+// 🟢 NEW: Get customer's order dates for garment calendar
+// ============================================
+export const getCustomerOrderDates = async (customerId, params = {}) => {
+  try {
+    const { month, year } = params;
+    
+    if (!customerId) {
+      throw new Error("Customer ID is required");
+    }
+    
+    if (month === undefined || year === undefined) {
+      throw new Error("Month and year are required");
+    }
+    
+    console.log(`🟢 Fetching customer order dates: ${customerId}, month: ${month}, year: ${year}`);
+    
+    const queryString = buildQueryString({ month, year });
+    const response = await API.get(`/garments/customer/${customerId}/order-dates${queryString}`);
+    
+    console.log(`✅ Found ${response.data?.dates?.length || 0} dates for customer`);
+    
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error fetching customer order dates:", error);
+    throw error;
+  }
+};
+
+// ===== Helper function for building query string =====
+const buildQueryString = (params = {}) => {
+  const queryParams = new URLSearchParams();
+  
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      queryParams.append(key, value);
+    }
+  });
+  
+  const queryString = queryParams.toString();
+  return queryString ? `?${queryString}` : '';
 };

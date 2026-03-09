@@ -217,6 +217,165 @@ orderSchema.set('toObject', {
   }
 });
 
+
+
+// ============================================
+// ✅ DELIVERY CALENDAR STATIC METHOD
+// ============================================
+orderSchema.statics.getDeliveryCalendar = async function(month, year, maxOrdersPerDay = 10) {
+  try {
+    console.log(`📅 Getting delivery calendar for month: ${month}, year: ${year}`);
+    
+    // Calculate date range
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 0, 23, 59, 59);
+    
+    console.log(`📅 Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+    // Aggregation pipeline
+    const result = await this.aggregate([
+      {
+        $match: {
+          deliveryDate: {
+            $gte: startDate,
+            $lte: endDate
+          },
+          status: { $ne: 'cancelled' }, // Exclude cancelled orders
+          isActive: true // Only active orders
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { 
+              format: "%Y-%m-%d", 
+              date: "$deliveryDate" 
+            }
+          },
+          count: { $sum: 1 },
+          orderIds: { $push: "$_id" },
+          totalAmount: { $sum: "$priceSummary.totalMax" }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id",
+          count: 1,
+          orderIds: 1,
+          totalAmount: 1,
+          available: {
+            $subtract: [maxOrdersPerDay, "$count"]
+          },
+          isFull: {
+            $gte: ["$count", maxOrdersPerDay]
+          }
+        }
+      },
+      {
+        $sort: { date: 1 }
+      }
+    ]);
+
+    console.log(`✅ Found ${result.length} days with orders`);
+
+    // Convert array to object for easy frontend use
+    const calendarData = {};
+    result.forEach(day => {
+      calendarData[day.date] = {
+        count: day.count,
+        available: day.available,
+        isFull: day.isFull,
+        orderIds: day.orderIds,
+        totalAmount: day.totalAmount
+      };
+    });
+
+    return {
+      success: true,
+      data: calendarData,
+      maxPerDay: maxOrdersPerDay,
+      month,
+      year
+    };
+
+  } catch (error) {
+    console.error("❌ Error in getDeliveryCalendar:", error);
+    throw error;
+  }
+};
+
+// ============================================
+// ✅ SIMPLE VERSION - Just day and count
+// ============================================
+orderSchema.statics.getDeliveryCountsByDay = async function(month, year) {
+  try {
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 0, 23, 59, 59);
+
+    const result = await this.aggregate([
+      {
+        $match: {
+          deliveryDate: { $gte: startDate, $lte: endDate },
+          status: { $ne: 'cancelled' },
+          isActive: true
+        }
+      },
+      {
+        $group: {
+          _id: { $dayOfMonth: "$deliveryDate" },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          day: "$_id",
+          count: 1,
+          _id: 0
+        }
+      },
+      { $sort: { day: 1 } }
+    ]);
+
+    return result;
+
+  } catch (error) {
+    console.error("❌ Error in getDeliveryCountsByDay:", error);
+    throw error;
+  }
+};
+
+// ============================================
+// ✅ CHECK IF DATE IS AVAILABLE
+// ============================================
+orderSchema.statics.isDateAvailable = async function(date, maxOrdersPerDay = 10) {
+  try {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const count = await this.countDocuments({
+      deliveryDate: { $gte: startOfDay, $lte: endOfDay },
+      status: { $ne: 'cancelled' },
+      isActive: true
+    });
+
+    return {
+      date: date.toISOString().split('T')[0],
+      currentOrders: count,
+      available: count < maxOrdersPerDay,
+      remaining: Math.max(0, maxOrdersPerDay - count),
+      maxPerDay: maxOrdersPerDay
+    };
+
+  } catch (error) {
+    console.error("❌ Error in isDateAvailable:", error);
+    throw error;
+  }
+};
+
 // ============================================
 // ✅ EXPORT MODEL
 // ============================================
