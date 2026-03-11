@@ -3497,7 +3497,2196 @@
 
 
 
-// Pages/Dashboard/AdminDashboard.jsx - WITH CUSTOM RANGE + WORKS + TAILORS + QUICK ACTIONS
+// // Pages/Dashboard/AdminDashboard.jsx - WITH CUSTOM RANGE + WORKS + TAILORS + QUICK ACTIONS
+// import React, { useState, useEffect } from 'react';
+// import { useDispatch, useSelector } from 'react-redux';
+// import { Link } from 'react-router-dom';
+// import {
+//   ShoppingCart,
+//   IndianRupee,
+//   Truck,
+//   Scissors,
+//   TrendingUp,
+//   Clock,
+//   ArrowRight,
+//   RefreshCw,
+//   Eye,
+//   Package,
+//   AlertCircle,
+//   Filter,
+//   Calendar,
+//   UserCheck,
+//   UserX,
+//   Award,
+//   Layers,
+//   CheckCircle,
+//   XCircle,
+//   Loader,
+//   Plus,
+//   UserPlus,
+//   Receipt,
+//   DollarSign
+// } from 'lucide-react';
+// import {
+//   PieChart as RePieChart,
+//   Pie,
+//   Cell,
+//   Tooltip,
+//   Legend,
+//   ResponsiveContainer,
+//   LineChart,
+//   Line,
+//   XAxis,
+//   YAxis,
+//   CartesianGrid,
+//   BarChart,
+//   Bar
+// } from 'recharts';
+// import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+
+// // IMPORT from orderSlice
+// import { 
+//   fetchOrderStats, 
+//   fetchRecentOrders,
+//   selectOrderStats,
+//   selectRecentOrders 
+// } from '../../features/order/orderSlice';
+
+// // IMPORT from workSlice
+// import {
+//   fetchWorkStats,
+//   fetchRecentWorks,
+//   selectWorkStats,
+//   selectRecentWorks
+// } from '../../features/work/workSlice';
+
+// // IMPORT from tailorSlice
+// import {
+//   fetchTailorStats,
+//   fetchTailorPerformance,
+//   selectTailorStats,
+//   selectTailorPerformance
+// } from '../../features/tailor/tailorSlice';
+
+// import StatCard from '../../components/common/StatCard';
+// import showToast from '../../utils/toast';
+
+// export default function AdminDashboard() {
+//   const dispatch = useDispatch();
+//   const { user } = useSelector((state) => state.auth);
+  
+//   // ===== DEBUG: Check user info =====
+//   console.log('👤 Current User:', user);
+  
+//   // ===== GET ORDER DATA =====
+//   const orderStats = useSelector(selectOrderStats) || {
+//     total: 0,
+//     pending: 0,
+//     cutting: 0,
+//     stitching: 0,
+//     ready: 0,
+//     delivered: 0,
+//     cancelled: 0
+//   };
+  
+//   const recentOrders = useSelector(selectRecentOrders) || [];
+  
+//   // ===== GET WORK DATA =====
+//   const workStats = useSelector(selectWorkStats) || {
+//     total: 0,
+//     pending: 0,
+//     inProgress: 0,
+//     completed: 0,
+//     cancelled: 0
+//   };
+  
+//   const recentWorks = useSelector(selectRecentWorks) || [];
+  
+//   // ===== GET TAILOR DATA =====
+//   const tailorStats = useSelector(selectTailorStats) || {
+//     total: 0,
+//     active: 0,
+//     busy: 0,
+//     idle: 0,
+//     onLeave: 0
+//   };
+  
+//   const tailorPerformance = useSelector(selectTailorPerformance) || [];
+  
+//   // Loading states
+//   const [isLoading, setIsLoading] = useState(false);
+//   const [dateRange, setDateRange] = useState('month');
+//   const [customStartDate, setCustomStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+//   const [customEndDate, setCustomEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+//   const [showCustomPicker, setShowCustomPicker] = useState(false);
+//   const [lastRefreshed, setLastRefreshed] = useState(new Date());
+  
+//   // Revenue chart data
+//   const [revenueData, setRevenueData] = useState([]);
+
+//   // ===== STATUS COLORS =====
+//   const STATUS_CONFIG = {
+//     'draft': { color: '#94a3b8', label: 'Draft', bg: 'bg-slate-100' },
+//     'confirmed': { color: '#f59e0b', label: 'Confirmed', bg: 'bg-amber-100' },
+//     'in-progress': { color: '#3b82f6', label: 'In Progress', bg: 'bg-blue-100' },
+//     'ready-to-delivery': { color: '#10b981', label: 'Ready', bg: 'bg-emerald-100' },
+//     'delivered': { color: '#6b7280', label: 'Delivered', bg: 'bg-gray-100' },
+//     'cancelled': { color: '#ef4444', label: 'Cancelled', bg: 'bg-red-100' }
+//   };
+
+//   const WORK_STATUS_COLORS = {
+//     'pending': '#f59e0b',
+//     'in-progress': '#3b82f6',
+//     'completed': '#10b981',
+//     'cancelled': '#ef4444'
+//   };
+
+//   // ===== LOAD DATA WHEN FILTER CHANGES =====
+//   useEffect(() => {
+//     console.log('🔄 Date range changed to:', dateRange);
+//     loadDashboardData();
+//   }, [dateRange, customStartDate, customEndDate]);
+
+//   const loadDashboardData = async () => {
+//     console.log('🚀 ===== LOADING DASHBOARD DATA STARTED =====');
+//     console.log('📅 Selected date range:', dateRange);
+//     setIsLoading(true);
+    
+//     try {
+//       // Get date parameters based on filter
+//       const params = getDateParams();
+//       console.log('📅 Date params being sent:', params);
+      
+//       // Build promises array
+//       const promises = [
+//         dispatch(fetchOrderStats(params)),
+//         dispatch(fetchRecentOrders({ ...params, limit: 10 })),
+//         dispatch(fetchWorkStats(params)),
+//         dispatch(fetchRecentWorks({ ...params, limit: 5 })),
+//         dispatch(fetchTailorStats()),
+//         dispatch(fetchTailorPerformance(params))
+//       ];
+      
+//       const startTime = Date.now();
+//       const results = await Promise.allSettled(promises);
+//       const endTime = Date.now();
+      
+//       console.log(`⏱️ API calls completed in ${endTime - startTime}ms`);
+      
+//       // Check results
+//       const apiNames = ['Order Stats', 'Recent Orders', 'Work Stats', 'Recent Works', 'Tailor Stats', 'Tailor Performance'];
+//       results.forEach((result, index) => {
+//         if (result.status === 'fulfilled') {
+//           console.log(`✅ ${apiNames[index]} successful:`, result.value);
+//         } else {
+//           console.error(`❌ ${apiNames[index]} failed:`, result.reason);
+//         }
+//       });
+      
+//       // Generate revenue chart data (sample for now)
+//       generateRevenueChartData();
+      
+//       setLastRefreshed(new Date());
+      
+//     } catch (error) {
+//       console.error('❌ Error loading dashboard:', error);
+//       showToast.error('Failed to load dashboard data');
+//     } finally {
+//       setIsLoading(false);
+//       console.log('🏁 ===== LOADING DASHBOARD DATA COMPLETED =====');
+//     }
+//   };
+
+//   const getDateParams = () => {
+//     const today = new Date();
+    
+//     switch(dateRange) {
+//       case 'today':
+//         return { 
+//           period: 'today',
+//           startDate: format(today, 'yyyy-MM-dd'),
+//           endDate: format(today, 'yyyy-MM-dd')
+//         };
+//       case 'week':
+//         const weekStart = startOfWeek(today);
+//         const weekEnd = endOfWeek(today);
+//         return {
+//           period: 'week',
+//           startDate: format(weekStart, 'yyyy-MM-dd'),
+//           endDate: format(weekEnd, 'yyyy-MM-dd')
+//         };
+//       case 'month':
+//         return { 
+//           period: 'month',
+//           startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
+//           endDate: format(endOfMonth(today), 'yyyy-MM-dd')
+//         };
+//       case 'custom':
+//         return {
+//           period: 'custom',
+//           startDate: customStartDate,
+//           endDate: customEndDate
+//         };
+//       default:
+//         return { period: 'month' };
+//     }
+//   };
+
+//   // ===== APPLY CUSTOM DATE RANGE =====
+//   const handleApplyCustomRange = () => {
+//     if (!customStartDate || !customEndDate) {
+//       showToast.error('Please select both start and end dates');
+//       return;
+//     }
+    
+//     if (new Date(customStartDate) > new Date(customEndDate)) {
+//       showToast.error('Start date cannot be after end date');
+//       return;
+//     }
+    
+//     setDateRange('custom');
+//     setShowCustomPicker(false);
+//     loadDashboardData();
+//     showToast.success(`Showing data from ${customStartDate} to ${customEndDate}`);
+//   };
+
+//   // ===== Generate Revenue Chart Data =====
+//   const generateRevenueChartData = () => {
+//     console.log('💰 Generating revenue chart data for:', dateRange);
+    
+//     let data = [];
+//     const today = new Date();
+    
+//     switch(dateRange) {
+//       case 'today':
+//         for (let i = 0; i < 8; i++) {
+//           data.push({
+//             time: `${i+9} AM`,
+//             revenue: Math.floor(Math.random() * 5000) + 1000,
+//             expense: Math.floor(Math.random() * 2000) + 500
+//           });
+//         }
+//         break;
+        
+//       case 'week':
+//         for (let i = 6; i >= 0; i--) {
+//           const date = subDays(today, i);
+//           data.push({
+//             day: format(date, 'EEE'),
+//             revenue: Math.floor(Math.random() * 15000) + 5000,
+//             expense: Math.floor(Math.random() * 5000) + 2000
+//           });
+//         }
+//         break;
+        
+//       case 'month':
+//       default:
+//         data = [
+//           { day: 'Week 1', revenue: Math.floor(Math.random() * 50000) + 20000, expense: Math.floor(Math.random() * 20000) + 10000 },
+//           { day: 'Week 2', revenue: Math.floor(Math.random() * 50000) + 20000, expense: Math.floor(Math.random() * 20000) + 10000 },
+//           { day: 'Week 3', revenue: Math.floor(Math.random() * 50000) + 20000, expense: Math.floor(Math.random() * 20000) + 10000 },
+//           { day: 'Week 4', revenue: Math.floor(Math.random() * 50000) + 20000, expense: Math.floor(Math.random() * 20000) + 10000 }
+//         ];
+//         break;
+//     }
+    
+//     setRevenueData(data);
+//   };
+
+//   // ===== PREPARE ORDER STATUS DATA =====
+//   const getOrderStatusData = () => {
+//     const data = [];
+    
+//     if (orderStats.confirmed > 0) {
+//       data.push({ 
+//         name: 'Confirmed', 
+//         value: orderStats.confirmed, 
+//         color: STATUS_CONFIG.confirmed.color 
+//       });
+//     }
+    
+//     if (orderStats['in-progress'] > 0) {
+//       data.push({ 
+//         name: 'In Progress', 
+//         value: orderStats['in-progress'], 
+//         color: STATUS_CONFIG['in-progress'].color 
+//       });
+//     }
+    
+//     if (orderStats['ready-to-delivery'] > 0) {
+//       data.push({ 
+//         name: 'Ready', 
+//         value: orderStats['ready-to-delivery'], 
+//         color: STATUS_CONFIG['ready-to-delivery'].color 
+//       });
+//     }
+    
+//     if (orderStats.delivered > 0) {
+//       data.push({ 
+//         name: 'Delivered', 
+//         value: orderStats.delivered, 
+//         color: STATUS_CONFIG.delivered.color 
+//       });
+//     }
+    
+//     if (orderStats.cancelled > 0) {
+//       data.push({ 
+//         name: 'Cancelled', 
+//         value: orderStats.cancelled, 
+//         color: STATUS_CONFIG.cancelled.color 
+//       });
+//     }
+    
+//     if (orderStats.draft > 0) {
+//       data.push({ 
+//         name: 'Draft', 
+//         value: orderStats.draft, 
+//         color: STATUS_CONFIG.draft.color 
+//       });
+//     }
+    
+//     return data;
+//   };
+
+//   const orderStatusData = getOrderStatusData();
+//   const hasOrderData = orderStatusData.length > 0;
+
+//   // ===== PREPARE WORK STATUS DATA =====
+//   const getWorkStatusData = () => {
+//     return [
+//       { name: 'Pending', value: workStats.pending || 0, color: '#f59e0b' },
+//       { name: 'In Progress', value: workStats.inProgress || 0, color: '#3b82f6' },
+//       { name: 'Completed', value: workStats.completed || 0, color: '#10b981' },
+//       { name: 'Cancelled', value: workStats.cancelled || 0, color: '#ef4444' }
+//     ].filter(item => item.value > 0);
+//   };
+
+//   const workStatusData = getWorkStatusData();
+//   const hasWorkData = workStatusData.length > 0;
+
+//   // Safe formatting
+//   const safeFormat = (value) => {
+//     return (value || 0).toLocaleString('en-IN');
+//   };
+
+//   // Get status badge
+//   const getStatusBadge = (status) => {
+//     const config = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
+//     return `${config.bg} text-gray-700 px-2 py-1 text-xs rounded-full`;
+//   };
+
+//   return (
+//     <div className="min-h-screen bg-slate-50 p-6">
+//       {/* ===== HEADER WITH CUSTOM DATE RANGE ===== */}
+//       <div className="mb-8">
+//         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+//           <div>
+//             <h1 className="text-3xl font-black text-slate-800 mb-2">
+//               Admin Dashboard
+//             </h1>
+//             <p className="text-slate-600 flex items-center gap-2">
+//               <Clock size={16} />
+//               {format(new Date(), 'EEEE, MMMM do, yyyy')}
+//             </p>
+//             <p className="text-xs text-gray-400 mt-1">
+//               Last refreshed: {format(lastRefreshed, 'hh:mm:ss a')}
+//             </p>
+//           </div>
+
+//           {/* Filter Buttons with Custom Range */}
+//           <div className="flex flex-wrap gap-2 bg-white p-2 rounded-xl shadow-sm">
+//             <button
+//               onClick={() => {
+//                 setDateRange('today');
+//                 setShowCustomPicker(false);
+//               }}
+//               className={`px-4 py-2 rounded-lg font-medium transition-all ${
+//                 dateRange === 'today' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+//               }`}
+//             >
+//               Today
+//             </button>
+//             <button
+//               onClick={() => {
+//                 setDateRange('week');
+//                 setShowCustomPicker(false);
+//               }}
+//               className={`px-4 py-2 rounded-lg font-medium transition-all ${
+//                 dateRange === 'week' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+//               }`}
+//             >
+//               This Week
+//             </button>
+//             <button
+//               onClick={() => {
+//                 setDateRange('month');
+//                 setShowCustomPicker(false);
+//               }}
+//               className={`px-4 py-2 rounded-lg font-medium transition-all ${
+//                 dateRange === 'month' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+//               }`}
+//             >
+//               This Month
+//             </button>
+//             <button
+//               onClick={() => setShowCustomPicker(!showCustomPicker)}
+//               className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1 ${
+//                 showCustomPicker || dateRange === 'custom' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+//               }`}
+//             >
+//               <Calendar size={16} />
+//               Custom
+//             </button>
+//             <button
+//               onClick={loadDashboardData}
+//               className="p-2 hover:bg-slate-100 rounded-lg transition-all"
+//               title="Refresh"
+//             >
+//               <RefreshCw size={18} className={isLoading ? 'animate-spin text-blue-600' : ''} />
+//             </button>
+//           </div>
+//         </div>
+
+//         {/* Custom Date Range Picker */}
+//         {showCustomPicker && (
+//           <div className="mt-4 bg-white p-4 rounded-xl shadow-sm border border-blue-100">
+//             <div className="flex flex-wrap items-end gap-4">
+//               <div>
+//                 <label className="block text-xs font-medium text-slate-500 mb-1">Start Date</label>
+//                 <input
+//                   type="date"
+//                   value={customStartDate}
+//                   onChange={(e) => setCustomStartDate(e.target.value)}
+//                   className="px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+//                   max={customEndDate}
+//                 />
+//               </div>
+//               <div>
+//                 <label className="block text-xs font-medium text-slate-500 mb-1">End Date</label>
+//                 <input
+//                   type="date"
+//                   value={customEndDate}
+//                   onChange={(e) => setCustomEndDate(e.target.value)}
+//                   className="px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+//                   min={customStartDate}
+//                 />
+//               </div>
+//               <button
+//                 onClick={handleApplyCustomRange}
+//                 className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all"
+//               >
+//                 Apply Range
+//               </button>
+//               <button
+//                 onClick={() => setShowCustomPicker(false)}
+//                 className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200 transition-all"
+//               >
+//                 Cancel
+//               </button>
+//             </div>
+//           </div>
+//         )}
+
+//         {/* Active Filter Indicator */}
+//         <p className="text-xs text-blue-600 mt-2">
+//           Showing: {
+//             dateRange === 'today' ? 'Today' :
+//             dateRange === 'week' ? 'This Week' :
+//             dateRange === 'month' ? 'This Month' :
+//             `Custom (${customStartDate} to ${customEndDate})`
+//           }
+//         </p>
+//       </div>
+
+//       {/* ===== KPI CARDS ===== */}
+//       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+//         {/* Card 1 - Total Orders */}
+//         <StatCard
+//           title="Total Orders"
+//           value={safeFormat(orderStats?.total || 0)}
+//           icon={<ShoppingCart className="text-blue-600" size={24} />}
+//           bgColor="bg-blue-50"
+//           borderColor="border-blue-200"
+//         >
+//           <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Pending</span>
+//               <p className="font-bold text-orange-600">
+//                 {(orderStats?.confirmed || 0) + (orderStats?.draft || 0)}
+//               </p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">In Progress</span>
+//               <p className="font-bold text-blue-600">
+//                 {(orderStats?.cutting || 0) + (orderStats?.stitching || 0) + (orderStats?.['in-progress'] || 0)}
+//               </p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Completed</span>
+//               <p className="font-bold text-green-600">{orderStats?.delivered || 0}</p>
+//             </div>
+//           </div>
+//         </StatCard>
+
+//         {/* Card 2 - Revenue */}
+//         <StatCard
+//           title="Revenue"
+//           value="₹0"
+//           icon={<IndianRupee className="text-green-600" size={24} />}
+//           bgColor="bg-green-50"
+//           borderColor="border-green-200"
+//         >
+//           <div className="mt-3 text-center text-xs text-slate-500">
+//             Coming soon
+//           </div>
+//         </StatCard>
+
+//         {/* Card 3 - Total Works */}
+//         <StatCard
+//           title="Total Works"
+//           value={safeFormat(workStats?.total || 0)}
+//           icon={<Layers className="text-purple-600" size={24} />}
+//           bgColor="bg-purple-50"
+//           borderColor="border-purple-200"
+//         >
+//           <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Pending</span>
+//               <p className="font-bold text-orange-600">{workStats?.pending || 0}</p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">In Progress</span>
+//               <p className="font-bold text-blue-600">{workStats?.inProgress || 0}</p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Completed</span>
+//               <p className="font-bold text-green-600">{workStats?.completed || 0}</p>
+//             </div>
+//           </div>
+//         </StatCard>
+
+//         {/* Card 4 - Active Tailors */}
+//         <StatCard
+//           title="Active Tailors"
+//           value={safeFormat(tailorStats?.active || 0)}
+//           icon={<Scissors className="text-purple-600" size={24} />}
+//           bgColor="bg-purple-50"
+//           borderColor="border-purple-200"
+//         >
+//           <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Working</span>
+//               <p className="font-bold text-green-600">{tailorStats?.busy || 0}</p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Idle</span>
+//               <p className="font-bold text-slate-600">{tailorStats?.idle || 0}</p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Leave</span>
+//               <p className="font-bold text-orange-600">{tailorStats?.onLeave || 0}</p>
+//             </div>
+//           </div>
+//         </StatCard>
+//       </div>
+
+//       {/* ===== ROW 1: ORDERS OVERVIEW + RECENT ORDERS ===== */}
+//       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+//         {/* Orders Status Chart */}
+//         <div className="bg-white rounded-xl p-6 shadow-sm">
+//           <div className="flex items-center justify-between mb-4">
+//             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+//               <Package size={20} className="text-blue-600" />
+//               Orders Overview
+//               <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today' : 
+//                  dateRange === 'week' ? 'This Week' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom'}
+//               </span>
+//             </h2>
+//             <Link to="/admin/orders" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
+//               View All <ArrowRight size={14} />
+//             </Link>
+//           </div>
+          
+//           {hasOrderData ? (
+//             <>
+//               <div className="h-64">
+//                 <ResponsiveContainer width="100%" height="100%">
+//                   <RePieChart>
+//                     <Pie
+//                       data={orderStatusData}
+//                       cx="50%"
+//                       cy="50%"
+//                       innerRadius={60}
+//                       outerRadius={80}
+//                       paddingAngle={5}
+//                       dataKey="value"
+//                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+//                     >
+//                       {orderStatusData.map((entry) => (
+//                         <Cell key={`cell-${entry.name}`} fill={entry.color} />
+//                       ))}
+//                     </Pie>
+//                     <Tooltip />
+//                     <Legend />
+//                   </RePieChart>
+//                 </ResponsiveContainer>
+//               </div>
+              
+//               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">
+//                 {Object.entries(STATUS_CONFIG).map(([status, config]) => {
+//                   const count = orderStats[status] || 0;
+//                   if (count === 0) return null;
+//                   return (
+//                     <div key={status} className="flex items-center gap-1 text-xs">
+//                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color }}></span>
+//                       <span className="text-slate-600">{config.label}</span>
+//                       <span className="font-bold text-slate-800 ml-auto">{count}</span>
+//                     </div>
+//                   );
+//                 })}
+//               </div>
+//             </>
+//           ) : (
+//             <div className="h-64 flex items-center justify-center text-slate-400">
+//               <Package size={48} className="opacity-30" />
+//               <p className="text-sm ml-2">No orders for this period</p>
+//             </div>
+//           )}
+//         </div>
+
+//         {/* Recent Orders */}
+//         <div className="bg-white rounded-xl shadow-sm">
+//           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+//             <h2 className="font-bold text-slate-800 flex items-center gap-2">
+//               <ShoppingCart size={18} className="text-blue-600" />
+//               Recent Orders
+//               <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today' : 
+//                  dateRange === 'week' ? 'This Week' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom'}
+//               </span>
+//             </h2>
+//             <Link to="/admin/orders" className="text-blue-600 text-sm hover:underline">View All</Link>
+//           </div>
+          
+//           {recentOrders.length > 0 ? (
+//             <div className="overflow-x-auto">
+//               <table className="w-full">
+//                 <thead className="bg-slate-50">
+//                   <tr>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Order ID</th>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Customer</th>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Items</th>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Status</th>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Action</th>
+//                   </tr>
+//                 </thead>
+//                 <tbody className="divide-y divide-slate-100">
+//                   {recentOrders.slice(0, 5).map((order) => (
+//                     <tr key={order._id} className="hover:bg-slate-50">
+//                       <td className="px-6 py-4 font-medium">#{order.orderId}</td>
+//                       <td className="px-6 py-4">{order.customer?.name || 'N/A'}</td>
+//                       <td className="px-6 py-4">{order.garments?.length || 0}</td>
+//                       <td className="px-6 py-4">
+//                         <span className={getStatusBadge(order.status)}>
+//                           {STATUS_CONFIG[order.status]?.label || order.status}
+//                         </span>
+//                       </td>
+//                       <td className="px-6 py-4">
+//                         <Link to={`/admin/orders/${order._id}`} className="text-blue-600">
+//                           <Eye size={16} />
+//                         </Link>
+//                       </td>
+//                     </tr>
+//                   ))}
+//                 </tbody>
+//               </table>
+//             </div>
+//           ) : (
+//             <div className="p-8 text-center text-slate-400">
+//               <ShoppingCart size={40} className="mx-auto mb-2 opacity-30" />
+//               <p>No recent orders</p>
+//             </div>
+//           )}
+//         </div>
+//       </div>
+
+//       {/* ===== ROW 2: REVENUE TREND CHART - FULL WIDTH ===== */}
+//       <div className="mb-8">
+//         <div className="bg-white rounded-xl p-6 shadow-sm">
+//           <div className="flex items-center justify-between mb-6">
+//             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+//               <TrendingUp size={24} className="text-green-600" />
+//               Revenue Trend
+//               <span className="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today (Hourly)' : 
+//                  dateRange === 'week' ? 'Last 7 Days' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom Range'}
+//               </span>
+//             </h2>
+            
+//             <div className="flex items-center gap-4">
+//               <div className="flex items-center gap-2">
+//                 <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+//                 <span className="text-sm text-slate-600">Revenue</span>
+//               </div>
+//               <div className="flex items-center gap-2">
+//                 <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+//                 <span className="text-sm text-slate-600">Expense</span>
+//               </div>
+//             </div>
+//           </div>
+          
+//           {revenueData.length > 0 ? (
+//             <>
+//               <div className="h-80">
+//                 <ResponsiveContainer width="100%" height="100%">
+//                   <LineChart data={revenueData}>
+//                     <CartesianGrid strokeDasharray="3 3" />
+//                     <XAxis dataKey={dateRange === 'today' ? 'time' : 'day'} />
+//                     <YAxis tickFormatter={(value) => `₹${value/1000}K`} />
+//                     <Tooltip formatter={(value) => `₹${value}`} />
+//                     <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} />
+//                     <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={3} />
+//                   </LineChart>
+//                 </ResponsiveContainer>
+//               </div>
+
+//               <div className="grid grid-cols-3 gap-6 mt-8">
+//                 <div className="bg-blue-50 p-4 rounded-lg">
+//                   <p className="text-sm text-blue-600">Total Revenue</p>
+//                   <p className="text-2xl font-bold text-blue-800">
+//                     ₹{safeFormat(revenueData.reduce((sum, i) => sum + i.revenue, 0))}
+//                   </p>
+//                 </div>
+//                 <div className="bg-red-50 p-4 rounded-lg">
+//                   <p className="text-sm text-red-600">Total Expense</p>
+//                   <p className="text-2xl font-bold text-red-800">
+//                     ₹{safeFormat(revenueData.reduce((sum, i) => sum + i.expense, 0))}
+//                   </p>
+//                 </div>
+//                 <div className="bg-green-50 p-4 rounded-lg">
+//                   <p className="text-sm text-green-600">Net Profit</p>
+//                   <p className="text-2xl font-bold text-green-800">
+//                     ₹{safeFormat(
+//                       revenueData.reduce((sum, i) => sum + i.revenue, 0) -
+//                       revenueData.reduce((sum, i) => sum + i.expense, 0)
+//                     )}
+//                   </p>
+//                 </div>
+//               </div>
+//             </>
+//           ) : (
+//             <div className="h-80 flex items-center justify-center text-slate-400">
+//               <TrendingUp size={48} className="opacity-30" />
+//               <p className="text-lg ml-2">No revenue data</p>
+//             </div>
+//           )}
+//         </div>
+//       </div>
+
+//       {/* ===== ROW 3: WORKS OVERVIEW + TAILOR PERFORMANCE ===== */}
+//       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+//         {/* WORKS OVERVIEW - Left Side */}
+//         <div className="bg-white rounded-xl p-6 shadow-sm">
+//           <div className="flex items-center justify-between mb-4">
+//             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+//               <Layers size={20} className="text-purple-600" />
+//               Works Overview
+//               <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today' : 
+//                  dateRange === 'week' ? 'This Week' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom'}
+//               </span>
+//             </h2>
+//             <Link to="/admin/works" className="text-purple-600 text-sm hover:underline flex items-center gap-1">
+//               View All <ArrowRight size={14} />
+//             </Link>
+//           </div>
+
+//           {/* Work Status Chart */}
+//           <div className="grid grid-cols-2 gap-6">
+//             {/* Pie Chart */}
+//             <div className="h-48">
+//               <ResponsiveContainer width="100%" height="100%">
+//                 <RePieChart>
+//                   <Pie
+//                     data={workStatusData}
+//                     cx="50%"
+//                     cy="50%"
+//                     innerRadius={40}
+//                     outerRadius={60}
+//                     paddingAngle={5}
+//                     dataKey="value"
+//                   >
+//                     {workStatusData.map((entry, index) => (
+//                       <Cell key={`cell-${index}`} fill={entry.color} />
+//                     ))}
+//                   </Pie>
+//                   <Tooltip />
+//                 </RePieChart>
+//               </ResponsiveContainer>
+//             </div>
+
+//             {/* Status List */}
+//             <div className="space-y-3">
+//               {Object.entries(WORK_STATUS_COLORS).map(([status, color]) => {
+//                 const count = workStats[status] || 0;
+//                 if (count === 0 && status !== 'pending') return null;
+//                 return (
+//                   <div key={status} className="flex items-center justify-between">
+//                     <div className="flex items-center gap-2">
+//                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></span>
+//                       <span className="text-sm capitalize text-slate-600">{status}</span>
+//                     </div>
+//                     <span className="font-bold text-slate-800">{count}</span>
+//                   </div>
+//                 );
+//               })}
+//               <div className="pt-2 border-t border-slate-100">
+//                 <div className="flex items-center justify-between font-medium">
+//                   <span className="text-sm text-slate-600">Total Works</span>
+//                   <span className="font-bold text-purple-600">{workStats.total || 0}</span>
+//                 </div>
+//               </div>
+//             </div>
+//           </div>
+
+//           {/* Recent Works */}
+//           <div className="mt-6">
+//             <h3 className="text-sm font-semibold text-slate-700 mb-3">Recent Works</h3>
+//             <div className="space-y-2">
+//               {recentWorks.slice(0, 3).map((work) => (
+//                 <div key={work._id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+//                   <div>
+//                     <p className="text-sm font-medium text-slate-800">{work.workId}</p>
+//                     <p className="text-xs text-slate-500">{work.garment?.name || 'Garment'}</p>
+//                   </div>
+//                   <span className={`px-2 py-1 text-xs rounded-full ${
+//                     work.status === 'completed' ? 'bg-green-100 text-green-700' :
+//                     work.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+//                     work.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+//                     'bg-red-100 text-red-700'
+//                   }`}>
+//                     {work.status}
+//                   </span>
+//                 </div>
+//               ))}
+//               {recentWorks.length === 0 && (
+//                 <p className="text-sm text-slate-400 text-center py-2">No recent works</p>
+//               )}
+//             </div>
+//           </div>
+//         </div>
+
+//         {/* TAILOR PERFORMANCE - Right Side */}
+//         <div className="bg-white rounded-xl p-6 shadow-sm">
+//           <div className="flex items-center justify-between mb-4">
+//             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+//               <Scissors size={20} className="text-purple-600" />
+//               Tailor Performance
+//               <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today' : 
+//                  dateRange === 'week' ? 'This Week' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom'}
+//               </span>
+//             </h2>
+//             <Link to="/admin/tailors" className="text-purple-600 text-sm hover:underline flex items-center gap-1">
+//               View All <ArrowRight size={14} />
+//             </Link>
+//           </div>
+
+//           {/* Tailor Status Cards */}
+//           <div className="grid grid-cols-2 gap-3 mb-6">
+//             <div className="bg-green-50 p-3 rounded-lg">
+//               <div className="flex items-center gap-2">
+//                 <UserCheck size={16} className="text-green-600" />
+//                 <span className="text-xs text-green-600">Active</span>
+//               </div>
+//               <p className="text-xl font-bold text-green-700">{tailorStats.active || 0}</p>
+//             </div>
+//             <div className="bg-blue-50 p-3 rounded-lg">
+//               <div className="flex items-center gap-2">
+//                 <Loader size={16} className="text-blue-600" />
+//                 <span className="text-xs text-blue-600">Working</span>
+//               </div>
+//               <p className="text-xl font-bold text-blue-700">{tailorStats.busy || 0}</p>
+//             </div>
+//             <div className="bg-slate-50 p-3 rounded-lg">
+//               <div className="flex items-center gap-2">
+//                 <UserX size={16} className="text-slate-600" />
+//                 <span className="text-xs text-slate-600">Idle</span>
+//               </div>
+//               <p className="text-xl font-bold text-slate-700">{tailorStats.idle || 0}</p>
+//             </div>
+//             <div className="bg-orange-50 p-3 rounded-lg">
+//               <div className="flex items-center gap-2">
+//                 <Calendar size={16} className="text-orange-600" />
+//                 <span className="text-xs text-orange-600">On Leave</span>
+//               </div>
+//               <p className="text-xl font-bold text-orange-700">{tailorStats.onLeave || 0}</p>
+//             </div>
+//           </div>
+
+//           {/* Performance List */}
+//           <h3 className="text-sm font-semibold text-slate-700 mb-3">Top Performers</h3>
+//           <div className="space-y-3">
+//             {tailorPerformance.slice(0, 4).map((tailor, index) => (
+//               <div key={tailor._id || index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+//                 <div className="flex items-center gap-3">
+//                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+//                     index === 0 ? 'bg-yellow-500' :
+//                     index === 1 ? 'bg-slate-500' :
+//                     index === 2 ? 'bg-orange-500' : 'bg-blue-500'
+//                   }`}>
+//                     {index + 1}
+//                   </div>
+//                   <div>
+//                     <p className="font-medium text-slate-800">{tailor.name || 'Tailor'}</p>
+//                     <p className="text-xs text-slate-500">{tailor.specialization || 'General'}</p>
+//                   </div>
+//                 </div>
+//                 <div className="text-right">
+//                   <p className="font-bold text-blue-600">{tailor.completedWorks || 0}</p>
+//                   <p className="text-xs text-slate-500">completed</p>
+//                 </div>
+//               </div>
+//             ))}
+//             {tailorPerformance.length === 0 && (
+//               <p className="text-sm text-slate-400 text-center py-4">No performance data</p>
+//             )}
+//           </div>
+
+//           {/* Quick Stats */}
+//           <div className="mt-4 pt-4 border-t border-slate-100">
+//             <div className="flex items-center justify-between text-sm">
+//               <span className="text-slate-600">Avg. Completion Time</span>
+//               <span className="font-bold text-green-600">3.5 days</span>
+//             </div>
+//             <div className="flex items-center justify-between text-sm mt-1">
+//               <span className="text-slate-600">Productivity Rate</span>
+//               <span className="font-bold text-blue-600">85%</span>
+//             </div>
+//           </div>
+//         </div>
+//       </div>
+
+//       {/* ===== QUICK ACTIONS FLOATING MENU ===== */}
+//       <div className="fixed bottom-6 right-6 z-50">
+//         <div className="relative group">
+//           {/* Main FAB Button */}
+//           <button className="w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg flex items-center justify-center text-white transition-all group-hover:scale-110 group-hover:shadow-xl">
+//             <Plus size={24} />
+//           </button>
+          
+//           {/* Quick Actions Menu - Appears on hover */}
+//           <div className="absolute bottom-16 right-0 bg-white rounded-xl shadow-xl p-2 min-w-[220px] hidden group-hover:block animate-fade-in-up">
+//             {/* Header */}
+//             <div className="text-sm font-medium text-slate-700 px-3 py-2 border-b border-slate-100 mb-1">
+//               Quick Actions
+//             </div>
+            
+//             {/* Menu Items */}
+//             <Link 
+//               to="/admin/orders/new" 
+//               className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg text-slate-600 transition-all group/item"
+//             >
+//               <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center group-hover/item:bg-blue-200 transition-all">
+//                 <ShoppingCart size={16} className="text-blue-600" />
+//               </div>
+//               <div className="flex-1">
+//                 <span className="text-sm font-medium">New Order</span>
+//                 <p className="text-xs text-slate-400">Create a new order</p>
+//               </div>
+//             </Link>
+
+//             <Link 
+//               to="/admin/customers/new" 
+//               className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg text-slate-600 transition-all group/item"
+//             >
+//               <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center group-hover/item:bg-green-200 transition-all">
+//                 <UserPlus size={16} className="text-green-600" />
+//               </div>
+//               <div className="flex-1">
+//                 <span className="text-sm font-medium">Add Customer</span>
+//                 <p className="text-xs text-slate-400">Register new customer</p>
+//               </div>
+//             </Link>
+
+//             <Link 
+//               to="/admin/transactions/expense" 
+//               className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg text-slate-600 transition-all group/item"
+//             >
+//               <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center group-hover/item:bg-red-200 transition-all">
+//                 <Receipt size={16} className="text-red-600" />
+//               </div>
+//               <div className="flex-1">
+//                 <span className="text-sm font-medium">Add Expense</span>
+//                 <p className="text-xs text-slate-400">Record an expense</p>
+//               </div>
+//             </Link>
+
+//             <Link 
+//               to="/admin/transactions/income" 
+//               className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg text-slate-600 transition-all group/item"
+//             >
+//               <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center group-hover/item:bg-green-200 transition-all">
+//                 <DollarSign size={16} className="text-green-600" />
+//               </div>
+//               <div className="flex-1">
+//                 <span className="text-sm font-medium">Add Income</span>
+//                 <p className="text-xs text-slate-400">Record an income</p>
+//               </div>
+//             </Link>
+
+//             {/* Divider */}
+//             <div className="border-t border-slate-100 my-1"></div>
+
+//             {/* View All Link */}
+//             <Link 
+//               to="/admin/quick-actions" 
+//               className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg text-blue-600 text-sm"
+//             >
+//               <span>View all actions</span>
+//               <ArrowRight size={14} />
+//             </Link>
+//           </div>
+//         </div>
+//       </div>
+
+//       {/* Loading Overlay */}
+//       {isLoading && (
+//         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+//           <div className="bg-white rounded-xl p-4 flex items-center gap-3 shadow-xl">
+//             <RefreshCw size={20} className="animate-spin text-blue-600" />
+//             <span>Loading dashboard...</span>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* Add animation styles */}
+//       <style jsx>{`
+//         @keyframes fadeInUp {
+//           from {
+//             opacity: 0;
+//             transform: translateY(10px);
+//           }
+//           to {
+//             opacity: 1;
+//             transform: translateY(0);
+//           }
+//         }
+//         .animate-fade-in-up {
+//           animation: fadeInUp 0.2s ease-out;
+//         }
+//       `}</style>
+//     </div>
+//   );
+// }
+
+
+
+
+
+
+
+
+
+// // Pages/Dashboard/AdminDashboard.jsx - WITH CORRECT TRANSACTION SLICE SELECTORS
+// import React, { useState, useEffect } from 'react';
+// import { useDispatch, useSelector } from 'react-redux';
+// import { Link } from 'react-router-dom';
+// import {
+//   ShoppingCart,
+//   IndianRupee,
+//   Truck,
+//   Scissors,
+//   TrendingUp,
+//   Clock,
+//   ArrowRight,
+//   RefreshCw,
+//   Eye,
+//   Package,
+//   AlertCircle,
+//   Filter,
+//   Calendar,
+//   UserCheck,
+//   UserX,
+//   Award,
+//   Layers,
+//   CheckCircle,
+//   XCircle,
+//   Loader,
+//   Plus,
+//   UserPlus,
+//   Receipt,
+//   DollarSign
+// } from 'lucide-react';
+// import {
+//   PieChart as RePieChart,
+//   Pie,
+//   Cell,
+//   Tooltip,
+//   Legend,
+//   ResponsiveContainer,
+//   LineChart,
+//   Line,
+//   XAxis,
+//   YAxis,
+//   CartesianGrid,
+//   BarChart,
+//   Bar
+// } from 'recharts';
+// import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+
+// // IMPORT from orderSlice
+// import { 
+//   fetchOrderStats, 
+//   fetchRecentOrders,
+//   selectOrderStats,
+//   selectRecentOrders 
+// } from '../../features/order/orderSlice';
+
+// // IMPORT from workSlice
+// import {
+//   fetchWorkStats,
+//   fetchRecentWorks,
+//   selectWorkStats,
+//   selectRecentWorks
+// } from '../../features/work/workSlice';
+
+// // IMPORT from tailorSlice
+// import {
+//   fetchTailorStats,
+//   fetchTailorPerformance,
+//   selectTailorStats,
+//   selectTailorPerformance
+// } from '../../features/tailor/tailorSlice';
+
+// // IMPORT from transactionSlice - USING YOUR CORRECT SELECTORS
+// import {
+//   fetchDailyRevenueStats,
+//   selectDailyRevenueData,
+//   selectDailyRevenueSummary,
+//   selectDailyRevenueLoading,
+//   fetchTodayTransactions,
+//   selectTodaySummary,
+//   selectTodayLoading
+// } from '../../features/transaction/transactionSlice';
+
+// import StatCard from '../../components/common/StatCard';
+// import showToast from '../../utils/toast';
+
+// export default function AdminDashboard() {
+//   const dispatch = useDispatch();
+//   const { user } = useSelector((state) => state.auth);
+  
+//   // ===== DEBUG: Check user info =====
+//   console.log('👤 Current User:', user);
+  
+//   // ===== GET ORDER DATA =====
+//   const orderStats = useSelector(selectOrderStats) || {
+//     total: 0,
+//     pending: 0,
+//     cutting: 0,
+//     stitching: 0,
+//     ready: 0,
+//     delivered: 0,
+//     cancelled: 0
+//   };
+  
+//   const recentOrders = useSelector(selectRecentOrders) || [];
+  
+//   // ===== GET WORK DATA =====
+//   const workStats = useSelector(selectWorkStats) || {
+//     total: 0,
+//     pending: 0,
+//     inProgress: 0,
+//     completed: 0,
+//     cancelled: 0
+//   };
+  
+//   const recentWorks = useSelector(selectRecentWorks) || [];
+  
+//   // ===== GET TAILOR DATA =====
+//   const tailorStats = useSelector(selectTailorStats) || {
+//     total: 0,
+//     active: 0,
+//     busy: 0,
+//     idle: 0,
+//     onLeave: 0
+//   };
+  
+//   const tailorPerformance = useSelector(selectTailorPerformance) || [];
+  
+//   // ===== GET REVENUE DATA FROM YOUR TRANSACTION SLICE =====
+//   const dailyRevenueData = useSelector(selectDailyRevenueData) || [];
+//   const dailyRevenueSummary = useSelector(selectDailyRevenueSummary) || {
+//     totalRevenue: 0,
+//     totalExpense: 0,
+//     netProfit: 0,
+//     period: 'month',
+//     dateRange: { start: null, end: null }
+//   };
+//   const revenueLoading = useSelector(selectDailyRevenueLoading);
+  
+//   // ===== GET TODAY'S TRANSACTIONS SUMMARY =====
+//   const todaySummary = useSelector(selectTodaySummary) || {
+//     totalIncome: 0,
+//     totalExpense: 0,
+//     netAmount: 0
+//   };
+//   const todayLoading = useSelector(selectTodayLoading);
+  
+//   // Loading states
+//   const [isLoading, setIsLoading] = useState(false);
+//   const [dateRange, setDateRange] = useState('month');
+//   const [customStartDate, setCustomStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+//   const [customEndDate, setCustomEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+//   const [showCustomPicker, setShowCustomPicker] = useState(false);
+//   const [lastRefreshed, setLastRefreshed] = useState(new Date());
+
+//   // ===== STATUS COLORS =====
+//   const STATUS_CONFIG = {
+//     'draft': { color: '#94a3b8', label: 'Draft', bg: 'bg-slate-100' },
+//     'confirmed': { color: '#f59e0b', label: 'Confirmed', bg: 'bg-amber-100' },
+//     'in-progress': { color: '#3b82f6', label: 'In Progress', bg: 'bg-blue-100' },
+//     'ready-to-delivery': { color: '#10b981', label: 'Ready', bg: 'bg-emerald-100' },
+//     'delivered': { color: '#6b7280', label: 'Delivered', bg: 'bg-gray-100' },
+//     'cancelled': { color: '#ef4444', label: 'Cancelled', bg: 'bg-red-100' }
+//   };
+
+//   const WORK_STATUS_COLORS = {
+//     'pending': '#f59e0b',
+//     'in-progress': '#3b82f6',
+//     'completed': '#10b981',
+//     'cancelled': '#ef4444'
+//   };
+
+//   // ===== LOAD DATA WHEN FILTER CHANGES =====
+//   useEffect(() => {
+//     console.log('🔄 Date range changed to:', dateRange);
+//     loadDashboardData();
+//   }, [dateRange, customStartDate, customEndDate]);
+
+//   const loadDashboardData = async () => {
+//     console.log('🚀 ===== LOADING DASHBOARD DATA STARTED =====');
+//     console.log('📅 Selected date range:', dateRange);
+//     setIsLoading(true);
+    
+//     try {
+//       // Get date parameters based on filter
+//       const params = getDateParams();
+//       console.log('📅 Date params being sent:', params);
+      
+//       // Build promises array - USING YOUR fetchDailyRevenueStats
+//       const promises = [
+//         dispatch(fetchOrderStats(params)),
+//         dispatch(fetchRecentOrders({ ...params, limit: 10 })),
+//         dispatch(fetchWorkStats(params)),
+//         dispatch(fetchRecentWorks({ ...params, limit: 5 })),
+//         dispatch(fetchTailorStats()),
+//         dispatch(fetchTailorPerformance(params)),
+//         dispatch(fetchDailyRevenueStats(params)), // Using your existing thunk
+//         dispatch(fetchTodayTransactions()) // Fetch today's transactions
+//       ];
+      
+//       const startTime = Date.now();
+//       const results = await Promise.allSettled(promises);
+//       const endTime = Date.now();
+      
+//       console.log(`⏱️ API calls completed in ${endTime - startTime}ms`);
+      
+//       // Check results
+//       const apiNames = ['Order Stats', 'Recent Orders', 'Work Stats', 'Recent Works', 'Tailor Stats', 'Tailor Performance', 'Daily Revenue', 'Today Transactions'];
+//       results.forEach((result, index) => {
+//         if (result.status === 'fulfilled') {
+//           console.log(`✅ ${apiNames[index]} successful:`, result.value);
+//         } else {
+//           console.error(`❌ ${apiNames[index]} failed:`, result.reason);
+//         }
+//       });
+      
+//       setLastRefreshed(new Date());
+      
+//     } catch (error) {
+//       console.error('❌ Error loading dashboard:', error);
+//       showToast.error('Failed to load dashboard data');
+//     } finally {
+//       setIsLoading(false);
+//       console.log('🏁 ===== LOADING DASHBOARD DATA COMPLETED =====');
+//     }
+//   };
+
+//   const getDateParams = () => {
+//     const today = new Date();
+    
+//     switch(dateRange) {
+//       case 'today':
+//         return { 
+//           period: 'today',
+//           startDate: format(today, 'yyyy-MM-dd'),
+//           endDate: format(today, 'yyyy-MM-dd')
+//         };
+//       case 'week':
+//         const weekStart = startOfWeek(today);
+//         const weekEnd = endOfWeek(today);
+//         return {
+//           period: 'week',
+//           startDate: format(weekStart, 'yyyy-MM-dd'),
+//           endDate: format(weekEnd, 'yyyy-MM-dd')
+//         };
+//       case 'month':
+//         return { 
+//           period: 'month',
+//           startDate: format(startOfMonth(today), 'yyyy-MM-dd'),
+//           endDate: format(endOfMonth(today), 'yyyy-MM-dd')
+//         };
+//       case 'custom':
+//         return {
+//           period: 'custom',
+//           startDate: customStartDate,
+//           endDate: customEndDate
+//         };
+//       default:
+//         return { period: 'month' };
+//     }
+//   };
+
+//   // ===== APPLY CUSTOM DATE RANGE =====
+//   const handleApplyCustomRange = () => {
+//     if (!customStartDate || !customEndDate) {
+//       showToast.error('Please select both start and end dates');
+//       return;
+//     }
+    
+//     if (new Date(customStartDate) > new Date(customEndDate)) {
+//       showToast.error('Start date cannot be after end date');
+//       return;
+//     }
+    
+//     setDateRange('custom');
+//     setShowCustomPicker(false);
+//     loadDashboardData();
+//     showToast.success(`Showing data from ${customStartDate} to ${customEndDate}`);
+//   };
+
+//   // ===== PREPARE ORDER STATUS DATA =====
+//   const getOrderStatusData = () => {
+//     const data = [];
+    
+//     if (orderStats.confirmed > 0) {
+//       data.push({ 
+//         name: 'Confirmed', 
+//         value: orderStats.confirmed, 
+//         color: STATUS_CONFIG.confirmed.color 
+//       });
+//     }
+    
+//     if (orderStats['in-progress'] > 0) {
+//       data.push({ 
+//         name: 'In Progress', 
+//         value: orderStats['in-progress'], 
+//         color: STATUS_CONFIG['in-progress'].color 
+//       });
+//     }
+    
+//     if (orderStats['ready-to-delivery'] > 0) {
+//       data.push({ 
+//         name: 'Ready', 
+//         value: orderStats['ready-to-delivery'], 
+//         color: STATUS_CONFIG['ready-to-delivery'].color 
+//       });
+//     }
+    
+//     if (orderStats.delivered > 0) {
+//       data.push({ 
+//         name: 'Delivered', 
+//         value: orderStats.delivered, 
+//         color: STATUS_CONFIG.delivered.color 
+//       });
+//     }
+    
+//     if (orderStats.cancelled > 0) {
+//       data.push({ 
+//         name: 'Cancelled', 
+//         value: orderStats.cancelled, 
+//         color: STATUS_CONFIG.cancelled.color 
+//       });
+//     }
+    
+//     if (orderStats.draft > 0) {
+//       data.push({ 
+//         name: 'Draft', 
+//         value: orderStats.draft, 
+//         color: STATUS_CONFIG.draft.color 
+//       });
+//     }
+    
+//     return data;
+//   };
+
+//   const orderStatusData = getOrderStatusData();
+//   const hasOrderData = orderStatusData.length > 0;
+
+//   // ===== PREPARE WORK STATUS DATA =====
+//   const getWorkStatusData = () => {
+//     return [
+//       { name: 'Pending', value: workStats.pending || 0, color: '#f59e0b' },
+//       { name: 'In Progress', value: workStats.inProgress || 0, color: '#3b82f6' },
+//       { name: 'Completed', value: workStats.completed || 0, color: '#10b981' },
+//       { name: 'Cancelled', value: workStats.cancelled || 0, color: '#ef4444' }
+//     ].filter(item => item.value > 0);
+//   };
+
+//   const workStatusData = getWorkStatusData();
+//   const hasWorkData = workStatusData.length > 0;
+
+//   // Safe formatting
+//   const safeFormat = (value) => {
+//     return (value || 0).toLocaleString('en-IN');
+//   };
+
+//   // Get status badge
+//   const getStatusBadge = (status) => {
+//     const config = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
+//     return `${config.bg} text-gray-700 px-2 py-1 text-xs rounded-full`;
+//   };
+
+//   // Debug logs
+//   console.log('📊 Daily Revenue Data:', dailyRevenueData);
+//   console.log('📊 Daily Revenue Summary:', dailyRevenueSummary);
+//   console.log('📊 Today Summary:', todaySummary);
+
+//   return (
+//     <div className="min-h-screen bg-slate-50 p-6">
+//       {/* ===== HEADER WITH CUSTOM DATE RANGE ===== */}
+//       <div className="mb-8">
+//         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+//           <div>
+//             <h1 className="text-3xl font-black text-slate-800 mb-2">
+//               Admin Dashboard
+//             </h1>
+//             <p className="text-slate-600 flex items-center gap-2">
+//               <Clock size={16} />
+//               {format(new Date(), 'EEEE, MMMM do, yyyy')}
+//             </p>
+//             <p className="text-xs text-gray-400 mt-1">
+//               Last refreshed: {format(lastRefreshed, 'hh:mm:ss a')}
+//             </p>
+//           </div>
+
+//           {/* Filter Buttons with Custom Range */}
+//           <div className="flex flex-wrap gap-2 bg-white p-2 rounded-xl shadow-sm">
+//             <button
+//               onClick={() => {
+//                 setDateRange('today');
+//                 setShowCustomPicker(false);
+//               }}
+//               className={`px-4 py-2 rounded-lg font-medium transition-all ${
+//                 dateRange === 'today' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+//               }`}
+//             >
+//               Today
+//             </button>
+//             <button
+//               onClick={() => {
+//                 setDateRange('week');
+//                 setShowCustomPicker(false);
+//               }}
+//               className={`px-4 py-2 rounded-lg font-medium transition-all ${
+//                 dateRange === 'week' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+//               }`}
+//             >
+//               This Week
+//             </button>
+//             <button
+//               onClick={() => {
+//                 setDateRange('month');
+//                 setShowCustomPicker(false);
+//               }}
+//               className={`px-4 py-2 rounded-lg font-medium transition-all ${
+//                 dateRange === 'month' && !showCustomPicker ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+//               }`}
+//             >
+//               This Month
+//             </button>
+//             <button
+//               onClick={() => setShowCustomPicker(!showCustomPicker)}
+//               className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-1 ${
+//                 showCustomPicker || dateRange === 'custom' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-100'
+//               }`}
+//             >
+//               <Calendar size={16} />
+//               Custom
+//             </button>
+//             <button
+//               onClick={loadDashboardData}
+//               className="p-2 hover:bg-slate-100 rounded-lg transition-all"
+//               title="Refresh"
+//             >
+//               <RefreshCw size={18} className={isLoading ? 'animate-spin text-blue-600' : ''} />
+//             </button>
+//           </div>
+//         </div>
+
+//         {/* Custom Date Range Picker */}
+//         {showCustomPicker && (
+//           <div className="mt-4 bg-white p-4 rounded-xl shadow-sm border border-blue-100">
+//             <div className="flex flex-wrap items-end gap-4">
+//               <div>
+//                 <label className="block text-xs font-medium text-slate-500 mb-1">Start Date</label>
+//                 <input
+//                   type="date"
+//                   value={customStartDate}
+//                   onChange={(e) => setCustomStartDate(e.target.value)}
+//                   className="px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+//                   max={customEndDate}
+//                 />
+//               </div>
+//               <div>
+//                 <label className="block text-xs font-medium text-slate-500 mb-1">End Date</label>
+//                 <input
+//                   type="date"
+//                   value={customEndDate}
+//                   onChange={(e) => setCustomEndDate(e.target.value)}
+//                   className="px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+//                   min={customStartDate}
+//                 />
+//               </div>
+//               <button
+//                 onClick={handleApplyCustomRange}
+//                 className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all"
+//               >
+//                 Apply Range
+//               </button>
+//               <button
+//                 onClick={() => setShowCustomPicker(false)}
+//                 className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg font-medium hover:bg-slate-200 transition-all"
+//               >
+//                 Cancel
+//               </button>
+//             </div>
+//           </div>
+//         )}
+
+//         {/* Active Filter Indicator */}
+//         <p className="text-xs text-blue-600 mt-2">
+//           Showing: {
+//             dateRange === 'today' ? 'Today' :
+//             dateRange === 'week' ? 'This Week' :
+//             dateRange === 'month' ? 'This Month' :
+//             `Custom (${customStartDate} to ${customEndDate})`
+//           }
+//         </p>
+//       </div>
+
+//       {/* ===== KPI CARDS ===== */}
+//       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+//         {/* Card 1 - Total Orders */}
+//         <StatCard
+//           title="Total Orders"
+//           value={safeFormat(orderStats?.total || 0)}
+//           icon={<ShoppingCart className="text-blue-600" size={24} />}
+//           bgColor="bg-blue-50"
+//           borderColor="border-blue-200"
+//         >
+//           <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Pending</span>
+//               <p className="font-bold text-orange-600">
+//                 {(orderStats?.confirmed || 0) + (orderStats?.draft || 0)}
+//               </p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">In Progress</span>
+//               <p className="font-bold text-blue-600">
+//                 {(orderStats?.cutting || 0) + (orderStats?.stitching || 0) + (orderStats?.['in-progress'] || 0)}
+//               </p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Completed</span>
+//               <p className="font-bold text-green-600">{orderStats?.delivered || 0}</p>
+//             </div>
+//           </div>
+//         </StatCard>
+
+//         {/* Card 2 - Revenue - USING YOUR DAILY REVENUE SUMMARY */}
+//         <StatCard
+//           title="Revenue"
+//           value={`₹${safeFormat(dailyRevenueSummary?.totalRevenue || 0)}`}
+//           icon={<IndianRupee className="text-green-600" size={24} />}
+//           bgColor="bg-green-50"
+//           borderColor="border-green-200"
+//         >
+//           <div className="mt-3 flex justify-between text-xs">
+//             <div className="bg-white p-2 rounded-lg flex-1 mr-1">
+//               <span className="text-slate-500">Expense</span>
+//               <p className="font-bold text-red-600">₹{safeFormat(dailyRevenueSummary?.totalExpense || 0)}</p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg flex-1 ml-1">
+//               <span className="text-slate-500">Profit</span>
+//               <p className="font-bold text-green-600">₹{safeFormat(dailyRevenueSummary?.netProfit || 0)}</p>
+//             </div>
+//           </div>
+//         </StatCard>
+
+//         {/* Card 3 - Total Works */}
+//         <StatCard
+//           title="Total Works"
+//           value={safeFormat(workStats?.total || 0)}
+//           icon={<Layers className="text-purple-600" size={24} />}
+//           bgColor="bg-purple-50"
+//           borderColor="border-purple-200"
+//         >
+//           <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Pending</span>
+//               <p className="font-bold text-orange-600">{workStats?.pending || 0}</p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">In Progress</span>
+//               <p className="font-bold text-blue-600">{workStats?.inProgress || 0}</p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Completed</span>
+//               <p className="font-bold text-green-600">{workStats?.completed || 0}</p>
+//             </div>
+//           </div>
+//         </StatCard>
+
+//         {/* Card 4 - Active Tailors */}
+//         <StatCard
+//           title="Active Tailors"
+//           value={safeFormat(tailorStats?.active || 0)}
+//           icon={<Scissors className="text-purple-600" size={24} />}
+//           bgColor="bg-purple-50"
+//           borderColor="border-purple-200"
+//         >
+//           <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Working</span>
+//               <p className="font-bold text-green-600">{tailorStats?.busy || 0}</p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Idle</span>
+//               <p className="font-bold text-slate-600">{tailorStats?.idle || 0}</p>
+//             </div>
+//             <div className="bg-white p-2 rounded-lg">
+//               <span className="text-slate-500">Leave</span>
+//               <p className="font-bold text-orange-600">{tailorStats?.onLeave || 0}</p>
+//             </div>
+//           </div>
+//         </StatCard>
+//       </div>
+
+//       {/* ===== ROW 1: ORDERS OVERVIEW + RECENT ORDERS ===== */}
+//       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+//         {/* Orders Status Chart */}
+//         <div className="bg-white rounded-xl p-6 shadow-sm">
+//           <div className="flex items-center justify-between mb-4">
+//             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+//               <Package size={20} className="text-blue-600" />
+//               Orders Overview
+//               <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today' : 
+//                  dateRange === 'week' ? 'This Week' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom'}
+//               </span>
+//             </h2>
+//             <Link to="/admin/orders" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
+//               View All <ArrowRight size={14} />
+//             </Link>
+//           </div>
+          
+//           {hasOrderData ? (
+//             <>
+//               <div className="h-64">
+//                 <ResponsiveContainer width="100%" height="100%">
+//                   <RePieChart>
+//                     <Pie
+//                       data={orderStatusData}
+//                       cx="50%"
+//                       cy="50%"
+//                       innerRadius={60}
+//                       outerRadius={80}
+//                       paddingAngle={5}
+//                       dataKey="value"
+//                       label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+//                     >
+//                       {orderStatusData.map((entry) => (
+//                         <Cell key={`cell-${entry.name}`} fill={entry.color} />
+//                       ))}
+//                     </Pie>
+//                     <Tooltip />
+//                     <Legend />
+//                   </RePieChart>
+//                 </ResponsiveContainer>
+//               </div>
+              
+//               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">
+//                 {Object.entries(STATUS_CONFIG).map(([status, config]) => {
+//                   const count = orderStats[status] || 0;
+//                   if (count === 0) return null;
+//                   return (
+//                     <div key={status} className="flex items-center gap-1 text-xs">
+//                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color }}></span>
+//                       <span className="text-slate-600">{config.label}</span>
+//                       <span className="font-bold text-slate-800 ml-auto">{count}</span>
+//                     </div>
+//                   );
+//                 })}
+//               </div>
+//             </>
+//           ) : (
+//             <div className="h-64 flex items-center justify-center text-slate-400">
+//               <Package size={48} className="opacity-30" />
+//               <p className="text-sm ml-2">No orders for this period</p>
+//             </div>
+//           )}
+//         </div>
+
+//         {/* Recent Orders */}
+//         <div className="bg-white rounded-xl shadow-sm">
+//           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+//             <h2 className="font-bold text-slate-800 flex items-center gap-2">
+//               <ShoppingCart size={18} className="text-blue-600" />
+//               Recent Orders
+//               <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today' : 
+//                  dateRange === 'week' ? 'This Week' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom'}
+//               </span>
+//             </h2>
+//             <Link to="/admin/orders" className="text-blue-600 text-sm hover:underline">View All</Link>
+//           </div>
+          
+//           {recentOrders.length > 0 ? (
+//             <div className="overflow-x-auto">
+//               <table className="w-full">
+//                 <thead className="bg-slate-50">
+//                   <tr>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Order ID</th>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Customer</th>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Items</th>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Status</th>
+//                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-500">Action</th>
+//                   </tr>
+//                 </thead>
+//                 <tbody className="divide-y divide-slate-100">
+//                   {recentOrders.slice(0, 5).map((order) => (
+//                     <tr key={order._id} className="hover:bg-slate-50">
+//                       <td className="px-6 py-4 font-medium">#{order.orderId}</td>
+//                       <td className="px-6 py-4">{order.customer?.name || 'N/A'}</td>
+//                       <td className="px-6 py-4">{order.garments?.length || 0}</td>
+//                       <td className="px-6 py-4">
+//                         <span className={getStatusBadge(order.status)}>
+//                           {STATUS_CONFIG[order.status]?.label || order.status}
+//                         </span>
+//                       </td>
+//                       <td className="px-6 py-4">
+//                         <Link to={`/admin/orders/${order._id}`} className="text-blue-600">
+//                           <Eye size={16} />
+//                         </Link>
+//                       </td>
+//                     </tr>
+//                   ))}
+//                 </tbody>
+//               </table>
+//             </div>
+//           ) : (
+//             <div className="p-8 text-center text-slate-400">
+//               <ShoppingCart size={40} className="mx-auto mb-2 opacity-30" />
+//               <p>No recent orders</p>
+//             </div>
+//           )}
+//         </div>
+//       </div>
+
+//       {/* ===== ROW 2: REVENUE TREND CHART - USING DAILY REVENUE DATA ===== */}
+//       <div className="mb-8">
+//         <div className="bg-white rounded-xl p-6 shadow-sm">
+//           <div className="flex items-center justify-between mb-6">
+//             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+//               <TrendingUp size={24} className="text-green-600" />
+//               Revenue Trend
+//               <span className="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today (Hourly)' : 
+//                  dateRange === 'week' ? 'Last 7 Days' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom Range'}
+//               </span>
+//             </h2>
+            
+//             <div className="flex items-center gap-4">
+//               <div className="flex items-center gap-2">
+//                 <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+//                 <span className="text-sm text-slate-600">Revenue</span>
+//               </div>
+//               <div className="flex items-center gap-2">
+//                 <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+//                 <span className="text-sm text-slate-600">Expense</span>
+//               </div>
+//             </div>
+//           </div>
+          
+//           {revenueLoading ? (
+//             <div className="h-80 flex items-center justify-center">
+//               <Loader size={32} className="animate-spin text-blue-600" />
+//               <span className="ml-2 text-slate-600">Loading revenue data...</span>
+//             </div>
+//           ) : dailyRevenueData && dailyRevenueData.length > 0 ? (
+//             <>
+//               <div className="h-80">
+//                 <ResponsiveContainer width="100%" height="100%">
+//                   <LineChart data={dailyRevenueData}>
+//                     <CartesianGrid strokeDasharray="3 3" />
+//                     <XAxis dataKey={dateRange === 'today' ? 'time' : 'day'} />
+//                     <YAxis tickFormatter={(value) => `₹${value/1000}K`} />
+//                     <Tooltip formatter={(value) => `₹${value}`} />
+//                     <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} />
+//                     <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={3} />
+//                   </LineChart>
+//                 </ResponsiveContainer>
+//               </div>
+
+//               <div className="grid grid-cols-3 gap-6 mt-8">
+//                 <div className="bg-blue-50 p-4 rounded-lg">
+//                   <p className="text-sm text-blue-600">Total Revenue</p>
+//                   <p className="text-2xl font-bold text-blue-800">
+//                     ₹{safeFormat(dailyRevenueSummary?.totalRevenue || 0)}
+//                   </p>
+//                 </div>
+//                 <div className="bg-red-50 p-4 rounded-lg">
+//                   <p className="text-sm text-red-600">Total Expense</p>
+//                   <p className="text-2xl font-bold text-red-800">
+//                     ₹{safeFormat(dailyRevenueSummary?.totalExpense || 0)}
+//                   </p>
+//                 </div>
+//                 <div className="bg-green-50 p-4 rounded-lg">
+//                   <p className="text-sm text-green-600">Net Profit</p>
+//                   <p className="text-2xl font-bold text-green-800">
+//                     ₹{safeFormat(dailyRevenueSummary?.netProfit || 0)}
+//                   </p>
+//                 </div>
+//               </div>
+//             </>
+//           ) : (
+//             <div className="h-80 flex items-center justify-center text-slate-400">
+//               <TrendingUp size={48} className="opacity-30" />
+//               <p className="text-lg ml-2">No revenue data available for this period</p>
+//             </div>
+//           )}
+//         </div>
+//       </div>
+
+//       {/* ===== ROW 3: WORKS OVERVIEW + TAILOR PERFORMANCE ===== */}
+//       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+//         {/* WORKS OVERVIEW - Left Side */}
+//         <div className="bg-white rounded-xl p-6 shadow-sm">
+//           <div className="flex items-center justify-between mb-4">
+//             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+//               <Layers size={20} className="text-purple-600" />
+//               Works Overview
+//               <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today' : 
+//                  dateRange === 'week' ? 'This Week' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom'}
+//               </span>
+//             </h2>
+//             <Link to="/admin/works" className="text-purple-600 text-sm hover:underline flex items-center gap-1">
+//               View All <ArrowRight size={14} />
+//             </Link>
+//           </div>
+
+//           {/* Work Status Chart */}
+//           <div className="grid grid-cols-2 gap-6">
+//             {/* Pie Chart */}
+//             <div className="h-48">
+//               <ResponsiveContainer width="100%" height="100%">
+//                 <RePieChart>
+//                   <Pie
+//                     data={workStatusData}
+//                     cx="50%"
+//                     cy="50%"
+//                     innerRadius={40}
+//                     outerRadius={60}
+//                     paddingAngle={5}
+//                     dataKey="value"
+//                   >
+//                     {workStatusData.map((entry, index) => (
+//                       <Cell key={`cell-${index}`} fill={entry.color} />
+//                     ))}
+//                   </Pie>
+//                   <Tooltip />
+//                 </RePieChart>
+//               </ResponsiveContainer>
+//             </div>
+
+//             {/* Status List */}
+//             <div className="space-y-3">
+//               {Object.entries(WORK_STATUS_COLORS).map(([status, color]) => {
+//                 const count = workStats[status] || 0;
+//                 if (count === 0 && status !== 'pending') return null;
+//                 return (
+//                   <div key={status} className="flex items-center justify-between">
+//                     <div className="flex items-center gap-2">
+//                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></span>
+//                       <span className="text-sm capitalize text-slate-600">{status}</span>
+//                     </div>
+//                     <span className="font-bold text-slate-800">{count}</span>
+//                   </div>
+//                 );
+//               })}
+//               <div className="pt-2 border-t border-slate-100">
+//                 <div className="flex items-center justify-between font-medium">
+//                   <span className="text-sm text-slate-600">Total Works</span>
+//                   <span className="font-bold text-purple-600">{workStats.total || 0}</span>
+//                 </div>
+//               </div>
+//             </div>
+//           </div>
+
+//           {/* Recent Works */}
+//           <div className="mt-6">
+//             <h3 className="text-sm font-semibold text-slate-700 mb-3">Recent Works</h3>
+//             <div className="space-y-2">
+//               {recentWorks.slice(0, 3).map((work) => (
+//                 <div key={work._id} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
+//                   <div>
+//                     <p className="text-sm font-medium text-slate-800">{work.workId}</p>
+//                     <p className="text-xs text-slate-500">{work.garment?.name || 'Garment'}</p>
+//                   </div>
+//                   <span className={`px-2 py-1 text-xs rounded-full ${
+//                     work.status === 'completed' ? 'bg-green-100 text-green-700' :
+//                     work.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+//                     work.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+//                     'bg-red-100 text-red-700'
+//                   }`}>
+//                     {work.status}
+//                   </span>
+//                 </div>
+//               ))}
+//               {recentWorks.length === 0 && (
+//                 <p className="text-sm text-slate-400 text-center py-2">No recent works</p>
+//               )}
+//             </div>
+//           </div>
+//         </div>
+
+//         {/* TAILOR PERFORMANCE - Right Side */}
+//         <div className="bg-white rounded-xl p-6 shadow-sm">
+//           <div className="flex items-center justify-between mb-4">
+//             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+//               <Scissors size={20} className="text-purple-600" />
+//               Tailor Performance
+//               <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">
+//                 {dateRange === 'today' ? 'Today' : 
+//                  dateRange === 'week' ? 'This Week' : 
+//                  dateRange === 'month' ? 'This Month' : 'Custom'}
+//               </span>
+//             </h2>
+//             <Link to="/admin/tailors" className="text-purple-600 text-sm hover:underline flex items-center gap-1">
+//               View All <ArrowRight size={14} />
+//             </Link>
+//           </div>
+
+//           {/* Tailor Status Cards */}
+//           <div className="grid grid-cols-2 gap-3 mb-6">
+//             <div className="bg-green-50 p-3 rounded-lg">
+//               <div className="flex items-center gap-2">
+//                 <UserCheck size={16} className="text-green-600" />
+//                 <span className="text-xs text-green-600">Active</span>
+//               </div>
+//               <p className="text-xl font-bold text-green-700">{tailorStats.active || 0}</p>
+//             </div>
+//             <div className="bg-blue-50 p-3 rounded-lg">
+//               <div className="flex items-center gap-2">
+//                 <Loader size={16} className="text-blue-600" />
+//                 <span className="text-xs text-blue-600">Working</span>
+//               </div>
+//               <p className="text-xl font-bold text-blue-700">{tailorStats.busy || 0}</p>
+//             </div>
+//             <div className="bg-slate-50 p-3 rounded-lg">
+//               <div className="flex items-center gap-2">
+//                 <UserX size={16} className="text-slate-600" />
+//                 <span className="text-xs text-slate-600">Idle</span>
+//               </div>
+//               <p className="text-xl font-bold text-slate-700">{tailorStats.idle || 0}</p>
+//             </div>
+//             <div className="bg-orange-50 p-3 rounded-lg">
+//               <div className="flex items-center gap-2">
+//                 <Calendar size={16} className="text-orange-600" />
+//                 <span className="text-xs text-orange-600">On Leave</span>
+//               </div>
+//               <p className="text-xl font-bold text-orange-700">{tailorStats.onLeave || 0}</p>
+//             </div>
+//           </div>
+
+//           {/* Performance List */}
+//           <h3 className="text-sm font-semibold text-slate-700 mb-3">Top Performers</h3>
+//           <div className="space-y-3">
+//             {tailorPerformance.slice(0, 4).map((tailor, index) => (
+//               <div key={tailor._id || index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+//                 <div className="flex items-center gap-3">
+//                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+//                     index === 0 ? 'bg-yellow-500' :
+//                     index === 1 ? 'bg-slate-500' :
+//                     index === 2 ? 'bg-orange-500' : 'bg-blue-500'
+//                   }`}>
+//                     {index + 1}
+//                   </div>
+//                   <div>
+//                     <p className="font-medium text-slate-800">{tailor.name || 'Tailor'}</p>
+//                     <p className="text-xs text-slate-500">{tailor.specialization || 'General'}</p>
+//                   </div>
+//                 </div>
+//                 <div className="text-right">
+//                   <p className="font-bold text-blue-600">{tailor.completedWorks || 0}</p>
+//                   <p className="text-xs text-slate-500">completed</p>
+//                 </div>
+//               </div>
+//             ))}
+//             {tailorPerformance.length === 0 && (
+//               <p className="text-sm text-slate-400 text-center py-4">No performance data</p>
+//             )}
+//           </div>
+
+//           {/* Quick Stats */}
+//           <div className="mt-4 pt-4 border-t border-slate-100">
+//             <div className="flex items-center justify-between text-sm">
+//               <span className="text-slate-600">Avg. Completion Time</span>
+//               <span className="font-bold text-green-600">3.5 days</span>
+//             </div>
+//             <div className="flex items-center justify-between text-sm mt-1">
+//               <span className="text-slate-600">Productivity Rate</span>
+//               <span className="font-bold text-blue-600">85%</span>
+//             </div>
+//           </div>
+//         </div>
+//       </div>
+
+//       {/* ===== QUICK ACTIONS FLOATING MENU ===== */}
+//       <div className="fixed bottom-6 right-6 z-50">
+//         <div className="relative group">
+//           {/* Main FAB Button */}
+//           <button className="w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg flex items-center justify-center text-white transition-all group-hover:scale-110 group-hover:shadow-xl">
+//             <Plus size={24} />
+//           </button>
+          
+//           {/* Quick Actions Menu - Appears on hover */}
+//           <div className="absolute bottom-16 right-0 bg-white rounded-xl shadow-xl p-2 min-w-[220px] hidden group-hover:block animate-fade-in-up">
+//             {/* Header */}
+//             <div className="text-sm font-medium text-slate-700 px-3 py-2 border-b border-slate-100 mb-1">
+//               Quick Actions
+//             </div>
+            
+//             {/* Menu Items */}
+//             <Link 
+//               to="/admin/orders/new" 
+//               className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg text-slate-600 transition-all group/item"
+//             >
+//               <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center group-hover/item:bg-blue-200 transition-all">
+//                 <ShoppingCart size={16} className="text-blue-600" />
+//               </div>
+//               <div className="flex-1">
+//                 <span className="text-sm font-medium">New Order</span>
+//                 <p className="text-xs text-slate-400">Create a new order</p>
+//               </div>
+//             </Link>
+
+//             <Link 
+//               to="/admin/customers/new" 
+//               className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg text-slate-600 transition-all group/item"
+//             >
+//               <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center group-hover/item:bg-green-200 transition-all">
+//                 <UserPlus size={16} className="text-green-600" />
+//               </div>
+//               <div className="flex-1">
+//                 <span className="text-sm font-medium">Add Customer</span>
+//                 <p className="text-xs text-slate-400">Register new customer</p>
+//               </div>
+//             </Link>
+
+//             <Link 
+//               to="/admin/transactions/expense" 
+//               className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg text-slate-600 transition-all group/item"
+//             >
+//               <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center group-hover/item:bg-red-200 transition-all">
+//                 <Receipt size={16} className="text-red-600" />
+//               </div>
+//               <div className="flex-1">
+//                 <span className="text-sm font-medium">Add Expense</span>
+//                 <p className="text-xs text-slate-400">Record an expense</p>
+//               </div>
+//             </Link>
+
+//             <Link 
+//               to="/admin/transactions/income" 
+//               className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg text-slate-600 transition-all group/item"
+//             >
+//               <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center group-hover/item:bg-green-200 transition-all">
+//                 <DollarSign size={16} className="text-green-600" />
+//               </div>
+//               <div className="flex-1">
+//                 <span className="text-sm font-medium">Add Income</span>
+//                 <p className="text-xs text-slate-400">Record an income</p>
+//               </div>
+//             </Link>
+
+//             {/* Divider */}
+//             <div className="border-t border-slate-100 my-1"></div>
+
+//             {/* View All Link */}
+//             <Link 
+//               to="/admin/quick-actions" 
+//               className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg text-blue-600 text-sm"
+//             >
+//               <span>View all actions</span>
+//               <ArrowRight size={14} />
+//             </Link>
+//           </div>
+//         </div>
+//       </div>
+
+//       {/* Loading Overlay */}
+//       {isLoading && (
+//         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+//           <div className="bg-white rounded-xl p-4 flex items-center gap-3 shadow-xl">
+//             <RefreshCw size={20} className="animate-spin text-blue-600" />
+//             <span>Loading dashboard...</span>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* Add animation styles */}
+//       <style jsx>{`
+//         @keyframes fadeInUp {
+//           from {
+//             opacity: 0;
+//             transform: translateY(10px);
+//           }
+//           to {
+//             opacity: 1;
+//             transform: translateY(0);
+//           }
+//         }
+//         .animate-fade-in-up {
+//           animation: fadeInUp 0.2s ease-out;
+//         }
+//       `}</style>
+//     </div>
+//   );
+// }
+
+
+
+
+
+
+
+// Pages/Dashboard/AdminDashboard.jsx - WITH CORRECT TAILOR SELECTORS
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
@@ -3560,13 +5749,29 @@ import {
   selectRecentWorks
 } from '../../features/work/workSlice';
 
-// IMPORT from tailorSlice
+// IMPORT from tailorSlice - USING CORRECT SELECTORS
 import {
   fetchTailorStats,
   fetchTailorPerformance,
+  fetchTopTailors,
   selectTailorStats,
-  selectTailorPerformance
+  selectTailorPerformance,      // This is state.tailor.tailorPerformance.data
+  selectTailorPerformanceSummary,
+  selectTailorPerformanceLoading,
+  selectTopTailors,
+  selectTopTailorsLoading
 } from '../../features/tailor/tailorSlice';
+
+// IMPORT from transactionSlice
+import {
+  fetchDailyRevenueStats,
+  selectDailyRevenueData,
+  selectDailyRevenueSummary,
+  selectDailyRevenueLoading,
+  fetchTodayTransactions,
+  selectTodaySummary,
+  selectTodayLoading
+} from '../../features/transaction/transactionSlice';
 
 import StatCard from '../../components/common/StatCard';
 import showToast from '../../utils/toast';
@@ -3611,7 +5816,41 @@ export default function AdminDashboard() {
     onLeave: 0
   };
   
+  // ✅ CORRECT: selectTailorPerformance returns the data array
   const tailorPerformance = useSelector(selectTailorPerformance) || [];
+  
+  // ✅ Get performance summary
+  const performanceSummary = useSelector(selectTailorPerformanceSummary) || {
+    totalCompleted: 0,
+    activeTailors: 0,
+    avgPerTailor: 0
+  };
+  
+  // ✅ Get top tailors
+  const topTailors = useSelector(selectTopTailors) || [];
+  
+  // Loading states
+  const performanceLoading = useSelector(selectTailorPerformanceLoading);
+  const topTailorsLoading = useSelector(selectTopTailorsLoading);
+  
+  // ===== GET REVENUE DATA =====
+  const dailyRevenueData = useSelector(selectDailyRevenueData) || [];
+  const dailyRevenueSummary = useSelector(selectDailyRevenueSummary) || {
+    totalRevenue: 0,
+    totalExpense: 0,
+    netProfit: 0,
+    period: 'month',
+    dateRange: { start: null, end: null }
+  };
+  const revenueLoading = useSelector(selectDailyRevenueLoading);
+  
+  // ===== GET TODAY'S TRANSACTIONS SUMMARY =====
+  const todaySummary = useSelector(selectTodaySummary) || {
+    totalIncome: 0,
+    totalExpense: 0,
+    netAmount: 0
+  };
+  const todayLoading = useSelector(selectTodayLoading);
   
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
@@ -3620,9 +5859,6 @@ export default function AdminDashboard() {
   const [customEndDate, setCustomEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [showCustomPicker, setShowCustomPicker] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
-  
-  // Revenue chart data
-  const [revenueData, setRevenueData] = useState([]);
 
   // ===== STATUS COLORS =====
   const STATUS_CONFIG = {
@@ -3664,7 +5900,10 @@ export default function AdminDashboard() {
         dispatch(fetchWorkStats(params)),
         dispatch(fetchRecentWorks({ ...params, limit: 5 })),
         dispatch(fetchTailorStats()),
-        dispatch(fetchTailorPerformance(params))
+        dispatch(fetchTailorPerformance({ period: dateRange })), // Fetch performance with period
+        dispatch(fetchTopTailors({ limit: 5, period: dateRange })), // Fetch top tailors
+        dispatch(fetchDailyRevenueStats(params)),
+        dispatch(fetchTodayTransactions())
       ];
       
       const startTime = Date.now();
@@ -3674,7 +5913,7 @@ export default function AdminDashboard() {
       console.log(`⏱️ API calls completed in ${endTime - startTime}ms`);
       
       // Check results
-      const apiNames = ['Order Stats', 'Recent Orders', 'Work Stats', 'Recent Works', 'Tailor Stats', 'Tailor Performance'];
+      const apiNames = ['Order Stats', 'Recent Orders', 'Work Stats', 'Recent Works', 'Tailor Stats', 'Tailor Performance', 'Top Tailors', 'Daily Revenue', 'Today Transactions'];
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           console.log(`✅ ${apiNames[index]} successful:`, result.value);
@@ -3682,9 +5921,6 @@ export default function AdminDashboard() {
           console.error(`❌ ${apiNames[index]} failed:`, result.reason);
         }
       });
-      
-      // Generate revenue chart data (sample for now)
-      generateRevenueChartData();
       
       setLastRefreshed(new Date());
       
@@ -3748,49 +5984,6 @@ export default function AdminDashboard() {
     setShowCustomPicker(false);
     loadDashboardData();
     showToast.success(`Showing data from ${customStartDate} to ${customEndDate}`);
-  };
-
-  // ===== Generate Revenue Chart Data =====
-  const generateRevenueChartData = () => {
-    console.log('💰 Generating revenue chart data for:', dateRange);
-    
-    let data = [];
-    const today = new Date();
-    
-    switch(dateRange) {
-      case 'today':
-        for (let i = 0; i < 8; i++) {
-          data.push({
-            time: `${i+9} AM`,
-            revenue: Math.floor(Math.random() * 5000) + 1000,
-            expense: Math.floor(Math.random() * 2000) + 500
-          });
-        }
-        break;
-        
-      case 'week':
-        for (let i = 6; i >= 0; i--) {
-          const date = subDays(today, i);
-          data.push({
-            day: format(date, 'EEE'),
-            revenue: Math.floor(Math.random() * 15000) + 5000,
-            expense: Math.floor(Math.random() * 5000) + 2000
-          });
-        }
-        break;
-        
-      case 'month':
-      default:
-        data = [
-          { day: 'Week 1', revenue: Math.floor(Math.random() * 50000) + 20000, expense: Math.floor(Math.random() * 20000) + 10000 },
-          { day: 'Week 2', revenue: Math.floor(Math.random() * 50000) + 20000, expense: Math.floor(Math.random() * 20000) + 10000 },
-          { day: 'Week 3', revenue: Math.floor(Math.random() * 50000) + 20000, expense: Math.floor(Math.random() * 20000) + 10000 },
-          { day: 'Week 4', revenue: Math.floor(Math.random() * 50000) + 20000, expense: Math.floor(Math.random() * 20000) + 10000 }
-        ];
-        break;
-    }
-    
-    setRevenueData(data);
   };
 
   // ===== PREPARE ORDER STATUS DATA =====
@@ -3874,6 +6067,15 @@ export default function AdminDashboard() {
     const config = STATUS_CONFIG[status] || STATUS_CONFIG.draft;
     return `${config.bg} text-gray-700 px-2 py-1 text-xs rounded-full`;
   };
+
+  // Debug logs
+  console.log('📊 Tailor Stats:', tailorStats);
+  console.log('📊 Tailor Performance:', tailorPerformance);
+  console.log('📊 Performance Summary:', performanceSummary);
+  console.log('📊 Top Tailors:', topTailors);
+
+  // Prepare data for top performers display
+  const displayPerformers = topTailors.length > 0 ? topTailors : tailorPerformance;
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -4031,13 +6233,20 @@ export default function AdminDashboard() {
         {/* Card 2 - Revenue */}
         <StatCard
           title="Revenue"
-          value="₹0"
+          value={`₹${safeFormat(dailyRevenueSummary?.totalRevenue || 0)}`}
           icon={<IndianRupee className="text-green-600" size={24} />}
           bgColor="bg-green-50"
           borderColor="border-green-200"
         >
-          <div className="mt-3 text-center text-xs text-slate-500">
-            Coming soon
+          <div className="mt-3 flex justify-between text-xs">
+            <div className="bg-white p-2 rounded-lg flex-1 mr-1">
+              <span className="text-slate-500">Expense</span>
+              <p className="font-bold text-red-600">₹{safeFormat(dailyRevenueSummary?.totalExpense || 0)}</p>
+            </div>
+            <div className="bg-white p-2 rounded-lg flex-1 ml-1">
+              <span className="text-slate-500">Profit</span>
+              <p className="font-bold text-green-600">₹{safeFormat(dailyRevenueSummary?.netProfit || 0)}</p>
+            </div>
           </div>
         </StatCard>
 
@@ -4213,7 +6422,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ===== ROW 2: REVENUE TREND CHART - FULL WIDTH ===== */}
+      {/* ===== ROW 2: REVENUE TREND CHART ===== */}
       <div className="mb-8">
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
@@ -4239,11 +6448,16 @@ export default function AdminDashboard() {
             </div>
           </div>
           
-          {revenueData.length > 0 ? (
+          {revenueLoading ? (
+            <div className="h-80 flex items-center justify-center">
+              <Loader size={32} className="animate-spin text-blue-600" />
+              <span className="ml-2 text-slate-600">Loading revenue data...</span>
+            </div>
+          ) : dailyRevenueData && dailyRevenueData.length > 0 ? (
             <>
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={revenueData}>
+                  <LineChart data={dailyRevenueData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey={dateRange === 'today' ? 'time' : 'day'} />
                     <YAxis tickFormatter={(value) => `₹${value/1000}K`} />
@@ -4258,22 +6472,19 @@ export default function AdminDashboard() {
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <p className="text-sm text-blue-600">Total Revenue</p>
                   <p className="text-2xl font-bold text-blue-800">
-                    ₹{safeFormat(revenueData.reduce((sum, i) => sum + i.revenue, 0))}
+                    ₹{safeFormat(dailyRevenueSummary?.totalRevenue || 0)}
                   </p>
                 </div>
                 <div className="bg-red-50 p-4 rounded-lg">
                   <p className="text-sm text-red-600">Total Expense</p>
                   <p className="text-2xl font-bold text-red-800">
-                    ₹{safeFormat(revenueData.reduce((sum, i) => sum + i.expense, 0))}
+                    ₹{safeFormat(dailyRevenueSummary?.totalExpense || 0)}
                   </p>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg">
                   <p className="text-sm text-green-600">Net Profit</p>
                   <p className="text-2xl font-bold text-green-800">
-                    ₹{safeFormat(
-                      revenueData.reduce((sum, i) => sum + i.revenue, 0) -
-                      revenueData.reduce((sum, i) => sum + i.expense, 0)
-                    )}
+                    ₹{safeFormat(dailyRevenueSummary?.netProfit || 0)}
                   </p>
                 </div>
               </div>
@@ -4281,7 +6492,7 @@ export default function AdminDashboard() {
           ) : (
             <div className="h-80 flex items-center justify-center text-slate-400">
               <TrendingUp size={48} className="opacity-30" />
-              <p className="text-lg ml-2">No revenue data</p>
+              <p className="text-lg ml-2">No revenue data available for this period</p>
             </div>
           )}
         </div>
@@ -4381,7 +6592,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* TAILOR PERFORMANCE - Right Side */}
+        {/* TAILOR PERFORMANCE - Right Side - NOW WITH REAL DATA */}
         <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -4398,76 +6609,100 @@ export default function AdminDashboard() {
             </Link>
           </div>
 
-          {/* Tailor Status Cards */}
+          {/* Tailor Status Cards - FROM REAL DATA */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             <div className="bg-green-50 p-3 rounded-lg">
               <div className="flex items-center gap-2">
                 <UserCheck size={16} className="text-green-600" />
                 <span className="text-xs text-green-600">Active</span>
               </div>
-              <p className="text-xl font-bold text-green-700">{tailorStats.active || 0}</p>
+              <p className="text-xl font-bold text-green-700">{tailorStats?.active || 0}</p>
             </div>
             <div className="bg-blue-50 p-3 rounded-lg">
               <div className="flex items-center gap-2">
                 <Loader size={16} className="text-blue-600" />
                 <span className="text-xs text-blue-600">Working</span>
               </div>
-              <p className="text-xl font-bold text-blue-700">{tailorStats.busy || 0}</p>
+              <p className="text-xl font-bold text-blue-700">{tailorStats?.busy || 0}</p>
             </div>
             <div className="bg-slate-50 p-3 rounded-lg">
               <div className="flex items-center gap-2">
                 <UserX size={16} className="text-slate-600" />
                 <span className="text-xs text-slate-600">Idle</span>
               </div>
-              <p className="text-xl font-bold text-slate-700">{tailorStats.idle || 0}</p>
+              <p className="text-xl font-bold text-slate-700">{tailorStats?.idle || 0}</p>
             </div>
             <div className="bg-orange-50 p-3 rounded-lg">
               <div className="flex items-center gap-2">
                 <Calendar size={16} className="text-orange-600" />
                 <span className="text-xs text-orange-600">On Leave</span>
               </div>
-              <p className="text-xl font-bold text-orange-700">{tailorStats.onLeave || 0}</p>
+              <p className="text-xl font-bold text-orange-700">{tailorStats?.onLeave || 0}</p>
             </div>
           </div>
 
-          {/* Performance List */}
+          {/* Performance List - USING REAL DATA */}
           <h3 className="text-sm font-semibold text-slate-700 mb-3">Top Performers</h3>
-          <div className="space-y-3">
-            {tailorPerformance.slice(0, 4).map((tailor, index) => (
-              <div key={tailor._id || index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                    index === 0 ? 'bg-yellow-500' :
-                    index === 1 ? 'bg-slate-500' :
-                    index === 2 ? 'bg-orange-500' : 'bg-blue-500'
-                  }`}>
-                    {index + 1}
+          
+          {performanceLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader size={24} className="animate-spin text-purple-600" />
+            </div>
+          ) : displayPerformers.length > 0 ? (
+            <div className="space-y-3">
+              {displayPerformers.slice(0, 4).map((tailor, index) => (
+                <div key={tailor._id || index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                      index === 0 ? 'bg-yellow-500' :
+                      index === 1 ? 'bg-slate-500' :
+                      index === 2 ? 'bg-orange-500' : 'bg-blue-500'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-800">{tailor.name || tailor.tailorName || 'Tailor'}</p>
+                      <p className="text-xs text-slate-500">
+                        {tailor.specialization || tailor.specializations?.join(', ') || 'General'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-800">{tailor.name || 'Tailor'}</p>
-                    <p className="text-xs text-slate-500">{tailor.specialization || 'General'}</p>
+                  <div className="text-right">
+                    <p className="font-bold text-blue-600">
+                      {tailor.completedWorks || tailor.completedOrders || tailor.count || 0}
+                    </p>
+                    <p className="text-xs text-slate-500">completed</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-blue-600">{tailor.completedWorks || 0}</p>
-                  <p className="text-xs text-slate-500">completed</p>
-                </div>
-              </div>
-            ))}
-            {tailorPerformance.length === 0 && (
-              <p className="text-sm text-slate-400 text-center py-4">No performance data</p>
-            )}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-slate-400">
+              <Scissors size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No performance data for this period</p>
+              <p className="text-xs mt-1">Try changing the date range</p>
+            </div>
+          )}
 
-          {/* Quick Stats */}
+          {/* Quick Stats - USING REAL SUMMARY DATA */}
           <div className="mt-4 pt-4 border-t border-slate-100">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">Avg. Completion Time</span>
-              <span className="font-bold text-green-600">3.5 days</span>
+              <span className="text-slate-600">Total Completed</span>
+              <span className="font-bold text-green-600">
+                {performanceSummary?.totalCompleted || 0}
+              </span>
             </div>
             <div className="flex items-center justify-between text-sm mt-1">
-              <span className="text-slate-600">Productivity Rate</span>
-              <span className="font-bold text-blue-600">85%</span>
+              <span className="text-slate-600">Active Tailors</span>
+              <span className="font-bold text-blue-600">
+                {performanceSummary?.activeTailors || tailorStats?.active || 0}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm mt-1">
+              <span className="text-slate-600">Avg per Tailor</span>
+              <span className="font-bold text-purple-600">
+                {performanceSummary?.avgPerTailor || 0}
+              </span>
             </div>
           </div>
         </div>
