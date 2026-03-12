@@ -25,7 +25,7 @@ const seedCuttingMaster = async () => {
     const cuttingMaster = new CuttingMaster({
       name: "Default Cutting Master",
       phone: "9876543211",
-      email: "cuttingmaster@test.com",
+      email: "cutting@dreamfit.com",
       password: "123456",
       specialization: ["Shirt Cutting", "Pant Cutting"],
       experience: 5,
@@ -47,6 +47,7 @@ const seedCuttingMaster = async () => {
   } catch (error) {
     console.error("❌ Error seeding Cutting Master:", error);
     process.exit(1);
+    
   }
 };
 

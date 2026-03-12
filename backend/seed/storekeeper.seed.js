@@ -23,7 +23,7 @@ const seedStoreKeeper = async () => {
     const storekeeper = new StoreKeeper({
       name: "Default Store Keeper",
       phone: "9876543210",
-      email: "storekeeper@test.com",
+      email: "store@dreamfit.com",
       password: "123456",
       department: "both",
       experience: 2,
