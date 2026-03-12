@@ -16,7 +16,8 @@
     "seed:item": "node seed/item.seed.js",
     "seed:sizefield": "node seed/sizefield.seed.js",
     "seed:sizetemplate": "node seed/sizetemplate.seed.js",
-    "seed:customer": "node seed/customer.seed.js"
+    "seed:customer": "node seed/customer.seed.js",
+    "seed:all": "npm run seed:admin && npm run seed:storekeeper && npm run seed:cuttingmaster && npm run seed:tailor && npm run seed:fabric && npm run seed:category && npm run seed:item && npm run seed:sizefield && npm run seed:sizetemplate && npm run seed:customer"
    
   },
   "keywords": [],
