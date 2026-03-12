@@ -1854,7 +1854,7 @@ export default function Orders() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Debug Panel */}
-      {DEBUG && process.env.NODE_ENV === 'development' && (
+      {/* {DEBUG && process.env.NODE_ENV === 'development' && (
         <div className="bg-gray-900 text-green-400 p-4 rounded-3xl font-mono text-sm overflow-auto max-h-40">
           <div className="flex justify-between items-center mb-2">
             <span className="font-bold">🔍 Debug Info</span>
@@ -1875,7 +1875,7 @@ export default function Orders() {
             <div>Role: {user?.role}</div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Header */}
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">

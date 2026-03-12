@@ -7011,7 +7011,7 @@ export default function OrderDetails() {
       ))}
 
       {/* Debug Panel */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* {process.env.NODE_ENV === 'development' && (
         <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-60">
           <div className="flex justify-between items-center mb-2">
             <span className="font-bold">🔍 DEBUG INFO</span>
@@ -7037,7 +7037,7 @@ export default function OrderDetails() {
             <div>Status: {currentOrder?.status}</div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Header with Actions */}
       <div className="flex items-center justify-between">
@@ -7735,13 +7735,13 @@ export default function OrderDetails() {
                   </button>
                 )}
 
-                <button
+                {/* <button
                   onClick={handleSendAcknowledgment}
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2"
                 >
                   <Send size={18} />
                   Send Acknowledgment
-                </button>
+                </button> */}
 
                 {currentOrder.status === 'in-progress' && (
                   <button

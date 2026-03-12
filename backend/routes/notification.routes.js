@@ -289,6 +289,14 @@ router.post('/', async (req, res) => {
  */
 router.get('/unread-count', getUnreadCount);
 
+
+/**
+ * @route   PATCH /api/notifications/mark-all-read
+ * @desc    Mark all notifications as read
+ * @access  Private
+ */
+router.patch('/mark-all-read', markAllAsRead);
+
 /**
  * @route   GET /api/notifications
  * @desc    Get all notifications for current user
@@ -312,12 +320,7 @@ router.get('/:id', getNotificationById);
  */
 router.patch('/:id/read', markAsRead);
 
-/**
- * @route   PATCH /api/notifications/mark-all-read
- * @desc    Mark all notifications as read
- * @access  Private
- */
-router.patch('/mark-all-read', markAllAsRead);
+
 
 // ==================== DELETE ROUTES ====================
 

@@ -619,12 +619,12 @@ export default function NotificationBell() {
         </button>
       )}
 
-      {/* Debug Panel */}
+      {/* Debug Panel
       <DebugBadge 
         showDebug={showDebug} 
         setShowDebug={setShowDebug} 
         debugInfo={debugInfo}
-      />
+      /> */}
     </div>
   );
 }
