@@ -1,2815 +1,3 @@
-// import React, { useState, useEffect, useCallback, useMemo } from "react";
-// import { useDispatch, useSelector } from "react-redux";
-// import { useNavigate, useLocation } from "react-router-dom";
-// import {
-//   ArrowLeft,
-//   Save,
-//   Plus,
-//   Trash2,
-//   User,
-//   Calendar,
-//   CreditCard,
-//   IndianRupee,
-//   Package,
-//   Clock,
-//   Wallet,
-//   Banknote,
-//   Smartphone,
-//   Landmark,
-//   X,
-//   AlertCircle,
-//   CheckCircle,
-//   Info,
-//   Bug,
-// } from "lucide-react";
-// import { createNewOrder } from "../../../features/order/orderSlice";
-// import { createGarment } from "../../../features/garment/garmentSlice";
-// import { fetchAllCustomers } from "../../../features/customer/customerSlice";
-// import GarmentForm from "../garment/GarmentForm";
-// import AddPaymentModal from "../../../components/AddPaymentModal";
-// import showToast from "../../../utils/toast";
-
-// export default function NewOrder() {
-//   const dispatch = useDispatch();
-//   const navigate = useNavigate();
-//   const location = useLocation();
-  
-//   // Enhanced Debug configuration
-//   const DEBUG = {
-//     ENABLED: true,
-//     LOG_LEVEL: 'verbose',
-//     SHOW_PANEL: true,
-//     LOG_REDUX: true,
-//     LOG_API: true,
-//     LOG_VALIDATION: true,
-//     LOG_FORM_DATA: true
-//   };
-  
-//   // Debug logger
-//   const logDebug = (level, category, message, data = null) => {
-//     if (!DEBUG.ENABLED) return;
-    
-//     const levels = { minimal: 1, normal: 2, verbose: 3 };
-//     const currentLevel = levels[DEBUG.LOG_LEVEL] || 2;
-//     const msgLevel = levels[level] || 2;
-    
-//     if (msgLevel > currentLevel) return;
-    
-//     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-//     console.log(
-//       `%c[${timestamp}][${category}] ${message}`,
-//       `color: #00ff00; font-weight: bold;`,
-//       data || ''
-//     );
-//   };
-
-//   // Error logger
-//   const logError = (context, error, additionalData = {}) => {
-//     console.group(`❌ ERROR [${context}] - ${new Date().toISOString()}`);
-//     console.error('Error object:', error);
-//     console.error('Error message:', error?.message);
-    
-//     if (error?.response) {
-//       console.log('🔍 Response Data:', error.response.data);
-//       console.log('🔍 Status:', error.response.status);
-//       console.log('🔍 Status Text:', error.response.statusText);
-//       console.log('🔍 Headers:', error.response.headers);
-      
-//       if (error.response.data?.errors) {
-//         console.log('📋 Validation Errors:', error.response.data.errors);
-//       }
-//       if (error.response.data?.message) {
-//         console.log('📋 Server Message:', error.response.data.message);
-//       }
-//     }
-    
-//     if (error?.request) {
-//       console.log('📡 Request:', error.request);
-//     }
-    
-//     if (Object.keys(additionalData).length > 0) {
-//       console.log('📦 Additional Data:', additionalData);
-//     }
-    
-//     console.groupEnd();
-//   };
-
-//   // Validation helper
-//   const validateMongoId = (id) => {
-//     if (!id) return { valid: false, reason: 'ID is empty' };
-//     const isValid = /^[0-9a-fA-F]{24}$/.test(id);
-//     return { 
-//       valid: isValid, 
-//       reason: isValid ? 'Valid' : 'Invalid format - must be 24 hex characters' 
-//     };
-//   };
-
-//   // Get passed customer from Customer Page (if any)
-//   const passedCustomer = location.state?.customer;
-  
-//   logDebug('normal', 'INIT', 'Component initialized', {
-//     hasPassedCustomer: !!passedCustomer,
-//     passedCustomerId: passedCustomer?._id
-//   });
-
-//   useEffect(() => {
-//     logDebug('normal', 'LIFECYCLE', 'Component mounted');
-//     return () => logDebug('normal', 'LIFECYCLE', 'Component unmounted');
-//   }, []);
-
-//   // Fixed Redux selectors
-//   const { customers, loading: customersLoading } = useSelector((state) => {
-//     const customerData = state.customers?.customers || state.customer?.customers || [];
-//     const customersArray = Array.isArray(customerData) ? customerData : [];
-    
-//     return {
-//       customers: customersArray,
-//       loading: state.customers?.loading || state.customer?.loading || false
-//     };
-//   });
-
-//   const { user } = useSelector((state) => {
-//     return { user: state.auth?.user };
-//   });
-  
-//   const [formData, setFormData] = useState({
-//     customer: "",
-//     deliveryDate: "",
-//     specialNotes: "",
-//     advancePayment: {
-//       amount: 0,
-//       method: "cash",
-//     },
-//   });
-
-//   // State for multiple payments
-//   const [payments, setPayments] = useState([]);
-//   const [showPaymentModal, setShowPaymentModal] = useState(false);
-//   const [editingPayment, setEditingPayment] = useState(null);
-
-//   const [garments, setGarments] = useState([]);
-//   const [showGarmentModal, setShowGarmentModal] = useState(false);
-//   const [editingGarment, setEditingGarment] = useState(null);
-//   const [searchTerm, setSearchTerm] = useState("");
-//   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-//   const [selectedCustomerDisplay, setSelectedCustomerDisplay] = useState("");
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-//   const [serverErrors, setServerErrors] = useState(null);
-
-//   // Get user ID
-//   const userId = user?.id || user?._id;
-//   const userRole = user?.role;
-
-//   // Validate user ID
-//   const userIdValidation = validateMongoId(userId);
-
-//   logDebug('normal', 'AUTH', 'User authentication details', {
-//     userId,
-//     userIdValid: userIdValidation.valid,
-//     userRole
-//   });
-
-//   // Get base path based on user role
-//   const basePath = user?.role === "ADMIN" ? "/admin" : 
-//                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
-//                    "/cuttingmaster";
-
-//   // Load customers on mount
-//   useEffect(() => {
-//     logDebug('normal', 'API', 'Fetching customers');
-//     dispatch(fetchAllCustomers())
-//       .unwrap()
-//       .then((result) => {
-//         logDebug('normal', 'API', 'Customers fetched', { count: result?.length });
-//       })
-//       .catch((error) => {
-//         logError('fetchCustomers', error);
-//         showToast.error("Failed to load customers");
-//       });
-//   }, [dispatch]);
-
-//   // AUTO-FILL LOGIC: When passedCustomer is available, auto-select them
-//   useEffect(() => {
-//     if (passedCustomer) {
-//       logDebug('normal', 'AUTO-FILL', 'Auto-filling customer', {
-//         passedCustomerId: passedCustomer._id
-//       });
-      
-//       const fullCustomer = customers?.find(c => c._id === passedCustomer._id) || passedCustomer;
-      
-//       setFormData(prev => ({
-//         ...prev,
-//         customer: fullCustomer._id
-//       }));
-
-//       const fullName = getCustomerFullName(fullCustomer);
-//       const displayId = getCustomerDisplayId(fullCustomer);
-//       let displayText = `${fullName} (${displayId})`;
-      
-//       setSelectedCustomerDisplay(displayText);
-//       setSearchTerm(displayText);
-//       setShowCustomerDropdown(false);
-//     }
-//   }, [passedCustomer, customers]);
-
-//   // Helper functions for customer display
-//   const getCustomerFullName = (customer) => {
-//     if (!customer) return 'Unknown Customer';
-    
-//     if (customer.firstName || customer.lastName) {
-//       const firstName = customer.firstName || '';
-//       const lastName = customer.lastName || '';
-//       const fullName = `${firstName} ${lastName}`.trim();
-//       if (fullName) return fullName;
-//     }
-    
-//     if (customer.name) return customer.name;
-    
-//     return 'Unknown Customer';
-//   };
-
-//   const getCustomerDisplayId = (customer) => {
-//     if (!customer) return '';
-//     return customer.customerId || customer._id?.slice(-6) || '';
-//   };
-
-//   const getCustomerPhone = (customer) => {
-//     if (!customer) return 'No phone';
-//     return customer.phone || customer.whatsappNumber || 'No phone';
-//   };
-
-//   // Filter customers
-//   const filteredCustomers = useMemo(() => {
-//     if (!customers || !Array.isArray(customers) || customers.length === 0) {
-//       return [];
-//     }
-    
-//     if (formData.customer && searchTerm === selectedCustomerDisplay) {
-//       return [];
-//     }
-    
-//     return customers.filter(customer => {
-//       if (!customer) return false;
-
-//       const fullName = getCustomerFullName(customer).toLowerCase();
-//       const customerId = getCustomerDisplayId(customer).toLowerCase();
-//       const phone = getCustomerPhone(customer).toLowerCase();
-//       const firstName = (customer.firstName || '').toLowerCase();
-//       const lastName = (customer.lastName || '').toLowerCase();
-      
-//       const searchLower = searchTerm.toLowerCase();
-      
-//       return fullName.includes(searchLower) ||
-//              firstName.includes(searchLower) ||
-//              lastName.includes(searchLower) ||
-//              phone.includes(searchLower) ||
-//              customerId.includes(searchLower);
-//     });
-//   }, [customers, searchTerm, formData.customer, selectedCustomerDisplay]);
-
-//   // Calculate total payments
-//   const totalPayments = useMemo(() => {
-//     return payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-//   }, [payments]);
-
-//   // Calculate price summary
-//   const priceSummary = useMemo(() => {
-//     const totalMin = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.min || 0);
-//     }, 0);
-    
-//     const totalMax = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.max || 0);
-//     }, 0);
-    
-//     return { totalMin, totalMax };
-//   }, [garments]);
-
-//   // Calculate balance
-//   const balanceAmount = useMemo(() => {
-//     return {
-//       min: Number(priceSummary.totalMin) - totalPayments,
-//       max: Number(priceSummary.totalMax) - totalPayments,
-//     };
-//   }, [priceSummary, totalPayments]);
-
-//   // Payment handlers
-//   const handleAddPayment = useCallback(() => {
-//     setEditingPayment(null);
-//     setShowPaymentModal(true);
-//   }, []);
-
-//   const handleEditPayment = useCallback((payment) => {
-//     setEditingPayment(payment);
-//     setShowPaymentModal(true);
-//   }, []);
-
-//   const handleDeletePayment = useCallback((index) => {
-//     if (window.confirm("Are you sure you want to delete this payment?")) {
-//       const newPayments = [...payments];
-//       newPayments.splice(index, 1);
-//       setPayments(newPayments);
-//       showToast.success("Payment removed");
-//     }
-//   }, [payments]);
-
-//   // Handle Save Payment with proper type mapping
-//   const handleSavePayment = useCallback((paymentData) => {
-//     logDebug('normal', 'PAYMENT', 'Saving payment', { 
-//       isEdit: !!editingPayment,
-//       paymentData
-//     });
-    
-//     // Map frontend type to backend enum
-//     let backendType = paymentData.type || 'advance';
-//     if (backendType === 'partial') {
-//       backendType = 'part-payment';
-//     } else if (backendType === 'full') {
-//       backendType = 'final-settlement';
-//     }
-    
-//     const paymentWithMappedType = {
-//       ...paymentData,
-//       type: backendType,
-//       date: paymentData.paymentDate || paymentData.date || new Date().toISOString().split('T')[0],
-//       time: paymentData.paymentTime || paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false })
-//     };
-    
-//     if (editingPayment) {
-//       // Update existing payment
-//       const index = payments.findIndex(p => p.tempId === editingPayment.tempId);
-//       if (index !== -1) {
-//         const newPayments = [...payments];
-//         newPayments[index] = { 
-//           ...paymentWithMappedType, 
-//           tempId: editingPayment.tempId
-//         };
-//         setPayments(newPayments);
-//         showToast.success("Payment updated");
-//       }
-//     } else {
-//       // Add new payment
-//       const newPayment = {
-//         ...paymentWithMappedType,
-//         tempId: Date.now() + Math.random()
-//       };
-//       setPayments([...payments, newPayment]);
-//       showToast.success("Payment added");
-//     }
-    
-//     setShowPaymentModal(false);
-//     setEditingPayment(null);
-//   }, [payments, editingPayment]);
-
-//   // ✅ UPDATED: Garment handlers with customer validation
-//   const handleAddGarment = useCallback(() => {
-//     // Validate customer selected first
-//     if (!formData.customer) {
-//       showToast.error("Please select a customer first before adding garments");
-//       return;
-//     }
-    
-//     setEditingGarment(null);
-//     setShowGarmentModal(true);
-//   }, [formData.customer]);
-
-//   const handleEditGarment = useCallback((garment) => {
-//     setEditingGarment(garment);
-//     setShowGarmentModal(true);
-//   }, []);
-
-//   const handleDeleteGarment = useCallback((index, garment) => {
-//     if (window.confirm(`Are you sure you want to remove ${garment.name || 'this garment'}?`)) {
-//       const newGarments = [...garments];
-//       newGarments.splice(index, 1);
-//       setGarments(newGarments);
-//       showToast.success("Garment removed");
-//     }
-//   }, [garments]);
-
-//   // Handle Save Garment
-//   const handleSaveGarment = useCallback((garmentData) => {
-//     logDebug('normal', 'GARMENT', 'Saving garment', {
-//       isEdit: !!editingGarment
-//     });
-    
-//     if (garmentData instanceof FormData) {
-//       // Convert FormData to object
-//       const garmentObj = {
-//         tempId: editingGarment?.tempId || Date.now() + Math.random(),
-//         referenceImages: [],
-//         customerImages: [],
-//         customerClothImages: []
-//       };
-      
-//       for (let [key, value] of garmentData.entries()) {
-//         if (value instanceof File) {
-//           if (key === 'referenceImages') {
-//             garmentObj.referenceImages.push(value);
-//           } else if (key === 'customerImages') {
-//             garmentObj.customerImages.push(value);
-//           } else if (key === 'customerClothImages') {
-//             garmentObj.customerClothImages.push(value);
-//           }
-//         } else {
-//           if (key === 'measurements' || key === 'priceRange') {
-//             try {
-//               garmentObj[key] = JSON.parse(value);
-//             } catch (e) {
-//               garmentObj[key] = value;
-//             }
-//           } else {
-//             garmentObj[key] = value;
-//           }
-//         }
-//       }
-      
-//       if (editingGarment) {
-//         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-//         if (index !== -1) {
-//           const newGarments = [...garments];
-//           newGarments[index] = garmentObj;
-//           setGarments(newGarments);
-//           showToast.success("Garment updated");
-//         }
-//       } else {
-//         setGarments([...garments, garmentObj]);
-//         showToast.success("Garment added");
-//       }
-//     } else {
-//       if (editingGarment) {
-//         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-//         if (index !== -1) {
-//           const newGarments = [...garments];
-//           newGarments[index] = { ...garmentData, tempId: editingGarment.tempId };
-//           setGarments(newGarments);
-//           showToast.success("Garment updated");
-//         }
-//       } else {
-//         const newGarment = {
-//           ...garmentData,
-//           tempId: Date.now() + Math.random()
-//         };
-//         setGarments([...garments, newGarment]);
-//         showToast.success("Garment added");
-//       }
-//     }
-    
-//     setShowGarmentModal(false);
-//   }, [garments, editingGarment]);
-
-//   const handleCustomerSelect = useCallback((customer) => {
-//     const fullName = getCustomerFullName(customer);
-//     const displayId = getCustomerDisplayId(customer);
-    
-//     setFormData(prev => ({
-//       ...prev,
-//       customer: customer._id
-//     }));
-
-//     let displayText = `${fullName} (${displayId})`;
-//     setSelectedCustomerDisplay(displayText);
-//     setSearchTerm(displayText);
-//     setShowCustomerDropdown(false);
-//   }, []);
-
-//   const handleSearchChange = useCallback((e) => {
-//     const value = e.target.value;
-//     setSearchTerm(value);
-//     setShowCustomerDropdown(true);
-    
-//     if (!value.trim()) {
-//       setFormData(prev => ({ ...prev, customer: "" }));
-//       setSelectedCustomerDisplay("");
-//     }
-//   }, []);
-
-//   // Payment Method Icon Component
-//   const PaymentMethodIcon = ({ method }) => {
-//     switch(method) {
-//       case 'cash':
-//         return <Banknote size={14} className="text-green-600" />;
-//       case 'upi':
-//         return <Smartphone size={14} className="text-blue-600" />;
-//       case 'bank-transfer':
-//         return <Landmark size={14} className="text-purple-600" />;
-//       case 'card':
-//         return <CreditCard size={14} className="text-orange-600" />;
-//       default:
-//         return <Wallet size={14} className="text-slate-600" />;
-//     }
-//   };
-
-//   // COMPLETELY FIXED handleSubmit with proper validation
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-    
-//     logDebug('normal', 'SUBMIT', 'Form submission started');
-//     setServerErrors(null);
-
-//     // Validation
-//     if (!formData.customer) {
-//       showToast.error("Please select a customer");
-//       return;
-//     }
-
-//     if (garments.length === 0) {
-//       showToast.error("Please add at least one garment");
-//       return;
-//     }
-
-//     if (!formData.deliveryDate) {
-//       showToast.error("Please select delivery date");
-//       return;
-//     }
-
-//     const finalUserId = userId;
-//     if (!finalUserId) {
-//       showToast.error("You must be logged in to create an order");
-//       return;
-//     }
-
-//     // Validate MongoDB IDs
-//     const customerIdValid = /^[0-9a-fA-F]{24}$/.test(formData.customer);
-//     const userIdValid = /^[0-9a-fA-F]{24}$/.test(finalUserId);
-
-//     if (!customerIdValid) {
-//       showToast.error("Invalid customer ID format");
-//       return;
-//     }
-
-//     if (!userIdValid) {
-//       showToast.error("Invalid user ID format. Please log in again.");
-//       return;
-//     }
-
-//     setIsSubmitting(true);
-
-//     try {
-//       // Map payment types to match model enum EXACTLY
-//       const mappedPayments = payments.map(payment => {
-//         let modelType = payment.type || 'advance';
-        
-//         if (modelType === 'partial') {
-//           modelType = 'part-payment';
-//         } else if (modelType === 'full') {
-//           modelType = 'final-settlement';
-//         }
-        
-//         const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-//         if (!validTypes.includes(modelType)) {
-//           console.error(`Invalid payment type after mapping: ${modelType}`);
-//           modelType = 'advance';
-//         }
-        
-//         return {
-//           amount: Number(payment.amount),
-//           type: modelType,
-//           method: payment.method || 'cash',
-//           referenceNumber: payment.referenceNumber || '',
-//           date: payment.date || new Date().toISOString().split('T')[0],
-//           notes: payment.notes || ''
-//         };
-//       });
-
-//       console.log("💰 Mapped Payments:", JSON.stringify(mappedPayments, null, 2));
-
-//       const validMethods = ['cash', 'upi', 'bank-transfer', 'card'];
-//       const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-      
-//       for (const payment of mappedPayments) {
-//         if (!validTypes.includes(payment.type)) {
-//           throw new Error(`Invalid payment type: ${payment.type}. Must be one of: ${validTypes.join(', ')}`);
-//         }
-//         if (!validMethods.includes(payment.method)) {
-//           throw new Error(`Invalid payment method: ${payment.method}`);
-//         }
-//         if (isNaN(payment.amount) || payment.amount <= 0) {
-//           throw new Error(`Invalid payment amount: ${payment.amount}`);
-//         }
-//       }
-
-//       const orderData = {
-//         customer: formData.customer,
-//         deliveryDate: formData.deliveryDate,
-//         specialNotes: formData.specialNotes || "",
-//         payments: mappedPayments,
-//         advancePayment: {
-//           amount: mappedPayments.length > 0 ? mappedPayments[0]?.amount || 0 : 0,
-//           method: mappedPayments.length > 0 ? mappedPayments[0]?.method || "cash" : "cash",
-//           date: new Date().toISOString()
-//         },
-//         priceSummary: {
-//           totalMin: Number(priceSummary.totalMin),
-//           totalMax: Number(priceSummary.totalMax)
-//         },
-//         balanceAmount: Number(balanceAmount.min),
-//         createdBy: finalUserId,
-//         status: "draft",
-//         orderDate: new Date().toISOString(),
-//         garments: []
-//       };
-
-//       const requiredFields = ['customer', 'deliveryDate', 'createdBy', 'priceSummary', 'balanceAmount', 'status', 'orderDate'];
-//       const missingFields = requiredFields.filter(field => !orderData[field]);
-      
-//       if (missingFields.length > 0) {
-//         throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
-//       }
-
-//       console.log("🔍 FINAL ORDER DATA BEING SENT:", JSON.stringify(orderData, null, 2));
-
-//       const result = await dispatch(createNewOrder(orderData)).unwrap();
-//       logDebug('normal', 'SUBMIT', 'Order created', result);
-      
-//       const orderId = result.order?._id || result._id;
-
-//       if (!orderId) {
-//         throw new Error("Order created but no ID returned");
-//       }
-
-//       for (const garment of garments) {
-//         const garmentFormData = new FormData();
-        
-//         garmentFormData.append("name", garment.name);
-//         garmentFormData.append("category", garment.category);
-//         garmentFormData.append("item", garment.item);
-//         garmentFormData.append("measurementTemplate", garment.measurementTemplate || "");
-//         garmentFormData.append("measurementSource", garment.measurementSource || "template");
-//         garmentFormData.append("measurements", JSON.stringify(garment.measurements || []));
-//         garmentFormData.append("additionalInfo", garment.additionalInfo || "");
-//         garmentFormData.append("estimatedDelivery", garment.estimatedDelivery || formData.deliveryDate);
-//         garmentFormData.append("priority", garment.priority || "normal");
-//         garmentFormData.append("priceRange", JSON.stringify({
-//           min: Number(garment.priceRange?.min) || 0,
-//           max: Number(garment.priceRange?.max) || 0
-//         }));
-//         garmentFormData.append("orderId", orderId);
-//         garmentFormData.append("createdBy", finalUserId);
-
-//         if (garment.referenceImages?.length > 0) {
-//           garment.referenceImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("referenceImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerImages?.length > 0) {
-//           garment.customerImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerClothImages?.length > 0) {
-//           garment.customerClothImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerClothImages", img);
-//             }
-//           });
-//         }
-
-//         await dispatch(createGarment({ orderId, garmentData: garmentFormData })).unwrap();
-//       }
-
-//       showToast.success("Order created successfully! 🎉");
-//       navigate(`${basePath}/orders`);
-//     } catch (error) {
-//       logError('createOrder', error, { 
-//         formData, 
-//         garmentsCount: garments.length,
-//         paymentsCount: payments.length 
-//       });
-      
-//       if (error.response?.data) {
-//         setServerErrors(error.response.data);
-//       }
-      
-//       let errorMessage = "Failed to create order";
-      
-//       if (error.response?.data?.message) {
-//         errorMessage = error.response.data.message;
-//       } else if (error.response?.data?.errors) {
-//         errorMessage = `Validation failed: ${error.response.data.errors.join(', ')}`;
-//       } else if (error.message) {
-//         errorMessage = error.message;
-//       }
-      
-//       showToast.error(errorMessage);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Enhanced Debug Panel
-//   const DebugPanel = () => {
-//     if (!DEBUG.SHOW_PANEL || process.env.NODE_ENV !== 'development') return null;
-    
-//     return (
-//       <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-[600px] border border-green-500/30">
-//         <div className="flex justify-between items-center mb-3 sticky top-0 bg-gray-900 pb-2 border-b border-gray-700">
-//           <div className="flex items-center gap-2">
-//             <Bug size={16} className="text-yellow-400" />
-//             <span className="font-bold text-yellow-400">DEBUG PANEL v3.0</span>
-//             <span className="text-xs bg-blue-600 px-2 py-0.5 rounded-full">DEV MODE</span>
-//           </div>
-//           <div className="flex gap-2">
-//             <button 
-//               onClick={() => window.location.reload()} 
-//               className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-//             >
-//               🔄 Refresh
-//             </button>
-//             <button 
-//               onClick={() => console.clear()} 
-//               className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-//             >
-//               🧹 Clear
-//             </button>
-//           </div>
-//         </div>
-        
-//         <div className="space-y-2 mb-3">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <Info size={14} /> STATE OVERVIEW
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Customer:</div>
-//             <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
-//               {formData.customer ? '✅ Selected' : '❌ Not selected'}
-//             </div>
-            
-//             <div className="text-gray-400">Customer ID:</div>
-//             <div className="font-mono text-xs">
-//               {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
-//             </div>
-            
-//             <div className="text-gray-400">ID Valid:</div>
-//             <div className={validateMongoId(formData.customer).valid ? 'text-green-400' : 'text-red-400'}>
-//               {validateMongoId(formData.customer).valid ? '✅' : '❌'}
-//             </div>
-            
-//             <div className="text-gray-400">Garments:</div>
-//             <div className="text-blue-400 font-bold">{garments.length}</div>
-            
-//             <div className="text-gray-400">Payments:</div>
-//             <div className="text-green-400 font-bold">{payments.length}</div>
-            
-//             <div className="text-gray-400">Total Paid:</div>
-//             <div className="text-green-400 font-bold">₹{totalPayments}</div>
-//           </div>
-//         </div>
-
-//         <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <User size={14} /> USER INFO
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">User ID:</div>
-//             <div className="font-mono">{userId ? `${userId.substring(0,8)}...` : '❌'}</div>
-            
-//             <div className="text-gray-400">ID Valid:</div>
-//             <div className={userIdValidation.valid ? 'text-green-400' : 'text-red-400'}>
-//               {userIdValidation.valid ? '✅' : '❌'}
-//             </div>
-            
-//             <div className="text-gray-400">Role:</div>
-//             <div className="text-purple-400">{userRole || 'N/A'}</div>
-            
-//             <div className="text-gray-400">Base Path:</div>
-//             <div className="text-blue-400">{basePath}</div>
-//           </div>
-//         </div>
-
-//         {/* ✅ NEW: Garment Form Props Debug */}
-//         <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <Package size={14} /> GARMENT FORM PROPS
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Customer ID passed:</div>
-//             <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
-//               {formData.customer ? '✅ Yes' : '❌ No'}
-//             </div>
-//             <div className="text-gray-400">Customer ID:</div>
-//             <div className="font-mono text-xs">
-//               {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
-//             </div>
-//             <div className="text-gray-400">Can add garments:</div>
-//             <div className={formData.customer ? 'text-green-400' : 'text-red-400'}>
-//               {formData.customer ? '✅ Yes' : '❌ Select customer first'}
-//             </div>
-//           </div>
-//         </div>
-
-//         {payments.length > 0 && (
-//           <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//             <div className="font-bold text-yellow-400 flex items-center gap-1">
-//               <Wallet size={14} /> PAYMENT DETAILS
-//             </div>
-//             {payments.map((p, idx) => {
-//               const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-//               const typeValid = validTypes.includes(p.type);
-              
-//               return (
-//                 <div key={p.tempId} className="bg-gray-800 p-2 rounded text-xs">
-//                   <div className="grid grid-cols-2 gap-1">
-//                     <span className="text-gray-400">#{idx+1}:</span>
-//                     <span className="text-green-400">₹{p.amount}</span>
-                    
-//                     <span className="text-gray-400">Type:</span>
-//                     <div className="flex items-center gap-1">
-//                       <span className={`${
-//                         p.type === 'advance' ? 'text-blue-400' :
-//                         p.type === 'part-payment' ? 'text-orange-400' :
-//                         p.type === 'final-settlement' ? 'text-green-400' : 
-//                         p.type === 'extra' ? 'text-purple-400' : 'text-red-400'
-//                       }`}>
-//                         {p.type}
-//                       </span>
-//                       {!typeValid && (
-//                         <span className="text-red-400 font-bold ml-1">❌ INVALID</span>
-//                       )}
-//                     </div>
-                    
-//                     <span className="text-gray-400">Method:</span>
-//                     <span className="capitalize">{p.method}</span>
-                    
-//                     <span className="text-gray-400">Will map to:</span>
-//                     <span className="text-yellow-400">
-//                       {p.type === 'partial' ? 'part-payment' : 
-//                        p.type === 'full' ? 'final-settlement' : p.type}
-//                     </span>
-//                   </div>
-//                 </div>
-//               );
-//             })}
-//           </div>
-//         )}
-
-//         <div className="space-y-2 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <IndianRupee size={14} /> PRICE SUMMARY
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Total Min:</div>
-//             <div className="text-blue-400">₹{priceSummary.totalMin}</div>
-//             <div className="text-gray-400">Total Max:</div>
-//             <div className="text-blue-400">₹{priceSummary.totalMax}</div>
-//             <div className="text-gray-400">Balance Min:</div>
-//             <div className="text-orange-400">₹{balanceAmount.min}</div>
-//             <div className="text-gray-400">Balance Max:</div>
-//             <div className="text-orange-400">₹{balanceAmount.max}</div>
-//           </div>
-//         </div>
-
-//         <div className="space-y-2 border-t border-gray-700 pt-2 mt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <CheckCircle size={14} /> VALIDATION STATUS
-//           </div>
-//           <div className="space-y-1 text-xs">
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Customer Selected:</span>
-//               {formData.customer ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Garments Added:</span>
-//               {garments.length > 0 ? 
-//                 <span className="text-green-400">✅ ({garments.length})</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Delivery Date:</span>
-//               {formData.deliveryDate ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">User Logged In:</span>
-//               {userId ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Payment Types Valid:</span>
-//               {payments.every(p => ['advance', 'part-payment', 'final-settlement', 'extra', 'partial', 'full'].includes(p.type)) ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//           </div>
-//         </div>
-
-//         {serverErrors && (
-//           <div className="space-y-2 border-t border-red-700 pt-2 mt-2">
-//             <div className="font-bold text-red-400 flex items-center gap-1">
-//               <AlertCircle size={14} /> SERVER ERRORS
-//             </div>
-//             <div className="bg-red-900/50 p-2 rounded text-xs text-red-300">
-//               <pre className="whitespace-pre-wrap">
-//                 {JSON.stringify(serverErrors, null, 2)}
-//               </pre>
-//             </div>
-//           </div>
-//         )}
-
-//         <div className="text-xs text-gray-500 mt-4 text-center border-t border-gray-700 pt-2">
-//           <div>Last updated: {new Date().toLocaleTimeString()}</div>
-//           <div>Log Level: {DEBUG.LOG_LEVEL}</div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   return (
-//     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 p-6">
-//       <DebugPanel />
-
-//       {/* Add Payment Modal */}
-//       {/* <AddPaymentModal
-//         isOpen={showPaymentModal}
-//         onClose={() => {
-//           setShowPaymentModal(false);
-//           setEditingPayment(null);
-//         }}
-//         onSave={handleSavePayment}
-//         orderTotal={priceSummary.totalMax}
-//         orderId="temp"
-//         customerId={formData.customer}
-//         initialData={editingPayment}
-//         title={editingPayment ? "Edit Payment" : "Add Payment"}
-//       /> */}
-
-
-
-
-// <AddPaymentModal
-//   isOpen={showPaymentModal}
-//   onClose={() => {
-//     setShowPaymentModal(false);
-//     setEditingPayment(null);
-//   }}
-//   onSave={handleSavePayment}
-//   orderTotalMin={priceSummary.totalMin}  // ✅ Changed
-//   orderTotalMax={priceSummary.totalMax}  // ✅ Added
-//   orderId="temp"
-//   customerId={formData.customer}
-//   initialData={editingPayment}
-//   title={editingPayment ? "Edit Payment" : "Add Payment"}
-// />
-//       {/* Header */}
-//       <div className="flex items-center gap-4">
-//         <button
-//           onClick={() => navigate(`${basePath}/orders`)}
-//           className="p-2 hover:bg-slate-100 rounded-xl transition-all"
-//         >
-//           <ArrowLeft size={20} className="text-slate-600" />
-//         </button>
-//         <div>
-//           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Create New Order</h1>
-//           <p className="text-slate-500">Add customer details and garments to create an order</p>
-//         </div>
-//       </div>
-
-//       {/* Main Form */}
-//       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-//         {/* Left Column - Customer & Order Details */}
-//         <div className="lg:col-span-2 space-y-6">
-//           {/* Customer Selection */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-//               <User size={20} className="text-blue-600" />
-//               Customer Details
-//             </h2>
-
-//             <div className="relative">
-//               <input
-//                 type="text"
-//                 placeholder="Search customer by name, phone or ID..."
-//                 value={searchTerm}
-//                 onChange={handleSearchChange}
-//                 onFocus={() => setShowCustomerDropdown(true)}
-//                 onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-//                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-//               />
-
-//               {showCustomerDropdown && (
-//                 <>
-//                   {customersLoading && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-//                       <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent"></div>
-//                       <p className="text-sm text-slate-500 mt-2">Loading customers...</p>
-//                     </div>
-//                   )}
-
-//                   {!customersLoading && filteredCustomers.length > 0 && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-//                       {filteredCustomers.map((customer) => {
-//                         const fullName = getCustomerFullName(customer);
-//                         const displayId = getCustomerDisplayId(customer);
-//                         const phone = getCustomerPhone(customer);
-                        
-//                         return (
-//                           <button
-//                             key={customer._id}
-//                             type="button"
-//                             onClick={() => handleCustomerSelect(customer)}
-//                             className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-100 last:border-0"
-//                           >
-//                             <p className="font-medium text-slate-800">{fullName}</p>
-//                             <p className="text-xs text-slate-400">
-//                               <span className="font-mono">{displayId}</span> • {phone}
-//                             </p>
-//                           </button>
-//                         );
-//                       })}
-//                     </div>
-//                   )}
-
-//                   {!customersLoading && filteredCustomers.length === 0 && searchTerm && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-//                       <p className="text-slate-500">No customers found</p>
-//                       <button
-//                         type="button"
-//                         onClick={() => navigate(`${basePath}/add-customer`)}
-//                         className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-//                       >
-//                         + Create new customer
-//                       </button>
-//                     </div>
-//                   )}
-//                 </>
-//               )}
-
-//               {formData.customer && !showCustomerDropdown && (
-//                 <div className="mt-2 text-xs text-green-600 font-medium">
-//                   ✓ Customer selected: {selectedCustomerDisplay}
-//                 </div>
-//               )}
-//             </div>
-
-//             {/* Special Notes */}
-//             <div className="mt-4">
-//               <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-//                 Special Notes
-//               </label>
-//               <textarea
-//                 value={formData.specialNotes}
-//                 onChange={(e) => setFormData({ ...formData, specialNotes: e.target.value })}
-//                 rows="3"
-//                 placeholder="Any special instructions for this order..."
-//                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
-//               />
-//             </div>
-//           </div>
-
-//           {/* Garments Section */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <div className="flex items-center justify-between mb-4">
-//               <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-//                 <Package size={20} className="text-blue-600" />
-//                 Garments
-//               </h2>
-//               <button
-//                 type="button"
-//                 onClick={handleAddGarment}
-//                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2"
-//               >
-//                 <Plus size={16} />
-//                 Add Garment
-//               </button>
-//             </div>
-
-//             {garments.length === 0 ? (
-//               <div className="text-center py-8 bg-slate-50 rounded-xl">
-//                 <Package size={40} className="mx-auto text-slate-300 mb-2" />
-//                 <p className="text-slate-500">No garments added yet</p>
-//                 <button
-//                   type="button"
-//                   onClick={handleAddGarment}
-//                   className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-//                 >
-//                   + Add your first garment
-//                 </button>
-//               </div>
-//             ) : (
-//               <div className="space-y-3">
-//                 {garments.map((garment, index) => (
-//                   <div
-//                     key={garment.tempId}
-//                     className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:shadow-md transition-all"
-//                   >
-//                     <div className="flex items-start justify-between">
-//                       <div className="flex-1">
-//                         <div className="flex items-center gap-2">
-//                           <h3 className="font-black text-slate-800">{garment.name}</h3>
-//                           <span className={`text-xs px-2 py-1 rounded-full ${
-//                             garment.priority === 'urgent' ? 'bg-red-100 text-red-600' :
-//                             garment.priority === 'high' ? 'bg-orange-100 text-orange-600' :
-//                             'bg-blue-100 text-blue-600'
-//                           }`}>
-//                             {garment.priority}
-//                           </span>
-//                           {(garment.referenceImages?.length > 0 || 
-//                             garment.customerImages?.length > 0 || 
-//                             garment.customerClothImages?.length > 0) && (
-//                             <span className="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded-full">
-//                               📸 {garment.referenceImages?.length || 0}/
-//                               {garment.customerImages?.length || 0}/
-//                               {garment.customerClothImages?.length || 0}
-//                             </span>
-//                           )}
-//                         </div>
-                        
-//                         <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
-//                           <div>
-//                             <p className="text-xs text-slate-400">Category/Item</p>
-//                             <p className="font-medium">{garment.category} / {garment.item}</p>
-//                           </div>
-                          
-//                           <div>
-//                             <p className="text-xs text-slate-400">Garment Delivery</p>
-//                             <p className="font-medium text-purple-600">
-//                               {garment.estimatedDelivery ? new Date(garment.estimatedDelivery).toLocaleDateString() : 'Not set'}
-//                             </p>
-//                           </div>
-                          
-//                           <div>
-//                             <p className="text-xs text-slate-400">Price Range</p>
-//                             <p className="font-medium">₹{garment.priceRange?.min} - ₹{garment.priceRange?.max}</p>
-//                           </div>
-//                         </div>
-                        
-//                         {garment.additionalInfo && (
-//                           <p className="text-sm text-slate-500 mt-2 italic">
-//                             Note: {garment.additionalInfo}
-//                           </p>
-//                         )}
-//                       </div>
-                      
-//                       <div className="flex gap-2 ml-4">
-//                         <button
-//                           type="button"
-//                           onClick={() => handleEditGarment(garment)}
-//                           className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
-//                           title="Edit"
-//                         >
-//                           Edit
-//                         </button>
-//                         <button
-//                           type="button"
-//                           onClick={() => handleDeleteGarment(index, garment)}
-//                           className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
-//                           title="Delete"
-//                         >
-//                           <Trash2 size={16} />
-//                         </button>
-//                       </div>
-//                     </div>
-//                   </div>
-//                 ))}
-//               </div>
-//             )}
-//           </div>
-
-//           {/* Delivery Date */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-//               <Calendar size={20} className="text-blue-600" />
-//               Order Delivery Details
-//             </h2>
-            
-//             <div>
-//               <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-//                 Expected Delivery Date <span className="text-red-500">*</span>
-//               </label>
-//               <div className="relative">
-//                 <Calendar className="absolute left-4 top-3.5 text-slate-400" size={18} />
-//                 <input
-//                   type="date"
-//                   value={formData.deliveryDate}
-//                   onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
-//                   min={new Date().toISOString().split("T")[0]}
-//                   className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-//                   required
-//                 />
-//               </div>
-//               <p className="text-xs text-slate-400 mt-2">
-//                 This is the overall order delivery date. Each garment can have its own estimated delivery date.
-//               </p>
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Right Column - Payment Summary */}
-//         <div className="lg:col-span-1">
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sticky top-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4">Price Summary</h2>
-            
-//             <div className="space-y-4">
-//               <div className="bg-blue-50 p-4 rounded-xl">
-//                 <p className="text-xs text-blue-600 font-black uppercase mb-1">Total Amount</p>
-//                 <p className="text-2xl font-black text-blue-700">
-//                   ₹{priceSummary.totalMin} - ₹{priceSummary.totalMax}
-//                 </p>
-//               </div>
-
-//               {/* Garment Delivery Range */}
-//               {garments.length > 0 && (
-//                 <div className="bg-purple-50 p-4 rounded-xl">
-//                   <p className="text-xs text-purple-600 font-black uppercase mb-1">
-//                     Garment Delivery Range
-//                   </p>
-//                   <p className="text-sm font-bold text-purple-700">
-//                     {new Date(Math.min(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()} - {new Date(Math.max(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()}
-//                   </p>
-//                 </div>
-//               )}
-
-//               {/* Payments Section */}
-//               <div className="border-t border-slate-100 pt-4">
-//                 <div className="flex items-center justify-between mb-3">
-//                   <h3 className="text-sm font-black text-slate-700">Payments</h3>
-//                   <button
-//                     type="button"
-//                     onClick={handleAddPayment}
-//                     className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1"
-//                   >
-//                     <Plus size={14} />
-//                     Add Payment
-//                   </button>
-//                 </div>
-
-//                 {payments.length === 0 ? (
-//                   <p className="text-sm text-slate-400 italic text-center py-2">
-//                     No payments added yet
-//                   </p>
-//                 ) : (
-//                   <div className="space-y-2 max-h-48 overflow-y-auto">
-//                     {payments.map((payment, index) => (
-//                       <div
-//                         key={payment.tempId}
-//                         className="bg-slate-50 rounded-lg p-3 border border-slate-200"
-//                       >
-//                         <div className="flex items-start justify-between">
-//                           <div className="flex-1">
-//                             <div className="flex items-center gap-2">
-//                               <p className="font-bold text-green-600">₹{payment.amount}</p>
-//                               <span className={`text-xs px-2 py-0.5 rounded-full ${
-//                                 payment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
-//                                 payment.type === 'part-payment' ? 'bg-orange-100 text-orange-700' :
-//                                 payment.type === 'final-settlement' ? 'bg-green-100 text-green-700' :
-//                                 'bg-purple-100 text-purple-700'
-//                               }`}>
-//                                 {payment.type === 'advance' ? 'Advance' :
-//                                  payment.type === 'part-payment' ? 'Part' :
-//                                  payment.type === 'final-settlement' ? 'Full' : 'Extra'}
-//                               </span>
-//                             </div>
-//                             <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-//                               <PaymentMethodIcon method={payment.method} />
-//                               <span className="capitalize">{payment.method}</span>
-//                             </div>
-//                             {payment.referenceNumber && (
-//                               <p className="text-xs text-purple-600 font-mono mt-0.5">
-//                                 Ref: {payment.referenceNumber}
-//                               </p>
-//                             )}
-//                             <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-//                               <span>{new Date(payment.date).toLocaleDateString()}</span>
-//                               <span>•</span>
-//                               <span>{payment.time}</span>
-//                             </div>
-//                             {payment.notes && (
-//                               <p className="text-xs text-slate-400 mt-1 italic">
-//                                 {payment.notes}
-//                               </p>
-//                             )}
-//                           </div>
-//                           <div className="flex gap-1 ml-2">
-//                             <button
-//                               type="button"
-//                               onClick={() => handleEditPayment(payment)}
-//                               className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
-//                               title="Edit"
-//                             >
-//                               Edit
-//                             </button>
-//                             <button
-//                               type="button"
-//                               onClick={() => handleDeletePayment(index)}
-//                               className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200"
-//                               title="Delete"
-//                             >
-//                               <Trash2 size={14} />
-//                             </button>
-//                           </div>
-//                         </div>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 )}
-
-//                 {payments.length > 0 && (
-//                   <div className="mt-3 pt-2 border-t border-slate-200">
-//                     <div className="flex justify-between text-sm">
-//                       <span className="font-medium text-slate-600">Total Paid:</span>
-//                       <span className="font-bold text-green-600">₹{totalPayments}</span>
-//                     </div>
-//                   </div>
-//                 )}
-//               </div>
-
-//               <div className="bg-orange-50 p-4 rounded-xl">
-//                 <p className="text-xs text-orange-600 font-black uppercase mb-1">Balance Amount</p>
-//                 <p className="text-xl font-black text-orange-700">
-//                   ₹{balanceAmount.min} - ₹{balanceAmount.max}
-//                 </p>
-//               </div>
-
-//               <button
-//                 type="submit"
-//                 disabled={isSubmitting || !userId}
-//                 className={`w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-4 rounded-xl font-black uppercase tracking-wider shadow-lg shadow-blue-500/30 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 mt-6 ${
-//                   isSubmitting || !userId ? 'opacity-50 cursor-not-allowed' : ''
-//                 }`}
-//               >
-//                 {isSubmitting ? (
-//                   <>
-//                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-//                     Creating...
-//                   </>
-//                 ) : !userId ? (
-//                   'Please log in to create order'
-//                 ) : (
-//                   <>
-//                     <Save size={18} />
-//                     Create Order
-//                   </>
-//                 )}
-//               </button>
-
-//               <button
-//                 type="button"
-//                 onClick={() => navigate(`${basePath}/orders`)}
-//                 className="w-full px-6 py-4 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-black uppercase tracking-wider transition-all"
-//               >
-//                 Cancel
-//               </button>
-//             </div>
-//           </div>
-//         </div>
-//       </form>
-
-//       {/* ✅ UPDATED: Garment Form Modal with customerId prop */}
-//       {showGarmentModal && (
-//         <GarmentForm
-//           onClose={() => setShowGarmentModal(false)}
-//           onSave={handleSaveGarment}
-//           editingGarment={editingGarment}
-//           customerId={formData.customer} // ✅ Pass selected customer ID
-//         />
-//       )}
-//     </div>
-//   );
-// }
-
-
-
-
-
-// import React, { useState, useEffect, useCallback, useMemo } from "react";
-// import { useDispatch, useSelector } from "react-redux";
-// import { useNavigate, useLocation } from "react-router-dom";
-// import {
-//   ArrowLeft,
-//   Save,
-//   Plus,
-//   Trash2,
-//   User,
-//   Calendar,
-//   CreditCard,
-//   IndianRupee,
-//   Package,
-//   Clock,
-//   Wallet,
-//   Banknote,
-//   Smartphone,
-//   Landmark,
-//   X,
-//   AlertCircle,
-//   CheckCircle,
-//   Info,
-//   Bug,
-// } from "lucide-react";
-// import { createNewOrder } from "../../../features/order/orderSlice";
-// import { createGarment } from "../../../features/garment/garmentSlice";
-// import { fetchAllCustomers } from "../../../features/customer/customerSlice";
-// import GarmentForm from "../garment/GarmentForm";
-// import AddPaymentModal from "../../../components/AddPaymentModal";
-// import showToast from "../../../utils/toast";
-
-// export default function NewOrder() {
-//   const dispatch = useDispatch();
-//   const navigate = useNavigate();
-//   const location = useLocation();
-  
-//   // Enhanced Debug configuration
-//   const DEBUG = {
-//     ENABLED: true,
-//     LOG_LEVEL: 'verbose',
-//     SHOW_PANEL: true,
-//     LOG_REDUX: true,
-//     LOG_API: true,
-//     LOG_VALIDATION: true,
-//     LOG_FORM_DATA: true
-//   };
-  
-//   // Debug logger
-//   const logDebug = (level, category, message, data = null) => {
-//     if (!DEBUG.ENABLED) return;
-    
-//     const levels = { minimal: 1, normal: 2, verbose: 3 };
-//     const currentLevel = levels[DEBUG.LOG_LEVEL] || 2;
-//     const msgLevel = levels[level] || 2;
-    
-//     if (msgLevel > currentLevel) return;
-    
-//     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-//     console.log(
-//       `%c[${timestamp}][${category}] ${message}`,
-//       `color: #00ff00; font-weight: bold;`,
-//       data || ''
-//     );
-//   };
-
-//   // Error logger
-//   const logError = (context, error, additionalData = {}) => {
-//     console.group(`❌ ERROR [${context}] - ${new Date().toISOString()}`);
-//     console.error('Error object:', error);
-//     console.error('Error message:', error?.message);
-    
-//     if (error?.response) {
-//       console.log('🔍 Response Data:', error.response.data);
-//       console.log('🔍 Status:', error.response.status);
-//       console.log('🔍 Status Text:', error.response.statusText);
-//       console.log('🔍 Headers:', error.response.headers);
-      
-//       if (error.response.data?.errors) {
-//         console.log('📋 Validation Errors:', error.response.data.errors);
-//       }
-//       if (error.response.data?.message) {
-//         console.log('📋 Server Message:', error.response.data.message);
-//       }
-//     }
-    
-//     if (error?.request) {
-//       console.log('📡 Request:', error.request);
-//     }
-    
-//     if (Object.keys(additionalData).length > 0) {
-//       console.log('📦 Additional Data:', additionalData);
-//     }
-    
-//     console.groupEnd();
-//   };
-
-//   // Validation helper
-//   const validateMongoId = (id) => {
-//     if (!id) return { valid: false, reason: 'ID is empty' };
-//     const isValid = /^[0-9a-fA-F]{24}$/.test(id);
-//     return { 
-//       valid: isValid, 
-//       reason: isValid ? 'Valid' : 'Invalid format - must be 24 hex characters' 
-//     };
-//   };
-
-//   // Get passed customer from Customer Page (if any)
-//   const passedCustomer = location.state?.customer;
-  
-//   logDebug('normal', 'INIT', 'Component initialized', {
-//     hasPassedCustomer: !!passedCustomer,
-//     passedCustomerId: passedCustomer?._id
-//   });
-
-//   useEffect(() => {
-//     logDebug('normal', 'LIFECYCLE', 'Component mounted');
-//     return () => logDebug('normal', 'LIFECYCLE', 'Component unmounted');
-//   }, []);
-
-//   // Fixed Redux selectors
-//   const { customers, loading: customersLoading } = useSelector((state) => {
-//     const customerData = state.customers?.customers || state.customer?.customers || [];
-//     const customersArray = Array.isArray(customerData) ? customerData : [];
-    
-//     return {
-//       customers: customersArray,
-//       loading: state.customers?.loading || state.customer?.loading || false
-//     };
-//   });
-
-//   // ✅ Add categories selector to get category names
-//   const { categories } = useSelector((state) => {
-//     const categoriesData = state.categories?.categories || [];
-//     return {
-//       categories: Array.isArray(categoriesData) ? categoriesData : []
-//     };
-//   });
-
-//   const { user } = useSelector((state) => {
-//     return { user: state.auth?.user };
-//   });
-  
-//   const [formData, setFormData] = useState({
-//     customer: "",
-//     deliveryDate: "",
-//     specialNotes: "",
-//     advancePayment: {
-//       amount: 0,
-//       method: "cash",
-//     },
-//   });
-
-//   // State for multiple payments
-//   const [payments, setPayments] = useState([]);
-//   const [showPaymentModal, setShowPaymentModal] = useState(false);
-//   const [editingPayment, setEditingPayment] = useState(null);
-
-//   const [garments, setGarments] = useState([]);
-//   const [showGarmentModal, setShowGarmentModal] = useState(false);
-//   const [editingGarment, setEditingGarment] = useState(null);
-//   const [searchTerm, setSearchTerm] = useState("");
-//   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-//   const [selectedCustomerDisplay, setSelectedCustomerDisplay] = useState("");
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-//   const [serverErrors, setServerErrors] = useState(null);
-
-//   // Get user ID
-//   const userId = user?.id || user?._id;
-//   const userRole = user?.role;
-
-//   // Validate user ID
-//   const userIdValidation = validateMongoId(userId);
-
-//   logDebug('normal', 'AUTH', 'User authentication details', {
-//     userId,
-//     userIdValid: userIdValidation.valid,
-//     userRole
-//   });
-
-//   // Get base path based on user role
-//   const basePath = user?.role === "ADMIN" ? "/admin" : 
-//                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
-//                    "/cuttingmaster";
-
-//   // Load customers on mount
-//   useEffect(() => {
-//     logDebug('normal', 'API', 'Fetching customers');
-//     dispatch(fetchAllCustomers())
-//       .unwrap()
-//       .then((result) => {
-//         logDebug('normal', 'API', 'Customers fetched', { count: result?.length });
-//       })
-//       .catch((error) => {
-//         logError('fetchCustomers', error);
-//         showToast.error("Failed to load customers");
-//       });
-//   }, [dispatch]);
-
-//   // AUTO-FILL LOGIC: When passedCustomer is available, auto-select them
-//   useEffect(() => {
-//     if (passedCustomer) {
-//       logDebug('normal', 'AUTO-FILL', 'Auto-filling customer', {
-//         passedCustomerId: passedCustomer._id
-//       });
-      
-//       const fullCustomer = customers?.find(c => c._id === passedCustomer._id) || passedCustomer;
-      
-//       setFormData(prev => ({
-//         ...prev,
-//         customer: fullCustomer._id
-//       }));
-
-//       const fullName = getCustomerFullName(fullCustomer);
-//       const displayId = getCustomerDisplayId(fullCustomer);
-//       let displayText = `${fullName} (${displayId})`;
-      
-//       setSelectedCustomerDisplay(displayText);
-//       setSearchTerm(displayText);
-//       setShowCustomerDropdown(false);
-//     }
-//   }, [passedCustomer, customers]);
-
-//   // Helper functions for customer display
-//   const getCustomerFullName = (customer) => {
-//     if (!customer) return 'Unknown Customer';
-    
-//     if (customer.firstName || customer.lastName) {
-//       const firstName = customer.firstName || '';
-//       const lastName = customer.lastName || '';
-//       const fullName = `${firstName} ${lastName}`.trim();
-//       if (fullName) return fullName;
-//     }
-    
-//     if (customer.name) return customer.name;
-    
-//     return 'Unknown Customer';
-//   };
-
-//   const getCustomerDisplayId = (customer) => {
-//     if (!customer) return '';
-//     return customer.customerId || customer._id?.slice(-6) || '';
-//   };
-
-//   const getCustomerPhone = (customer) => {
-//     if (!customer) return 'No phone';
-//     return customer.phone || customer.whatsappNumber || 'No phone';
-//   };
-
-//   // Filter customers
-//   const filteredCustomers = useMemo(() => {
-//     if (!customers || !Array.isArray(customers) || customers.length === 0) {
-//       return [];
-//     }
-    
-//     if (formData.customer && searchTerm === selectedCustomerDisplay) {
-//       return [];
-//     }
-    
-//     return customers.filter(customer => {
-//       if (!customer) return false;
-
-//       const fullName = getCustomerFullName(customer).toLowerCase();
-//       const customerId = getCustomerDisplayId(customer).toLowerCase();
-//       const phone = getCustomerPhone(customer).toLowerCase();
-//       const firstName = (customer.firstName || '').toLowerCase();
-//       const lastName = (customer.lastName || '').toLowerCase();
-      
-//       const searchLower = searchTerm.toLowerCase();
-      
-//       return fullName.includes(searchLower) ||
-//              firstName.includes(searchLower) ||
-//              lastName.includes(searchLower) ||
-//              phone.includes(searchLower) ||
-//              customerId.includes(searchLower);
-//     });
-//   }, [customers, searchTerm, formData.customer, selectedCustomerDisplay]);
-
-//   // Calculate total payments
-//   const totalPayments = useMemo(() => {
-//     return payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-//   }, [payments]);
-
-//   // Calculate price summary
-//   const priceSummary = useMemo(() => {
-//     const totalMin = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.min || 0);
-//     }, 0);
-    
-//     const totalMax = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.max || 0);
-//     }, 0);
-    
-//     return { totalMin, totalMax };
-//   }, [garments]);
-
-//   // Calculate balance
-//   const balanceAmount = useMemo(() => {
-//     return {
-//       min: Number(priceSummary.totalMin) - totalPayments,
-//       max: Number(priceSummary.totalMax) - totalPayments,
-//     };
-//   }, [priceSummary, totalPayments]);
-
-//   // Payment handlers
-//   const handleAddPayment = useCallback(() => {
-//     setEditingPayment(null);
-//     setShowPaymentModal(true);
-//   }, []);
-
-//   const handleEditPayment = useCallback((payment) => {
-//     setEditingPayment(payment);
-//     setShowPaymentModal(true);
-//   }, []);
-
-//   const handleDeletePayment = useCallback((index) => {
-//     if (window.confirm("Are you sure you want to delete this payment?")) {
-//       const newPayments = [...payments];
-//       newPayments.splice(index, 1);
-//       setPayments(newPayments);
-//       showToast.success("Payment removed");
-//     }
-//   }, [payments]);
-
-//   // Handle Save Payment with proper type mapping
-//   const handleSavePayment = useCallback((paymentData) => {
-//     logDebug('normal', 'PAYMENT', 'Saving payment', { 
-//       isEdit: !!editingPayment,
-//       paymentData
-//     });
-    
-//     // Map frontend type to backend enum
-//     let backendType = paymentData.type || 'advance';
-//     if (backendType === 'partial') {
-//       backendType = 'part-payment';
-//     } else if (backendType === 'full') {
-//       backendType = 'final-settlement';
-//     }
-    
-//     const paymentWithMappedType = {
-//       ...paymentData,
-//       type: backendType,
-//       date: paymentData.paymentDate || paymentData.date || new Date().toISOString().split('T')[0],
-//       time: paymentData.paymentTime || paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false })
-//     };
-    
-//     if (editingPayment) {
-//       // Update existing payment
-//       const index = payments.findIndex(p => p.tempId === editingPayment.tempId);
-//       if (index !== -1) {
-//         const newPayments = [...payments];
-//         newPayments[index] = { 
-//           ...paymentWithMappedType, 
-//           tempId: editingPayment.tempId
-//         };
-//         setPayments(newPayments);
-//         showToast.success("Payment updated");
-//       }
-//     } else {
-//       // Add new payment
-//       const newPayment = {
-//         ...paymentWithMappedType,
-//         tempId: Date.now() + Math.random()
-//       };
-//       setPayments([...payments, newPayment]);
-//       showToast.success("Payment added");
-//     }
-    
-//     setShowPaymentModal(false);
-//     setEditingPayment(null);
-//   }, [payments, editingPayment]);
-
-//   // ✅ UPDATED: Garment handlers with customer validation
-//   const handleAddGarment = useCallback(() => {
-//     // Validate customer selected first
-//     if (!formData.customer) {
-//       showToast.error("Please select a customer first before adding garments");
-//       return;
-//     }
-    
-//     setEditingGarment(null);
-//     setShowGarmentModal(true);
-//   }, [formData.customer]);
-
-//   const handleEditGarment = useCallback((garment) => {
-//     setEditingGarment(garment);
-//     setShowGarmentModal(true);
-//   }, []);
-
-//   const handleDeleteGarment = useCallback((index, garment) => {
-//     if (window.confirm(`Are you sure you want to remove ${garment.name || 'this garment'}?`)) {
-//       const newGarments = [...garments];
-//       newGarments.splice(index, 1);
-//       setGarments(newGarments);
-//       showToast.success("Garment removed");
-//     }
-//   }, [garments]);
-
-//   // Handle Save Garment
-//   const handleSaveGarment = useCallback((garmentData) => {
-//     logDebug('normal', 'GARMENT', 'Saving garment', {
-//       isEdit: !!editingGarment
-//     });
-    
-//     if (garmentData instanceof FormData) {
-//       // Convert FormData to object
-//       const garmentObj = {
-//         tempId: editingGarment?.tempId || Date.now() + Math.random(),
-//         referenceImages: [],
-//         customerImages: [],
-//         customerClothImages: []
-//       };
-      
-//       for (let [key, value] of garmentData.entries()) {
-//         if (value instanceof File) {
-//           if (key === 'referenceImages') {
-//             garmentObj.referenceImages.push(value);
-//           } else if (key === 'customerImages') {
-//             garmentObj.customerImages.push(value);
-//           } else if (key === 'customerClothImages') {
-//             garmentObj.customerClothImages.push(value);
-//           }
-//         } else {
-//           if (key === 'measurements' || key === 'priceRange') {
-//             try {
-//               garmentObj[key] = JSON.parse(value);
-//             } catch (e) {
-//               garmentObj[key] = value;
-//             }
-//           } else {
-//             garmentObj[key] = value;
-//           }
-//         }
-//       }
-      
-//       if (editingGarment) {
-//         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-//         if (index !== -1) {
-//           const newGarments = [...garments];
-//           newGarments[index] = garmentObj;
-//           setGarments(newGarments);
-//           showToast.success("Garment updated");
-//         }
-//       } else {
-//         setGarments([...garments, garmentObj]);
-//         showToast.success("Garment added");
-//       }
-//     } else {
-//       if (editingGarment) {
-//         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-//         if (index !== -1) {
-//           const newGarments = [...garments];
-//           newGarments[index] = { ...garmentData, tempId: editingGarment.tempId };
-//           setGarments(newGarments);
-//           showToast.success("Garment updated");
-//         }
-//       } else {
-//         const newGarment = {
-//           ...garmentData,
-//           tempId: Date.now() + Math.random()
-//         };
-//         setGarments([...garments, newGarment]);
-//         showToast.success("Garment added");
-//       }
-//     }
-    
-//     setShowGarmentModal(false);
-//   }, [garments, editingGarment]);
-
-//   const handleCustomerSelect = useCallback((customer) => {
-//     const fullName = getCustomerFullName(customer);
-//     const displayId = getCustomerDisplayId(customer);
-    
-//     setFormData(prev => ({
-//       ...prev,
-//       customer: customer._id
-//     }));
-
-//     let displayText = `${fullName} (${displayId})`;
-//     setSelectedCustomerDisplay(displayText);
-//     setSearchTerm(displayText);
-//     setShowCustomerDropdown(false);
-//   }, []);
-
-//   const handleSearchChange = useCallback((e) => {
-//     const value = e.target.value;
-//     setSearchTerm(value);
-//     setShowCustomerDropdown(true);
-    
-//     if (!value.trim()) {
-//       setFormData(prev => ({ ...prev, customer: "" }));
-//       setSelectedCustomerDisplay("");
-//     }
-//   }, []);
-
-//   // ✅ Helper function to get category name from ID
-//   const getCategoryName = useCallback((categoryId) => {
-//     if (!categoryId) return 'Unknown';
-//     const category = categories?.find(c => c._id === categoryId);
-//     return category?.name || category?.categoryName || categoryId;
-//   }, [categories]);
-
-//   // ✅ Helper function to get item name from garment object
-//   const getItemName = useCallback((garment) => {
-//     // First check if itemName is directly available (from GarmentForm)
-//     if (garment.itemName) return garment.itemName;
-    
-//     // If not, try to find in categories
-//     if (garment.item && categories) {
-//       for (const category of categories) {
-//         if (category.items && Array.isArray(category.items)) {
-//           const foundItem = category.items.find(item => 
-//             item._id === garment.item || item._id?.toString() === garment.item?.toString()
-//           );
-//           if (foundItem) return foundItem.name || foundItem.itemName;
-//         }
-//       }
-//     }
-    
-//     return garment.item || 'Unknown';
-//   }, [categories]);
-
-//   // Payment Method Icon Component
-//   const PaymentMethodIcon = ({ method }) => {
-//     switch(method) {
-//       case 'cash':
-//         return <Banknote size={14} className="text-green-600" />;
-//       case 'upi':
-//         return <Smartphone size={14} className="text-blue-600" />;
-//       case 'bank-transfer':
-//         return <Landmark size={14} className="text-purple-600" />;
-//       case 'card':
-//         return <CreditCard size={14} className="text-orange-600" />;
-//       default:
-//         return <Wallet size={14} className="text-slate-600" />;
-//     }
-//   };
-
-//   // COMPLETELY FIXED handleSubmit with proper validation
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-    
-//     logDebug('normal', 'SUBMIT', 'Form submission started');
-//     setServerErrors(null);
-
-//     // Validation
-//     if (!formData.customer) {
-//       showToast.error("Please select a customer");
-//       return;
-//     }
-
-//     if (garments.length === 0) {
-//       showToast.error("Please add at least one garment");
-//       return;
-//     }
-
-//     if (!formData.deliveryDate) {
-//       showToast.error("Please select delivery date");
-//       return;
-//     }
-
-//     const finalUserId = userId;
-//     if (!finalUserId) {
-//       showToast.error("You must be logged in to create an order");
-//       return;
-//     }
-
-//     // Validate MongoDB IDs
-//     const customerIdValid = /^[0-9a-fA-F]{24}$/.test(formData.customer);
-//     const userIdValid = /^[0-9a-fA-F]{24}$/.test(finalUserId);
-
-//     if (!customerIdValid) {
-//       showToast.error("Invalid customer ID format");
-//       return;
-//     }
-
-//     if (!userIdValid) {
-//       showToast.error("Invalid user ID format. Please log in again.");
-//       return;
-//     }
-
-//     setIsSubmitting(true);
-
-//     try {
-//       // Map payment types to match model enum EXACTLY
-//       const mappedPayments = payments.map(payment => {
-//         let modelType = payment.type || 'advance';
-        
-//         if (modelType === 'partial') {
-//           modelType = 'part-payment';
-//         } else if (modelType === 'full') {
-//           modelType = 'final-settlement';
-//         }
-        
-//         const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-//         if (!validTypes.includes(modelType)) {
-//           console.error(`Invalid payment type after mapping: ${modelType}`);
-//           modelType = 'advance';
-//         }
-        
-//         return {
-//           amount: Number(payment.amount),
-//           type: modelType,
-//           method: payment.method || 'cash',
-//           referenceNumber: payment.referenceNumber || '',
-//           date: payment.date || new Date().toISOString().split('T')[0],
-//           notes: payment.notes || ''
-//         };
-//       });
-
-//       console.log("💰 Mapped Payments:", JSON.stringify(mappedPayments, null, 2));
-
-//       const validMethods = ['cash', 'upi', 'bank-transfer', 'card'];
-//       const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-      
-//       for (const payment of mappedPayments) {
-//         if (!validTypes.includes(payment.type)) {
-//           throw new Error(`Invalid payment type: ${payment.type}. Must be one of: ${validTypes.join(', ')}`);
-//         }
-//         if (!validMethods.includes(payment.method)) {
-//           throw new Error(`Invalid payment method: ${payment.method}`);
-//         }
-//         if (isNaN(payment.amount) || payment.amount <= 0) {
-//           throw new Error(`Invalid payment amount: ${payment.amount}`);
-//         }
-//       }
-
-//       const orderData = {
-//         customer: formData.customer,
-//         deliveryDate: formData.deliveryDate,
-//         specialNotes: formData.specialNotes || "",
-//         payments: mappedPayments,
-//         advancePayment: {
-//           amount: mappedPayments.length > 0 ? mappedPayments[0]?.amount || 0 : 0,
-//           method: mappedPayments.length > 0 ? mappedPayments[0]?.method || "cash" : "cash",
-//           date: new Date().toISOString()
-//         },
-//         priceSummary: {
-//           totalMin: Number(priceSummary.totalMin),
-//           totalMax: Number(priceSummary.totalMax)
-//         },
-//         balanceAmount: Number(balanceAmount.min),
-//         createdBy: finalUserId,
-//         status: "draft",
-//         orderDate: new Date().toISOString(),
-//         garments: []
-//       };
-
-//       const requiredFields = ['customer', 'deliveryDate', 'createdBy', 'priceSummary', 'balanceAmount', 'status', 'orderDate'];
-//       const missingFields = requiredFields.filter(field => !orderData[field]);
-      
-//       if (missingFields.length > 0) {
-//         throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
-//       }
-
-//       console.log("🔍 FINAL ORDER DATA BEING SENT:", JSON.stringify(orderData, null, 2));
-
-//       const result = await dispatch(createNewOrder(orderData)).unwrap();
-//       logDebug('normal', 'SUBMIT', 'Order created', result);
-      
-//       const orderId = result.order?._id || result._id;
-
-//       if (!orderId) {
-//         throw new Error("Order created but no ID returned");
-//       }
-
-//       for (const garment of garments) {
-//         const garmentFormData = new FormData();
-        
-//         garmentFormData.append("name", garment.name);
-//         garmentFormData.append("category", garment.category);
-//         garmentFormData.append("item", garment.item);
-        
-//         // ✅ Add categoryName and itemName if available
-//         if (garment.categoryName) {
-//           garmentFormData.append("categoryName", garment.categoryName);
-//         }
-        
-//         if (garment.itemName) {
-//           garmentFormData.append("itemName", garment.itemName);
-//         }
-        
-//         garmentFormData.append("measurementTemplate", garment.measurementTemplate || "");
-//         garmentFormData.append("measurementSource", garment.measurementSource || "template");
-//         garmentFormData.append("measurements", JSON.stringify(garment.measurements || []));
-//         garmentFormData.append("additionalInfo", garment.additionalInfo || "");
-//         garmentFormData.append("estimatedDelivery", garment.estimatedDelivery || formData.deliveryDate);
-//         garmentFormData.append("priority", garment.priority || "normal");
-//         garmentFormData.append("priceRange", JSON.stringify({
-//           min: Number(garment.priceRange?.min) || 0,
-//           max: Number(garment.priceRange?.max) || 0
-//         }));
-//         garmentFormData.append("orderId", orderId);
-//         garmentFormData.append("createdBy", finalUserId);
-
-//         if (garment.referenceImages?.length > 0) {
-//           garment.referenceImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("referenceImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerImages?.length > 0) {
-//           garment.customerImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerClothImages?.length > 0) {
-//           garment.customerClothImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerClothImages", img);
-//             }
-//           });
-//         }
-
-//         await dispatch(createGarment({ orderId, garmentData: garmentFormData })).unwrap();
-//       }
-
-//       showToast.success("Order created successfully! 🎉");
-//       navigate(`${basePath}/orders`);
-//     } catch (error) {
-//       logError('createOrder', error, { 
-//         formData, 
-//         garmentsCount: garments.length,
-//         paymentsCount: payments.length 
-//       });
-      
-//       if (error.response?.data) {
-//         setServerErrors(error.response.data);
-//       }
-      
-//       let errorMessage = "Failed to create order";
-      
-//       if (error.response?.data?.message) {
-//         errorMessage = error.response.data.message;
-//       } else if (error.response?.data?.errors) {
-//         errorMessage = `Validation failed: ${error.response.data.errors.join(', ')}`;
-//       } else if (error.message) {
-//         errorMessage = error.message;
-//       }
-      
-//       showToast.error(errorMessage);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Enhanced Debug Panel
-//   const DebugPanel = () => {
-//     if (!DEBUG.SHOW_PANEL || process.env.NODE_ENV !== 'development') return null;
-    
-//     return (
-//       <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-[600px] border border-green-500/30">
-//         <div className="flex justify-between items-center mb-3 sticky top-0 bg-gray-900 pb-2 border-b border-gray-700">
-//           <div className="flex items-center gap-2">
-//             <Bug size={16} className="text-yellow-400" />
-//             <span className="font-bold text-yellow-400">DEBUG PANEL v3.0</span>
-//             <span className="text-xs bg-blue-600 px-2 py-0.5 rounded-full">DEV MODE</span>
-//           </div>
-//           <div className="flex gap-2">
-//             <button 
-//               onClick={() => window.location.reload()} 
-//               className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-//             >
-//               🔄 Refresh
-//             </button>
-//             <button 
-//               onClick={() => console.clear()} 
-//               className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-//             >
-//               🧹 Clear
-//             </button>
-//           </div>
-//         </div>
-        
-//         <div className="space-y-2 mb-3">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <Info size={14} /> STATE OVERVIEW
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Customer:</div>
-//             <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
-//               {formData.customer ? '✅ Selected' : '❌ Not selected'}
-//             </div>
-            
-//             <div className="text-gray-400">Customer ID:</div>
-//             <div className="font-mono text-xs">
-//               {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
-//             </div>
-            
-//             <div className="text-gray-400">ID Valid:</div>
-//             <div className={validateMongoId(formData.customer).valid ? 'text-green-400' : 'text-red-400'}>
-//               {validateMongoId(formData.customer).valid ? '✅' : '❌'}
-//             </div>
-            
-//             <div className="text-gray-400">Garments:</div>
-//             <div className="text-blue-400 font-bold">{garments.length}</div>
-            
-//             <div className="text-gray-400">Payments:</div>
-//             <div className="text-green-400 font-bold">{payments.length}</div>
-            
-//             <div className="text-gray-400">Total Paid:</div>
-//             <div className="text-green-400 font-bold">₹{totalPayments}</div>
-//           </div>
-//         </div>
-
-//         <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <User size={14} /> USER INFO
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">User ID:</div>
-//             <div className="font-mono">{userId ? `${userId.substring(0,8)}...` : '❌'}</div>
-            
-//             <div className="text-gray-400">ID Valid:</div>
-//             <div className={userIdValidation.valid ? 'text-green-400' : 'text-red-400'}>
-//               {userIdValidation.valid ? '✅' : '❌'}
-//             </div>
-            
-//             <div className="text-gray-400">Role:</div>
-//             <div className="text-purple-400">{userRole || 'N/A'}</div>
-            
-//             <div className="text-gray-400">Base Path:</div>
-//             <div className="text-blue-400">{basePath}</div>
-//           </div>
-//         </div>
-
-//         {/* ✅ NEW: Garment Form Props Debug */}
-//         <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <Package size={14} /> GARMENT FORM PROPS
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Customer ID passed:</div>
-//             <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
-//               {formData.customer ? '✅ Yes' : '❌ No'}
-//             </div>
-//             <div className="text-gray-400">Customer ID:</div>
-//             <div className="font-mono text-xs">
-//               {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
-//             </div>
-//             <div className="text-gray-400">Can add garments:</div>
-//             <div className={formData.customer ? 'text-green-400' : 'text-red-400'}>
-//               {formData.customer ? '✅ Yes' : '❌ Select customer first'}
-//             </div>
-//           </div>
-//         </div>
-
-//         {payments.length > 0 && (
-//           <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//             <div className="font-bold text-yellow-400 flex items-center gap-1">
-//               <Wallet size={14} /> PAYMENT DETAILS
-//             </div>
-//             {payments.map((p, idx) => {
-//               const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-//               const typeValid = validTypes.includes(p.type);
-              
-//               return (
-//                 <div key={p.tempId} className="bg-gray-800 p-2 rounded text-xs">
-//                   <div className="grid grid-cols-2 gap-1">
-//                     <span className="text-gray-400">#{idx+1}:</span>
-//                     <span className="text-green-400">₹{p.amount}</span>
-                    
-//                     <span className="text-gray-400">Type:</span>
-//                     <div className="flex items-center gap-1">
-//                       <span className={`${
-//                         p.type === 'advance' ? 'text-blue-400' :
-//                         p.type === 'part-payment' ? 'text-orange-400' :
-//                         p.type === 'final-settlement' ? 'text-green-400' : 
-//                         p.type === 'extra' ? 'text-purple-400' : 'text-red-400'
-//                       }`}>
-//                         {p.type}
-//                       </span>
-//                       {!typeValid && (
-//                         <span className="text-red-400 font-bold ml-1">❌ INVALID</span>
-//                       )}
-//                     </div>
-                    
-//                     <span className="text-gray-400">Method:</span>
-//                     <span className="capitalize">{p.method}</span>
-                    
-//                     <span className="text-gray-400">Will map to:</span>
-//                     <span className="text-yellow-400">
-//                       {p.type === 'partial' ? 'part-payment' : 
-//                        p.type === 'full' ? 'final-settlement' : p.type}
-//                     </span>
-//                   </div>
-//                 </div>
-//               );
-//             })}
-//           </div>
-//         )}
-
-//         <div className="space-y-2 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <IndianRupee size={14} /> PRICE SUMMARY
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Total Min:</div>
-//             <div className="text-blue-400">₹{priceSummary.totalMin}</div>
-//             <div className="text-gray-400">Total Max:</div>
-//             <div className="text-blue-400">₹{priceSummary.totalMax}</div>
-//             <div className="text-gray-400">Balance Min:</div>
-//             <div className="text-orange-400">₹{balanceAmount.min}</div>
-//             <div className="text-gray-400">Balance Max:</div>
-//             <div className="text-orange-400">₹{balanceAmount.max}</div>
-//           </div>
-//         </div>
-
-//         <div className="space-y-2 border-t border-gray-700 pt-2 mt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <CheckCircle size={14} /> VALIDATION STATUS
-//           </div>
-//           <div className="space-y-1 text-xs">
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Customer Selected:</span>
-//               {formData.customer ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Garments Added:</span>
-//               {garments.length > 0 ? 
-//                 <span className="text-green-400">✅ ({garments.length})</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Delivery Date:</span>
-//               {formData.deliveryDate ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">User Logged In:</span>
-//               {userId ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Payment Types Valid:</span>
-//               {payments.every(p => ['advance', 'part-payment', 'final-settlement', 'extra', 'partial', 'full'].includes(p.type)) ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//           </div>
-//         </div>
-
-//         {serverErrors && (
-//           <div className="space-y-2 border-t border-red-700 pt-2 mt-2">
-//             <div className="font-bold text-red-400 flex items-center gap-1">
-//               <AlertCircle size={14} /> SERVER ERRORS
-//             </div>
-//             <div className="bg-red-900/50 p-2 rounded text-xs text-red-300">
-//               <pre className="whitespace-pre-wrap">
-//                 {JSON.stringify(serverErrors, null, 2)}
-//               </pre>
-//             </div>
-//           </div>
-//         )}
-
-//         <div className="text-xs text-gray-500 mt-4 text-center border-t border-gray-700 pt-2">
-//           <div>Last updated: {new Date().toLocaleTimeString()}</div>
-//           <div>Log Level: {DEBUG.LOG_LEVEL}</div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   return (
-//     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 p-6">
-//       <DebugPanel />
-
-//       {/* Add Payment Modal */}
-//       <AddPaymentModal
-//         isOpen={showPaymentModal}
-//         onClose={() => {
-//           setShowPaymentModal(false);
-//           setEditingPayment(null);
-//         }}
-//         onSave={handleSavePayment}
-//         orderTotalMin={priceSummary.totalMin}
-//         orderTotalMax={priceSummary.totalMax}
-//         orderId="temp"
-//         customerId={formData.customer}
-//         initialData={editingPayment}
-//         title={editingPayment ? "Edit Payment" : "Add Payment"}
-//       />
-
-//       {/* Header */}
-//       <div className="flex items-center gap-4">
-//         <button
-//           onClick={() => navigate(`${basePath}/orders`)}
-//           className="p-2 hover:bg-slate-100 rounded-xl transition-all"
-//         >
-//           <ArrowLeft size={20} className="text-slate-600" />
-//         </button>
-//         <div>
-//           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Create New Order</h1>
-//           <p className="text-slate-500">Add customer details and garments to create an order</p>
-//         </div>
-//       </div>
-
-//       {/* Main Form */}
-//       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-//         {/* Left Column - Customer & Order Details */}
-//         <div className="lg:col-span-2 space-y-6">
-//           {/* Customer Selection */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-//               <User size={20} className="text-blue-600" />
-//               Customer Details
-//             </h2>
-
-//             <div className="relative">
-//               <input
-//                 type="text"
-//                 placeholder="Search customer by name, phone or ID..."
-//                 value={searchTerm}
-//                 onChange={handleSearchChange}
-//                 onFocus={() => setShowCustomerDropdown(true)}
-//                 onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-//                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-//               />
-
-//               {showCustomerDropdown && (
-//                 <>
-//                   {customersLoading && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-//                       <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent"></div>
-//                       <p className="text-sm text-slate-500 mt-2">Loading customers...</p>
-//                     </div>
-//                   )}
-
-//                   {!customersLoading && filteredCustomers.length > 0 && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-//                       {filteredCustomers.map((customer) => {
-//                         const fullName = getCustomerFullName(customer);
-//                         const displayId = getCustomerDisplayId(customer);
-//                         const phone = getCustomerPhone(customer);
-                        
-//                         return (
-//                           <button
-//                             key={customer._id}
-//                             type="button"
-//                             onClick={() => handleCustomerSelect(customer)}
-//                             className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-100 last:border-0"
-//                           >
-//                             <p className="font-medium text-slate-800">{fullName}</p>
-//                             <p className="text-xs text-slate-400">
-//                               <span className="font-mono">{displayId}</span> • {phone}
-//                             </p>
-//                           </button>
-//                         );
-//                       })}
-//                     </div>
-//                   )}
-
-//                   {!customersLoading && filteredCustomers.length === 0 && searchTerm && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-//                       <p className="text-slate-500">No customers found</p>
-//                       <button
-//                         type="button"
-//                         onClick={() => navigate(`${basePath}/add-customer`)}
-//                         className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-//                       >
-//                         + Create new customer
-//                       </button>
-//                     </div>
-//                   )}
-//                 </>
-//               )}
-
-//               {formData.customer && !showCustomerDropdown && (
-//                 <div className="mt-2 text-xs text-green-600 font-medium">
-//                   ✓ Customer selected: {selectedCustomerDisplay}
-//                 </div>
-//               )}
-//             </div>
-
-//             {/* Special Notes */}
-//             <div className="mt-4">
-//               <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-//                 Special Notes
-//               </label>
-//               <textarea
-//                 value={formData.specialNotes}
-//                 onChange={(e) => setFormData({ ...formData, specialNotes: e.target.value })}
-//                 rows="3"
-//                 placeholder="Any special instructions for this order..."
-//                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
-//               />
-//             </div>
-//           </div>
-
-//           {/* Garments Section - UPDATED with Category/Item Names */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <div className="flex items-center justify-between mb-4">
-//               <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-//                 <Package size={20} className="text-blue-600" />
-//                 Garments
-//               </h2>
-//               <button
-//                 type="button"
-//                 onClick={handleAddGarment}
-//                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2"
-//               >
-//                 <Plus size={16} />
-//                 Add Garment
-//               </button>
-//             </div>
-
-//             {garments.length === 0 ? (
-//               <div className="text-center py-8 bg-slate-50 rounded-xl">
-//                 <Package size={40} className="mx-auto text-slate-300 mb-2" />
-//                 <p className="text-slate-500">No garments added yet</p>
-//                 <button
-//                   type="button"
-//                   onClick={handleAddGarment}
-//                   className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-//                 >
-//                   + Add your first garment
-//                 </button>
-//               </div>
-//             ) : (
-//               <div className="space-y-3">
-//                 {garments.map((garment, index) => {
-//                   // Get category name
-//                   const categoryName = garment.categoryName || getCategoryName(garment.category);
-                  
-//                   // Get item name
-//                   const itemName = garment.itemName || getItemName(garment);
-                  
-//                   return (
-//                     <div
-//                       key={garment.tempId}
-//                       className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:shadow-md transition-all"
-//                     >
-//                       <div className="flex items-start justify-between">
-//                         <div className="flex-1">
-//                           <div className="flex items-center gap-2">
-//                             <h3 className="font-black text-slate-800">{garment.name}</h3>
-//                             <span className={`text-xs px-2 py-1 rounded-full ${
-//                               garment.priority === 'urgent' ? 'bg-red-100 text-red-600' :
-//                               garment.priority === 'high' ? 'bg-orange-100 text-orange-600' :
-//                               'bg-blue-100 text-blue-600'
-//                             }`}>
-//                               {garment.priority}
-//                             </span>
-//                             {(garment.referenceImages?.length > 0 || 
-//                               garment.customerImages?.length > 0 || 
-//                               garment.customerClothImages?.length > 0) && (
-//                               <span className="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded-full">
-//                                 📸 {garment.referenceImages?.length || 0}/
-//                                 {garment.customerImages?.length || 0}/
-//                                 {garment.customerClothImages?.length || 0}
-//                               </span>
-//                             )}
-//                           </div>
-                          
-//                           <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
-//                             {/* ✅ UPDATED: Show Category/Item Names instead of IDs */}
-//                             <div>
-//                               <p className="text-xs text-slate-400">Category/Item</p>
-//                               <p className="font-medium text-blue-700">
-//                                 {categoryName} / {itemName}
-//                               </p>
-//                               {/* Optional: Show IDs in small text for debugging */}
-//                               {process.env.NODE_ENV === 'development' && (
-//                                 <p className="text-xs text-slate-300 font-mono mt-0.5">
-//                                   {garment.category?.substring(0,6)}.../{garment.item?.substring(0,6)}...
-//                                 </p>
-//                               )}
-//                             </div>
-                            
-//                             <div>
-//                               <p className="text-xs text-slate-400">Garment Delivery</p>
-//                               <p className="font-medium text-purple-600">
-//                                 {garment.estimatedDelivery ? new Date(garment.estimatedDelivery).toLocaleDateString() : 'Not set'}
-//                               </p>
-//                             </div>
-                            
-//                             <div>
-//                               <p className="text-xs text-slate-400">Price Range</p>
-//                               <p className="font-medium">₹{garment.priceRange?.min} - ₹{garment.priceRange?.max}</p>
-//                             </div>
-//                           </div>
-                          
-//                           {garment.additionalInfo && (
-//                             <p className="text-sm text-slate-500 mt-2 italic">
-//                               Note: {garment.additionalInfo}
-//                             </p>
-//                           )}
-//                         </div>
-                        
-//                         <div className="flex gap-2 ml-4">
-//                           <button
-//                             type="button"
-//                             onClick={() => handleEditGarment(garment)}
-//                             className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
-//                             title="Edit"
-//                           >
-//                             Edit
-//                           </button>
-//                           <button
-//                             type="button"
-//                             onClick={() => handleDeleteGarment(index, garment)}
-//                             className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
-//                             title="Delete"
-//                           >
-//                             <Trash2 size={16} />
-//                           </button>
-//                         </div>
-//                       </div>
-//                     </div>
-//                   );
-//                 })}
-//               </div>
-//             )}
-//           </div>
-
-//           {/* Delivery Date */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-//               <Calendar size={20} className="text-blue-600" />
-//               Order Delivery Details
-//             </h2>
-            
-//             <div>
-//               <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-//                 Expected Delivery Date <span className="text-red-500">*</span>
-//               </label>
-//               <div className="relative">
-//                 <Calendar className="absolute left-4 top-3.5 text-slate-400" size={18} />
-//                 <input
-//                   type="date"
-//                   value={formData.deliveryDate}
-//                   onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
-//                   min={new Date().toISOString().split("T")[0]}
-//                   className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-//                   required
-//                 />
-//               </div>
-//               <p className="text-xs text-slate-400 mt-2">
-//                 This is the overall order delivery date. Each garment can have its own estimated delivery date.
-//               </p>
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Right Column - Payment Summary */}
-//         <div className="lg:col-span-1">
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sticky top-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4">Price Summary</h2>
-            
-//             <div className="space-y-4">
-//               <div className="bg-blue-50 p-4 rounded-xl">
-//                 <p className="text-xs text-blue-600 font-black uppercase mb-1">Total Amount</p>
-//                 <p className="text-2xl font-black text-blue-700">
-//                   ₹{priceSummary.totalMin} - ₹{priceSummary.totalMax}
-//                 </p>
-//               </div>
-
-//               {/* Garment Delivery Range */}
-//               {garments.length > 0 && (
-//                 <div className="bg-purple-50 p-4 rounded-xl">
-//                   <p className="text-xs text-purple-600 font-black uppercase mb-1">
-//                     Garment Delivery Range
-//                   </p>
-//                   <p className="text-sm font-bold text-purple-700">
-//                     {new Date(Math.min(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()} - {new Date(Math.max(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()}
-//                   </p>
-//                 </div>
-//               )}
-
-//               {/* Payments Section */}
-//               <div className="border-t border-slate-100 pt-4">
-//                 <div className="flex items-center justify-between mb-3">
-//                   <h3 className="text-sm font-black text-slate-700">Payments</h3>
-//                   <button
-//                     type="button"
-//                     onClick={handleAddPayment}
-//                     className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1"
-//                   >
-//                     <Plus size={14} />
-//                     Add Payment
-//                   </button>
-//                 </div>
-
-//                 {payments.length === 0 ? (
-//                   <p className="text-sm text-slate-400 italic text-center py-2">
-//                     No payments added yet
-//                   </p>
-//                 ) : (
-//                   <div className="space-y-2 max-h-48 overflow-y-auto">
-//                     {payments.map((payment, index) => (
-//                       <div
-//                         key={payment.tempId}
-//                         className="bg-slate-50 rounded-lg p-3 border border-slate-200"
-//                       >
-//                         <div className="flex items-start justify-between">
-//                           <div className="flex-1">
-//                             <div className="flex items-center gap-2">
-//                               <p className="font-bold text-green-600">₹{payment.amount}</p>
-//                               <span className={`text-xs px-2 py-0.5 rounded-full ${
-//                                 payment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
-//                                 payment.type === 'part-payment' ? 'bg-orange-100 text-orange-700' :
-//                                 payment.type === 'final-settlement' ? 'bg-green-100 text-green-700' :
-//                                 'bg-purple-100 text-purple-700'
-//                               }`}>
-//                                 {payment.type === 'advance' ? 'Advance' :
-//                                  payment.type === 'part-payment' ? 'Part' :
-//                                  payment.type === 'final-settlement' ? 'Full' : 'Extra'}
-//                               </span>
-//                             </div>
-//                             <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-//                               <PaymentMethodIcon method={payment.method} />
-//                               <span className="capitalize">{payment.method}</span>
-//                             </div>
-//                             {payment.referenceNumber && (
-//                               <p className="text-xs text-purple-600 font-mono mt-0.5">
-//                                 Ref: {payment.referenceNumber}
-//                               </p>
-//                             )}
-//                             <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-//                               <span>{new Date(payment.date).toLocaleDateString()}</span>
-//                               <span>•</span>
-//                               <span>{payment.time}</span>
-//                             </div>
-//                             {payment.notes && (
-//                               <p className="text-xs text-slate-400 mt-1 italic">
-//                                 {payment.notes}
-//                               </p>
-//                             )}
-//                           </div>
-//                           <div className="flex gap-1 ml-2">
-//                             <button
-//                               type="button"
-//                               onClick={() => handleEditPayment(payment)}
-//                               className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
-//                               title="Edit"
-//                             >
-//                               Edit
-//                             </button>
-//                             <button
-//                               type="button"
-//                               onClick={() => handleDeletePayment(index)}
-//                               className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200"
-//                               title="Delete"
-//                             >
-//                               <Trash2 size={14} />
-//                             </button>
-//                           </div>
-//                         </div>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 )}
-
-//                 {payments.length > 0 && (
-//                   <div className="mt-3 pt-2 border-t border-slate-200">
-//                     <div className="flex justify-between text-sm">
-//                       <span className="font-medium text-slate-600">Total Paid:</span>
-//                       <span className="font-bold text-green-600">₹{totalPayments}</span>
-//                     </div>
-//                   </div>
-//                 )}
-//               </div>
-
-//               <div className="bg-orange-50 p-4 rounded-xl">
-//                 <p className="text-xs text-orange-600 font-black uppercase mb-1">Balance Amount</p>
-//                 <p className="text-xl font-black text-orange-700">
-//                   ₹{balanceAmount.min} - ₹{balanceAmount.max}
-//                 </p>
-//               </div>
-
-//               <button
-//                 type="submit"
-//                 disabled={isSubmitting || !userId}
-//                 className={`w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-4 rounded-xl font-black uppercase tracking-wider shadow-lg shadow-blue-500/30 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 mt-6 ${
-//                   isSubmitting || !userId ? 'opacity-50 cursor-not-allowed' : ''
-//                 }`}
-//               >
-//                 {isSubmitting ? (
-//                   <>
-//                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-//                     Creating...
-//                   </>
-//                 ) : !userId ? (
-//                   'Please log in to create order'
-//                 ) : (
-//                   <>
-//                     <Save size={18} />
-//                     Create Order
-//                   </>
-//                 )}
-//               </button>
-
-//               <button
-//                 type="button"
-//                 onClick={() => navigate(`${basePath}/orders`)}
-//                 className="w-full px-6 py-4 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-black uppercase tracking-wider transition-all"
-//               >
-//                 Cancel
-//               </button>
-//             </div>
-//           </div>
-//         </div>
-//       </form>
-
-//       {/* Garment Form Modal with customerId prop */}
-//       {showGarmentModal && (
-//         <GarmentForm
-//           onClose={() => setShowGarmentModal(false)}
-//           onSave={handleSaveGarment}
-//           editingGarment={editingGarment}
-//           customerId={formData.customer}
-//         />
-//       )}
-//     </div>
-//   );
-// }
-
-
-
-
-// // add cleander 
 // import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 // import { useDispatch, useSelector } from "react-redux";
 // import { useNavigate, useLocation } from "react-router-dom";
@@ -2831,3158 +19,8 @@
 //   X,
 //   AlertCircle,
 //   CheckCircle,
-//   Info,
-//   Bug,
-// } from "lucide-react";
-// import { createNewOrder } from "../../../features/order/orderSlice";
-// import { createGarment } from "../../../features/garment/garmentSlice";
-// import { fetchAllCustomers } from "../../../features/customer/customerSlice";
-// // 📅 NEW: Import calendar functions and selectors
-// import { fetchOrderDates, selectOrderDates, selectCalendarLoading } from "../../../features/order/orderSlice";
-// import DatePicker from "react-datepicker";
-// import "react-datepicker/dist/react-datepicker.css";
-// import GarmentForm from "../garment/GarmentForm";
-// import AddPaymentModal from "../../../components/AddPaymentModal";
-// import showToast from "../../../utils/toast";
-
-
-// export default function NewOrder() {
-//   const dispatch = useDispatch();
-//   const navigate = useNavigate();
-//   const location = useLocation();
-  
-//   // Enhanced Debug configuration
-//   const DEBUG = {
-//     ENABLED: true,
-//     LOG_LEVEL: 'verbose',
-//     SHOW_PANEL: true,
-//     LOG_REDUX: true,
-//     LOG_API: true,
-//     LOG_VALIDATION: true,
-//     LOG_FORM_DATA: true
-//   };
-  
-//   // Debug logger
-//   const logDebug = (level, category, message, data = null) => {
-//     if (!DEBUG.ENABLED) return;
-    
-//     const levels = { minimal: 1, normal: 2, verbose: 3 };
-//     const currentLevel = levels[DEBUG.LOG_LEVEL] || 2;
-//     const msgLevel = levels[level] || 2;
-    
-//     if (msgLevel > currentLevel) return;
-    
-//     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-//     console.log(
-//       `%c[${timestamp}][${category}] ${message}`,
-//       `color: #00ff00; font-weight: bold;`,
-//       data || ''
-//     );
-//   };
-
-//   // Error logger
-//   const logError = (context, error, additionalData = {}) => {
-//     console.group(`❌ ERROR [${context}] - ${new Date().toISOString()}`);
-//     console.error('Error object:', error);
-//     console.error('Error message:', error?.message);
-    
-//     if (error?.response) {
-//       console.log('🔍 Response Data:', error.response.data);
-//       console.log('🔍 Status:', error.response.status);
-//       console.log('🔍 Status Text:', error.response.statusText);
-//       console.log('🔍 Headers:', error.response.headers);
-      
-//       if (error.response.data?.errors) {
-//         console.log('📋 Validation Errors:', error.response.data.errors);
-//       }
-//       if (error.response.data?.message) {
-//         console.log('📋 Server Message:', error.response.data.message);
-//       }
-//     }
-    
-//     if (error?.request) {
-//       console.log('📡 Request:', error.request);
-//     }
-    
-//     if (Object.keys(additionalData).length > 0) {
-//       console.log('📦 Additional Data:', additionalData);
-//     }
-    
-//     console.groupEnd();
-//   };
-
-//   // Validation helper
-//   const validateMongoId = (id) => {
-//     if (!id) return { valid: false, reason: 'ID is empty' };
-//     const isValid = /^[0-9a-fA-F]{24}$/.test(id);
-//     return { 
-//       valid: isValid, 
-//       reason: isValid ? 'Valid' : 'Invalid format - must be 24 hex characters' 
-//     };
-//   };
-
-//   // Get passed customer from Customer Page (if any)
-//   const passedCustomer = location.state?.customer;
-  
-//   logDebug('normal', 'INIT', 'Component initialized', {
-//     hasPassedCustomer: !!passedCustomer,
-//     passedCustomerId: passedCustomer?._id
-//   });
-
-//   useEffect(() => {
-//     logDebug('normal', 'LIFECYCLE', 'Component mounted');
-//     return () => logDebug('normal', 'LIFECYCLE', 'Component unmounted');
-//   }, []);
-
-//   // Fixed Redux selectors
-//   const { customers, loading: customersLoading } = useSelector((state) => {
-//     const customerData = state.customers?.customers || state.customer?.customers || [];
-//     const customersArray = Array.isArray(customerData) ? customerData : [];
-    
-//     return {
-//       customers: customersArray,
-//       loading: state.customers?.loading || state.customer?.loading || false
-//     };
-//   });
-
-//   // ✅ Add categories selector to get category names
-//   const { categories } = useSelector((state) => {
-//     const categoriesData = state.categories?.categories || [];
-//     return {
-//       categories: Array.isArray(categoriesData) ? categoriesData : []
-//     };
-//   });
-
-//   const { user } = useSelector((state) => {
-//     return { user: state.auth?.user };
-//   });
-  
-//   // 📅 NEW: Calendar state from Redux
-//   const orderDates = useSelector(selectOrderDates);
-//   const calendarLoading = useSelector(selectCalendarLoading);
-  
-//   const [formData, setFormData] = useState({
-//     customer: "",
-//     deliveryDate: "",
-//     specialNotes: "",
-//     advancePayment: {
-//       amount: 0,
-//       method: "cash",
-//     },
-//   });
-
-//   // State for multiple payments
-//   const [payments, setPayments] = useState([]);
-//   const [showPaymentModal, setShowPaymentModal] = useState(false);
-//   const [editingPayment, setEditingPayment] = useState(null);
-
-//   const [garments, setGarments] = useState([]);
-//   const [showGarmentModal, setShowGarmentModal] = useState(false);
-//   const [editingGarment, setEditingGarment] = useState(null);
-//   const [searchTerm, setSearchTerm] = useState("");
-//   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-//   const [selectedCustomerDisplay, setSelectedCustomerDisplay] = useState("");
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-//   const [serverErrors, setServerErrors] = useState(null);
-
-//   // 📅 NEW: Calendar state
-//   const [selectedDate, setSelectedDate] = useState(null);
-//   const [showCalendar, setShowCalendar] = useState(false);
-//   const [currentMonth, setCurrentMonth] = useState(new Date());
-//   const calendarRef = useRef(null);
-
-//   // Get user ID
-//   const userId = user?.id || user?._id;
-//   const userRole = user?.role;
-
-//   // Validate user ID
-//   const userIdValidation = validateMongoId(userId);
-
-//   logDebug('normal', 'AUTH', 'User authentication details', {
-//     userId,
-//     userIdValid: userIdValidation.valid,
-//     userRole
-//   });
-
-//   // Get base path based on user role
-//   const basePath = user?.role === "ADMIN" ? "/admin" : 
-//                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
-//                    "/cuttingmaster";
-
-//   // Load customers on mount
-//   useEffect(() => {
-//     logDebug('normal', 'API', 'Fetching customers');
-//     dispatch(fetchAllCustomers())
-//       .unwrap()
-//       .then((result) => {
-//         logDebug('normal', 'API', 'Customers fetched', { count: result?.length });
-//       })
-//       .catch((error) => {
-//         logError('fetchCustomers', error);
-//         showToast.error("Failed to load customers");
-//       });
-//   }, [dispatch]);
-
-//   // AUTO-FILL LOGIC: When passedCustomer is available, auto-select them
-//   useEffect(() => {
-//     if (passedCustomer) {
-//       logDebug('normal', 'AUTO-FILL', 'Auto-filling customer', {
-//         passedCustomerId: passedCustomer._id
-//       });
-      
-//       const fullCustomer = customers?.find(c => c._id === passedCustomer._id) || passedCustomer;
-      
-//       setFormData(prev => ({
-//         ...prev,
-//         customer: fullCustomer._id
-//       }));
-
-//       const fullName = getCustomerFullName(fullCustomer);
-//       const displayId = getCustomerDisplayId(fullCustomer);
-//       let displayText = `${fullName} (${displayId})`;
-      
-//       setSelectedCustomerDisplay(displayText);
-//       setSearchTerm(displayText);
-//       setShowCustomerDropdown(false);
-//     }
-//   }, [passedCustomer, customers]);
-
-//   // 📅 NEW: Fetch order dates when month changes
-//   useEffect(() => {
-//     const month = currentMonth.getMonth();
-//     const year = currentMonth.getFullYear();
-    
-//     logDebug('normal', 'CALENDAR', `Fetching order dates for month: ${month}, year: ${year}`);
-//     dispatch(fetchOrderDates({ month, year }));
-//   }, [currentMonth, dispatch]);
-
-//   // 📅 NEW: Close calendar when clicking outside
-//   useEffect(() => {
-//     function handleClickOutside(event) {
-//       if (calendarRef.current && !calendarRef.current.contains(event.target)) {
-//         setShowCalendar(false);
-//       }
-//     }
-//     document.addEventListener("mousedown", handleClickOutside);
-//     return () => document.removeEventListener("mousedown", handleClickOutside);
-//   }, []);
-
-//   // Helper functions for customer display
-//   const getCustomerFullName = (customer) => {
-//     if (!customer) return 'Unknown Customer';
-    
-//     if (customer.firstName || customer.lastName) {
-//       const firstName = customer.firstName || '';
-//       const lastName = customer.lastName || '';
-//       const fullName = `${firstName} ${lastName}`.trim();
-//       if (fullName) return fullName;
-//     }
-    
-//     if (customer.name) return customer.name;
-    
-//     return 'Unknown Customer';
-//   };
-
-//   const getCustomerDisplayId = (customer) => {
-//     if (!customer) return '';
-//     return customer.customerId || customer._id?.slice(-6) || '';
-//   };
-
-//   const getCustomerPhone = (customer) => {
-//     if (!customer) return 'No phone';
-//     return customer.phone || customer.whatsappNumber || 'No phone';
-//   };
-
-//   // Filter customers
-//   const filteredCustomers = useMemo(() => {
-//     if (!customers || !Array.isArray(customers) || customers.length === 0) {
-//       return [];
-//     }
-    
-//     if (formData.customer && searchTerm === selectedCustomerDisplay) {
-//       return [];
-//     }
-    
-//     return customers.filter(customer => {
-//       if (!customer) return false;
-
-//       const fullName = getCustomerFullName(customer).toLowerCase();
-//       const customerId = getCustomerDisplayId(customer).toLowerCase();
-//       const phone = getCustomerPhone(customer).toLowerCase();
-//       const firstName = (customer.firstName || '').toLowerCase();
-//       const lastName = (customer.lastName || '').toLowerCase();
-      
-//       const searchLower = searchTerm.toLowerCase();
-      
-//       return fullName.includes(searchLower) ||
-//              firstName.includes(searchLower) ||
-//              lastName.includes(searchLower) ||
-//              phone.includes(searchLower) ||
-//              customerId.includes(searchLower);
-//     });
-//   }, [customers, searchTerm, formData.customer, selectedCustomerDisplay]);
-
-//   // Calculate total payments
-//   const totalPayments = useMemo(() => {
-//     return payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-//   }, [payments]);
-
-//   // Calculate price summary
-//   const priceSummary = useMemo(() => {
-//     const totalMin = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.min || 0);
-//     }, 0);
-    
-//     const totalMax = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.max || 0);
-//     }, 0);
-    
-//     return { totalMin, totalMax };
-//   }, [garments]);
-
-//   // Calculate balance
-//   const balanceAmount = useMemo(() => {
-//     return {
-//       min: Number(priceSummary.totalMin) - totalPayments,
-//       max: Number(priceSummary.totalMax) - totalPayments,
-//     };
-//   }, [priceSummary, totalPayments]);
-
-//   // Payment handlers
-//   const handleAddPayment = useCallback(() => {
-//     setEditingPayment(null);
-//     setShowPaymentModal(true);
-//   }, []);
-
-//   const handleEditPayment = useCallback((payment) => {
-//     setEditingPayment(payment);
-//     setShowPaymentModal(true);
-//   }, []);
-
-//   const handleDeletePayment = useCallback((index) => {
-//     if (window.confirm("Are you sure you want to delete this payment?")) {
-//       const newPayments = [...payments];
-//       newPayments.splice(index, 1);
-//       setPayments(newPayments);
-//       showToast.success("Payment removed");
-//     }
-//   }, [payments]);
-
-//   // Handle Save Payment with proper type mapping
-//   const handleSavePayment = useCallback((paymentData) => {
-//     logDebug('normal', 'PAYMENT', 'Saving payment', { 
-//       isEdit: !!editingPayment,
-//       paymentData
-//     });
-    
-//     // Map frontend type to backend enum
-//     let backendType = paymentData.type || 'advance';
-//     if (backendType === 'partial') {
-//       backendType = 'part-payment';
-//     } else if (backendType === 'full') {
-//       backendType = 'final-settlement';
-//     }
-    
-//     const paymentWithMappedType = {
-//       ...paymentData,
-//       type: backendType,
-//       date: paymentData.paymentDate || paymentData.date || new Date().toISOString().split('T')[0],
-//       time: paymentData.paymentTime || paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false })
-//     };
-    
-//     if (editingPayment) {
-//       // Update existing payment
-//       const index = payments.findIndex(p => p.tempId === editingPayment.tempId);
-//       if (index !== -1) {
-//         const newPayments = [...payments];
-//         newPayments[index] = { 
-//           ...paymentWithMappedType, 
-//           tempId: editingPayment.tempId
-//         };
-//         setPayments(newPayments);
-//         showToast.success("Payment updated");
-//       }
-//     } else {
-//       // Add new payment
-//       const newPayment = {
-//         ...paymentWithMappedType,
-//         tempId: Date.now() + Math.random()
-//       };
-//       setPayments([...payments, newPayment]);
-//       showToast.success("Payment added");
-//     }
-    
-//     setShowPaymentModal(false);
-//     setEditingPayment(null);
-//   }, [payments, editingPayment]);
-
-//   // ✅ UPDATED: Garment handlers with customer validation
-//   const handleAddGarment = useCallback(() => {
-//     // Validate customer selected first
-//     if (!formData.customer) {
-//       showToast.error("Please select a customer first before adding garments");
-//       return;
-//     }
-    
-//     setEditingGarment(null);
-//     setShowGarmentModal(true);
-//   }, [formData.customer]);
-
-//   const handleEditGarment = useCallback((garment) => {
-//     setEditingGarment(garment);
-//     setShowGarmentModal(true);
-//   }, []);
-
-//   const handleDeleteGarment = useCallback((index, garment) => {
-//     if (window.confirm(`Are you sure you want to remove ${garment.name || 'this garment'}?`)) {
-//       const newGarments = [...garments];
-//       newGarments.splice(index, 1);
-//       setGarments(newGarments);
-//       showToast.success("Garment removed");
-//     }
-//   }, [garments]);
-
-//   // Handle Save Garment
-//   const handleSaveGarment = useCallback((garmentData) => {
-//     logDebug('normal', 'GARMENT', 'Saving garment', {
-//       isEdit: !!editingGarment
-//     });
-    
-//     if (garmentData instanceof FormData) {
-//       // Convert FormData to object
-//       const garmentObj = {
-//         tempId: editingGarment?.tempId || Date.now() + Math.random(),
-//         referenceImages: [],
-//         customerImages: [],
-//         customerClothImages: []
-//       };
-      
-//       for (let [key, value] of garmentData.entries()) {
-//         if (value instanceof File) {
-//           if (key === 'referenceImages') {
-//             garmentObj.referenceImages.push(value);
-//           } else if (key === 'customerImages') {
-//             garmentObj.customerImages.push(value);
-//           } else if (key === 'customerClothImages') {
-//             garmentObj.customerClothImages.push(value);
-//           }
-//         } else {
-//           if (key === 'measurements' || key === 'priceRange') {
-//             try {
-//               garmentObj[key] = JSON.parse(value);
-//             } catch (e) {
-//               garmentObj[key] = value;
-//             }
-//           } else {
-//             garmentObj[key] = value;
-//           }
-//         }
-//       }
-      
-//       if (editingGarment) {
-//         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-//         if (index !== -1) {
-//           const newGarments = [...garments];
-//           newGarments[index] = garmentObj;
-//           setGarments(newGarments);
-//           showToast.success("Garment updated");
-//         }
-//       } else {
-//         setGarments([...garments, garmentObj]);
-//         showToast.success("Garment added");
-//       }
-//     } else {
-//       if (editingGarment) {
-//         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-//         if (index !== -1) {
-//           const newGarments = [...garments];
-//           newGarments[index] = { ...garmentData, tempId: editingGarment.tempId };
-//           setGarments(newGarments);
-//           showToast.success("Garment updated");
-//         }
-//       } else {
-//         const newGarment = {
-//           ...garmentData,
-//           tempId: Date.now() + Math.random()
-//         };
-//         setGarments([...garments, newGarment]);
-//         showToast.success("Garment added");
-//       }
-//     }
-    
-//     setShowGarmentModal(false);
-//   }, [garments, editingGarment]);
-
-//   const handleCustomerSelect = useCallback((customer) => {
-//     const fullName = getCustomerFullName(customer);
-//     const displayId = getCustomerDisplayId(customer);
-    
-//     setFormData(prev => ({
-//       ...prev,
-//       customer: customer._id
-//     }));
-
-//     let displayText = `${fullName} (${displayId})`;
-//     setSelectedCustomerDisplay(displayText);
-//     setSearchTerm(displayText);
-//     setShowCustomerDropdown(false);
-//   }, []);
-
-//   const handleSearchChange = useCallback((e) => {
-//     const value = e.target.value;
-//     setSearchTerm(value);
-//     setShowCustomerDropdown(true);
-    
-//     if (!value.trim()) {
-//       setFormData(prev => ({ ...prev, customer: "" }));
-//       setSelectedCustomerDisplay("");
-//     }
-//   }, []);
-
-//   // ✅ Helper function to get category name from ID
-//   const getCategoryName = useCallback((categoryId) => {
-//     if (!categoryId) return 'Unknown';
-//     const category = categories?.find(c => c._id === categoryId);
-//     return category?.name || category?.categoryName || categoryId;
-//   }, [categories]);
-
-//   // ✅ Helper function to get item name from garment object
-//   const getItemName = useCallback((garment) => {
-//     // First check if itemName is directly available (from GarmentForm)
-//     if (garment.itemName) return garment.itemName;
-    
-//     // If not, try to find in categories
-//     if (garment.item && categories) {
-//       for (const category of categories) {
-//         if (category.items && Array.isArray(category.items)) {
-//           const foundItem = category.items.find(item => 
-//             item._id === garment.item || item._id?.toString() === garment.item?.toString()
-//           );
-//           if (foundItem) return foundItem.name || foundItem.itemName;
-//         }
-//       }
-//     }
-    
-//     return garment.item || 'Unknown';
-//   }, [categories]);
-
-//   // 📅 NEW: Handle date selection from calendar
-//   const handleDateSelect = useCallback((date) => {
-//     setSelectedDate(date);
-//     setShowCalendar(false);
-    
-//     const dateStr = date.toISOString().split('T')[0];
-//     setFormData(prev => ({
-//       ...prev,
-//       deliveryDate: dateStr
-//     }));
-    
-//     logDebug('normal', 'CALENDAR', `Date selected: ${dateStr}`);
-//   }, []);
-
-//   // 📅 NEW: Handle month change in calendar
-//   const handleMonthChange = useCallback((date) => {
-//     setCurrentMonth(date);
-//   }, []);
-
-//   // 📅 NEW: Format date for display
-//   const formatDisplayDate = useCallback((date) => {
-//     if (!date) return "Select delivery date";
-//     return new Date(date).toLocaleDateString('en-IN', {
-//       weekday: 'short',
-//       year: 'numeric',
-//       month: 'short',
-//       day: 'numeric'
-//     });
-//   }, []);
-
-//   // 📅 NEW: Simple green dot for dates with orders
-//   const renderDayContents = useCallback((day, date) => {
-//     const dateStr = date.toISOString().split('T')[0];
-//     const hasOrders = orderDates.includes(dateStr);
-    
-//     return (
-//       <div className="relative">
-//         <div>{day}</div>
-//         {hasOrders && (
-//           <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
-//         )}
-//       </div>
-//     );
-//   }, [orderDates]);
-
-//   // Payment Method Icon Component
-//   const PaymentMethodIcon = ({ method }) => {
-//     switch(method) {
-//       case 'cash':
-//         return <Banknote size={14} className="text-green-600" />;
-//       case 'upi':
-//         return <Smartphone size={14} className="text-blue-600" />;
-//       case 'bank-transfer':
-//         return <Landmark size={14} className="text-purple-600" />;
-//       case 'card':
-//         return <CreditCard size={14} className="text-orange-600" />;
-//       default:
-//         return <Wallet size={14} className="text-slate-600" />;
-//     }
-//   };
-
-//   // COMPLETELY FIXED handleSubmit with proper validation
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-    
-//     logDebug('normal', 'SUBMIT', 'Form submission started');
-//     setServerErrors(null);
-
-//     // Validation
-//     if (!formData.customer) {
-//       showToast.error("Please select a customer");
-//       return;
-//     }
-
-//     if (garments.length === 0) {
-//       showToast.error("Please add at least one garment");
-//       return;
-//     }
-
-//     if (!formData.deliveryDate) {
-//       showToast.error("Please select delivery date");
-//       return;
-//     }
-
-//     const finalUserId = userId;
-//     if (!finalUserId) {
-//       showToast.error("You must be logged in to create an order");
-//       return;
-//     }
-
-//     // Validate MongoDB IDs
-//     const customerIdValid = /^[0-9a-fA-F]{24}$/.test(formData.customer);
-//     const userIdValid = /^[0-9a-fA-F]{24}$/.test(finalUserId);
-
-//     if (!customerIdValid) {
-//       showToast.error("Invalid customer ID format");
-//       return;
-//     }
-
-//     if (!userIdValid) {
-//       showToast.error("Invalid user ID format. Please log in again.");
-//       return;
-//     }
-
-//     setIsSubmitting(true);
-
-//     try {
-//       // Map payment types to match model enum EXACTLY
-//       const mappedPayments = payments.map(payment => {
-//         let modelType = payment.type || 'advance';
-        
-//         if (modelType === 'partial') {
-//           modelType = 'part-payment';
-//         } else if (modelType === 'full') {
-//           modelType = 'final-settlement';
-//         }
-        
-//         const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-//         if (!validTypes.includes(modelType)) {
-//           console.error(`Invalid payment type after mapping: ${modelType}`);
-//           modelType = 'advance';
-//         }
-        
-//         return {
-//           amount: Number(payment.amount),
-//           type: modelType,
-//           method: payment.method || 'cash',
-//           referenceNumber: payment.referenceNumber || '',
-//           date: payment.date || new Date().toISOString().split('T')[0],
-//           notes: payment.notes || ''
-//         };
-//       });
-
-//       console.log("💰 Mapped Payments:", JSON.stringify(mappedPayments, null, 2));
-
-//       const validMethods = ['cash', 'upi', 'bank-transfer', 'card'];
-//       const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-      
-//       for (const payment of mappedPayments) {
-//         if (!validTypes.includes(payment.type)) {
-//           throw new Error(`Invalid payment type: ${payment.type}. Must be one of: ${validTypes.join(', ')}`);
-//         }
-//         if (!validMethods.includes(payment.method)) {
-//           throw new Error(`Invalid payment method: ${payment.method}`);
-//         }
-//         if (isNaN(payment.amount) || payment.amount <= 0) {
-//           throw new Error(`Invalid payment amount: ${payment.amount}`);
-//         }
-//       }
-
-//       const orderData = {
-//         customer: formData.customer,
-//         deliveryDate: formData.deliveryDate,
-//         specialNotes: formData.specialNotes || "",
-//         payments: mappedPayments,
-//         advancePayment: {
-//           amount: mappedPayments.length > 0 ? mappedPayments[0]?.amount || 0 : 0,
-//           method: mappedPayments.length > 0 ? mappedPayments[0]?.method || "cash" : "cash",
-//           date: new Date().toISOString()
-//         },
-//         priceSummary: {
-//           totalMin: Number(priceSummary.totalMin),
-//           totalMax: Number(priceSummary.totalMax)
-//         },
-//         balanceAmount: Number(balanceAmount.min),
-//         createdBy: finalUserId,
-//         status: "draft",
-//         orderDate: new Date().toISOString(),
-//         garments: []
-//       };
-
-//       const requiredFields = ['customer', 'deliveryDate', 'createdBy', 'priceSummary', 'balanceAmount', 'status', 'orderDate'];
-//       const missingFields = requiredFields.filter(field => !orderData[field]);
-      
-//       if (missingFields.length > 0) {
-//         throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
-//       }
-
-//       console.log("🔍 FINAL ORDER DATA BEING SENT:", JSON.stringify(orderData, null, 2));
-
-//       const result = await dispatch(createNewOrder(orderData)).unwrap();
-//       logDebug('normal', 'SUBMIT', 'Order created', result);
-      
-//       const orderId = result.order?._id || result._id;
-
-//       if (!orderId) {
-//         throw new Error("Order created but no ID returned");
-//       }
-
-//       for (const garment of garments) {
-//         const garmentFormData = new FormData();
-        
-//         garmentFormData.append("name", garment.name);
-//         garmentFormData.append("category", garment.category);
-//         garmentFormData.append("item", garment.item);
-        
-//         // ✅ Add categoryName and itemName if available
-//         if (garment.categoryName) {
-//           garmentFormData.append("categoryName", garment.categoryName);
-//         }
-        
-//         if (garment.itemName) {
-//           garmentFormData.append("itemName", garment.itemName);
-//         }
-        
-//         garmentFormData.append("measurementTemplate", garment.measurementTemplate || "");
-//         garmentFormData.append("measurementSource", garment.measurementSource || "template");
-//         garmentFormData.append("measurements", JSON.stringify(garment.measurements || []));
-//         garmentFormData.append("additionalInfo", garment.additionalInfo || "");
-//         garmentFormData.append("estimatedDelivery", garment.estimatedDelivery || formData.deliveryDate);
-//         garmentFormData.append("priority", garment.priority || "normal");
-//         garmentFormData.append("priceRange", JSON.stringify({
-//           min: Number(garment.priceRange?.min) || 0,
-//           max: Number(garment.priceRange?.max) || 0
-//         }));
-//         garmentFormData.append("orderId", orderId);
-//         garmentFormData.append("createdBy", finalUserId);
-
-//         if (garment.referenceImages?.length > 0) {
-//           garment.referenceImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("referenceImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerImages?.length > 0) {
-//           garment.customerImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerClothImages?.length > 0) {
-//           garment.customerClothImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerClothImages", img);
-//             }
-//           });
-//         }
-
-//         await dispatch(createGarment({ orderId, garmentData: garmentFormData })).unwrap();
-//       }
-
-//       showToast.success("Order created successfully! 🎉");
-//       navigate(`${basePath}/orders`);
-//     } catch (error) {
-//       logError('createOrder', error, { 
-//         formData, 
-//         garmentsCount: garments.length,
-//         paymentsCount: payments.length 
-//       });
-      
-//       if (error.response?.data) {
-//         setServerErrors(error.response.data);
-//       }
-      
-//       let errorMessage = "Failed to create order";
-      
-//       if (error.response?.data?.message) {
-//         errorMessage = error.response.data.message;
-//       } else if (error.response?.data?.errors) {
-//         errorMessage = `Validation failed: ${error.response.data.errors.join(', ')}`;
-//       } else if (error.message) {
-//         errorMessage = error.message;
-//       }
-      
-//       showToast.error(errorMessage);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Enhanced Debug Panel
-//   const DebugPanel = () => {
-//     if (!DEBUG.SHOW_PANEL || process.env.NODE_ENV !== 'development') return null;
-    
-//     return (
-//       <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-[600px] border border-green-500/30">
-//         <div className="flex justify-between items-center mb-3 sticky top-0 bg-gray-900 pb-2 border-b border-gray-700">
-//           <div className="flex items-center gap-2">
-//             <Bug size={16} className="text-yellow-400" />
-//             <span className="font-bold text-yellow-400">DEBUG PANEL v3.0</span>
-//             <span className="text-xs bg-blue-600 px-2 py-0.5 rounded-full">DEV MODE</span>
-//           </div>
-//           <div className="flex gap-2">
-//             <button 
-//               onClick={() => window.location.reload()} 
-//               className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-//             >
-//               🔄 Refresh
-//             </button>
-//             <button 
-//               onClick={() => console.clear()} 
-//               className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-//             >
-//               🧹 Clear
-//             </button>
-//           </div>
-//         </div>
-        
-//         <div className="space-y-2 mb-3">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <Info size={14} /> STATE OVERVIEW
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Customer:</div>
-//             <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
-//               {formData.customer ? '✅ Selected' : '❌ Not selected'}
-//             </div>
-            
-//             <div className="text-gray-400">Customer ID:</div>
-//             <div className="font-mono text-xs">
-//               {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
-//             </div>
-            
-//             <div className="text-gray-400">ID Valid:</div>
-//             <div className={validateMongoId(formData.customer).valid ? 'text-green-400' : 'text-red-400'}>
-//               {validateMongoId(formData.customer).valid ? '✅' : '❌'}
-//             </div>
-            
-//             <div className="text-gray-400">Garments:</div>
-//             <div className="text-blue-400 font-bold">{garments.length}</div>
-            
-//             <div className="text-gray-400">Payments:</div>
-//             <div className="text-green-400 font-bold">{payments.length}</div>
-            
-//             <div className="text-gray-400">Total Paid:</div>
-//             <div className="text-green-400 font-bold">₹{totalPayments}</div>
-            
-//             {/* 📅 NEW: Order dates info */}
-//             <div className="text-gray-400">📅 Dates with orders:</div>
-//             <div className="text-green-400 font-bold">{orderDates.length}</div>
-//           </div>
-//         </div>
-
-//         <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <User size={14} /> USER INFO
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">User ID:</div>
-//             <div className="font-mono">{userId ? `${userId.substring(0,8)}...` : '❌'}</div>
-            
-//             <div className="text-gray-400">ID Valid:</div>
-//             <div className={userIdValidation.valid ? 'text-green-400' : 'text-red-400'}>
-//               {userIdValidation.valid ? '✅' : '❌'}
-//             </div>
-            
-//             <div className="text-gray-400">Role:</div>
-//             <div className="text-purple-400">{userRole || 'N/A'}</div>
-            
-//             <div className="text-gray-400">Base Path:</div>
-//             <div className="text-blue-400">{basePath}</div>
-//           </div>
-//         </div>
-
-//         {/* ✅ NEW: Garment Form Props Debug */}
-//         <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <Package size={14} /> GARMENT FORM PROPS
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Customer ID passed:</div>
-//             <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
-//               {formData.customer ? '✅ Yes' : '❌ No'}
-//             </div>
-//             <div className="text-gray-400">Customer ID:</div>
-//             <div className="font-mono text-xs">
-//               {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
-//             </div>
-//             <div className="text-gray-400">Can add garments:</div>
-//             <div className={formData.customer ? 'text-green-400' : 'text-red-400'}>
-//               {formData.customer ? '✅ Yes' : '❌ Select customer first'}
-//             </div>
-//           </div>
-//         </div>
-
-//         {payments.length > 0 && (
-//           <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//             <div className="font-bold text-yellow-400 flex items-center gap-1">
-//               <Wallet size={14} /> PAYMENT DETAILS
-//             </div>
-//             {payments.map((p, idx) => {
-//               const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-//               const typeValid = validTypes.includes(p.type);
-              
-//               return (
-//                 <div key={p.tempId} className="bg-gray-800 p-2 rounded text-xs">
-//                   <div className="grid grid-cols-2 gap-1">
-//                     <span className="text-gray-400">#{idx+1}:</span>
-//                     <span className="text-green-400">₹{p.amount}</span>
-                    
-//                     <span className="text-gray-400">Type:</span>
-//                     <div className="flex items-center gap-1">
-//                       <span className={`${
-//                         p.type === 'advance' ? 'text-blue-400' :
-//                         p.type === 'part-payment' ? 'text-orange-400' :
-//                         p.type === 'final-settlement' ? 'text-green-400' : 
-//                         p.type === 'extra' ? 'text-purple-400' : 'text-red-400'
-//                       }`}>
-//                         {p.type}
-//                       </span>
-//                       {!typeValid && (
-//                         <span className="text-red-400 font-bold ml-1">❌ INVALID</span>
-//                       )}
-//                     </div>
-                    
-//                     <span className="text-gray-400">Method:</span>
-//                     <span className="capitalize">{p.method}</span>
-                    
-//                     <span className="text-gray-400">Will map to:</span>
-//                     <span className="text-yellow-400">
-//                       {p.type === 'partial' ? 'part-payment' : 
-//                        p.type === 'full' ? 'final-settlement' : p.type}
-//                     </span>
-//                   </div>
-//                 </div>
-//               );
-//             })}
-//           </div>
-//         )}
-
-//         <div className="space-y-2 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <IndianRupee size={14} /> PRICE SUMMARY
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Total Min:</div>
-//             <div className="text-blue-400">₹{priceSummary.totalMin}</div>
-//             <div className="text-gray-400">Total Max:</div>
-//             <div className="text-blue-400">₹{priceSummary.totalMax}</div>
-//             <div className="text-gray-400">Balance Min:</div>
-//             <div className="text-orange-400">₹{balanceAmount.min}</div>
-//             <div className="text-gray-400">Balance Max:</div>
-//             <div className="text-orange-400">₹{balanceAmount.max}</div>
-//           </div>
-//         </div>
-
-//         <div className="space-y-2 border-t border-gray-700 pt-2 mt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <CheckCircle size={14} /> VALIDATION STATUS
-//           </div>
-//           <div className="space-y-1 text-xs">
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Customer Selected:</span>
-//               {formData.customer ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Garments Added:</span>
-//               {garments.length > 0 ? 
-//                 <span className="text-green-400">✅ ({garments.length})</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Delivery Date:</span>
-//               {formData.deliveryDate ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">User Logged In:</span>
-//               {userId ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Payment Types Valid:</span>
-//               {payments.every(p => ['advance', 'part-payment', 'final-settlement', 'extra', 'partial', 'full'].includes(p.type)) ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//           </div>
-//         </div>
-
-//         {serverErrors && (
-//           <div className="space-y-2 border-t border-red-700 pt-2 mt-2">
-//             <div className="font-bold text-red-400 flex items-center gap-1">
-//               <AlertCircle size={14} /> SERVER ERRORS
-//             </div>
-//             <div className="bg-red-900/50 p-2 rounded text-xs text-red-300">
-//               <pre className="whitespace-pre-wrap">
-//                 {JSON.stringify(serverErrors, null, 2)}
-//               </pre>
-//             </div>
-//           </div>
-//         )}
-
-//         <div className="text-xs text-gray-500 mt-4 text-center border-t border-gray-700 pt-2">
-//           <div>Last updated: {new Date().toLocaleTimeString()}</div>
-//           <div>Log Level: {DEBUG.LOG_LEVEL}</div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   return (
-//     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 p-6">
-//       <DebugPanel />
-
-//       {/* Add Payment Modal */}
-//       <AddPaymentModal
-//         isOpen={showPaymentModal}
-//         onClose={() => {
-//           setShowPaymentModal(false);
-//           setEditingPayment(null);
-//         }}
-//         onSave={handleSavePayment}
-//         orderTotalMin={priceSummary.totalMin}
-//         orderTotalMax={priceSummary.totalMax}
-//         orderId="temp"
-//         customerId={formData.customer}
-//         initialData={editingPayment}
-//         title={editingPayment ? "Edit Payment" : "Add Payment"}
-//       />
-
-//       {/* Header */}
-//       <div className="flex items-center gap-4">
-//         <button
-//           onClick={() => navigate(`${basePath}/orders`)}
-//           className="p-2 hover:bg-slate-100 rounded-xl transition-all"
-//         >
-//           <ArrowLeft size={20} className="text-slate-600" />
-//         </button>
-//         <div>
-//           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Create New Order</h1>
-//           <p className="text-slate-500">Add customer details and garments to create an order</p>
-//         </div>
-//       </div>
-
-//       {/* Main Form */}
-//       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-//         {/* Left Column - Customer & Order Details */}
-//         <div className="lg:col-span-2 space-y-6">
-//           {/* Customer Selection */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-//               <User size={20} className="text-blue-600" />
-//               Customer Details
-//             </h2>
-
-//             <div className="relative">
-//               <input
-//                 type="text"
-//                 placeholder="Search customer by name, phone or ID..."
-//                 value={searchTerm}
-//                 onChange={handleSearchChange}
-//                 onFocus={() => setShowCustomerDropdown(true)}
-//                 onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-//                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-//               />
-
-//               {showCustomerDropdown && (
-//                 <>
-//                   {customersLoading && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-//                       <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent"></div>
-//                       <p className="text-sm text-slate-500 mt-2">Loading customers...</p>
-//                     </div>
-//                   )}
-
-//                   {!customersLoading && filteredCustomers.length > 0 && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-//                       {filteredCustomers.map((customer) => {
-//                         const fullName = getCustomerFullName(customer);
-//                         const displayId = getCustomerDisplayId(customer);
-//                         const phone = getCustomerPhone(customer);
-                        
-//                         return (
-//                           <button
-//                             key={customer._id}
-//                             type="button"
-//                             onClick={() => handleCustomerSelect(customer)}
-//                             className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-100 last:border-0"
-//                           >
-//                             <p className="font-medium text-slate-800">{fullName}</p>
-//                             <p className="text-xs text-slate-400">
-//                               <span className="font-mono">{displayId}</span> • {phone}
-//                             </p>
-//                           </button>
-//                         );
-//                       })}
-//                     </div>
-//                   )}
-
-//                   {!customersLoading && filteredCustomers.length === 0 && searchTerm && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-//                       <p className="text-slate-500">No customers found</p>
-//                       <button
-//                         type="button"
-//                         onClick={() => navigate(`${basePath}/add-customer`)}
-//                         className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-//                       >
-//                         + Create new customer
-//                       </button>
-//                     </div>
-//                   )}
-//                 </>
-//               )}
-
-//               {formData.customer && !showCustomerDropdown && (
-//                 <div className="mt-2 text-xs text-green-600 font-medium">
-//                   ✓ Customer selected: {selectedCustomerDisplay}
-//                 </div>
-//               )}
-//             </div>
-
-//             {/* Special Notes */}
-//             <div className="mt-4">
-//               <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-//                 Special Notes
-//               </label>
-//               <textarea
-//                 value={formData.specialNotes}
-//                 onChange={(e) => setFormData({ ...formData, specialNotes: e.target.value })}
-//                 rows="3"
-//                 placeholder="Any special instructions for this order..."
-//                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
-//               />
-//             </div>
-//           </div>
-
-//           {/* Garments Section - UPDATED with Category/Item Names */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <div className="flex items-center justify-between mb-4">
-//               <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-//                 <Package size={20} className="text-blue-600" />
-//                 Garments
-//               </h2>
-//               <button
-//                 type="button"
-//                 onClick={handleAddGarment}
-//                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2"
-//               >
-//                 <Plus size={16} />
-//                 Add Garment
-//               </button>
-//             </div>
-
-//             {garments.length === 0 ? (
-//               <div className="text-center py-8 bg-slate-50 rounded-xl">
-//                 <Package size={40} className="mx-auto text-slate-300 mb-2" />
-//                 <p className="text-slate-500">No garments added yet</p>
-//                 <button
-//                   type="button"
-//                   onClick={handleAddGarment}
-//                   className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-//                 >
-//                   + Add your first garment
-//                 </button>
-//               </div>
-//             ) : (
-//               <div className="space-y-3">
-//                 {garments.map((garment, index) => {
-//                   // Get category name
-//                   const categoryName = garment.categoryName || getCategoryName(garment.category);
-                  
-//                   // Get item name
-//                   const itemName = garment.itemName || getItemName(garment);
-                  
-//                   return (
-//                     <div
-//                       key={garment.tempId}
-//                       className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:shadow-md transition-all"
-//                     >
-//                       <div className="flex items-start justify-between">
-//                         <div className="flex-1">
-//                           <div className="flex items-center gap-2">
-//                             <h3 className="font-black text-slate-800">{garment.name}</h3>
-//                             <span className={`text-xs px-2 py-1 rounded-full ${
-//                               garment.priority === 'urgent' ? 'bg-red-100 text-red-600' :
-//                               garment.priority === 'high' ? 'bg-orange-100 text-orange-600' :
-//                               'bg-blue-100 text-blue-600'
-//                             }`}>
-//                               {garment.priority}
-//                             </span>
-//                             {(garment.referenceImages?.length > 0 || 
-//                               garment.customerImages?.length > 0 || 
-//                               garment.customerClothImages?.length > 0) && (
-//                               <span className="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded-full">
-//                                 📸 {garment.referenceImages?.length || 0}/
-//                                 {garment.customerImages?.length || 0}/
-//                                 {garment.customerClothImages?.length || 0}
-//                               </span>
-//                             )}
-//                           </div>
-                          
-//                           <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
-//                             {/* ✅ UPDATED: Show Category/Item Names instead of IDs */}
-//                             <div>
-//                               <p className="text-xs text-slate-400">Category/Item</p>
-//                               <p className="font-medium text-blue-700">
-//                                 {categoryName} / {itemName}
-//                               </p>
-//                               {/* Optional: Show IDs in small text for debugging */}
-//                               {process.env.NODE_ENV === 'development' && (
-//                                 <p className="text-xs text-slate-300 font-mono mt-0.5">
-//                                   {garment.category?.substring(0,6)}.../{garment.item?.substring(0,6)}...
-//                                 </p>
-//                               )}
-//                             </div>
-                            
-//                             <div>
-//                               <p className="text-xs text-slate-400">Garment Delivery</p>
-//                               <p className="font-medium text-purple-600">
-//                                 {garment.estimatedDelivery ? new Date(garment.estimatedDelivery).toLocaleDateString() : 'Not set'}
-//                               </p>
-//                             </div>
-                            
-//                             <div>
-//                               <p className="text-xs text-slate-400">Price Range</p>
-//                               <p className="font-medium">₹{garment.priceRange?.min} - ₹{garment.priceRange?.max}</p>
-//                             </div>
-//                           </div>
-                          
-//                           {garment.additionalInfo && (
-//                             <p className="text-sm text-slate-500 mt-2 italic">
-//                               Note: {garment.additionalInfo}
-//                             </p>
-//                           )}
-//                         </div>
-                        
-//                         <div className="flex gap-2 ml-4">
-//                           <button
-//                             type="button"
-//                             onClick={() => handleEditGarment(garment)}
-//                             className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
-//                             title="Edit"
-//                           >
-//                             Edit
-//                           </button>
-//                           <button
-//                             type="button"
-//                             onClick={() => handleDeleteGarment(index, garment)}
-//                             className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
-//                             title="Delete"
-//                           >
-//                             <Trash2 size={16} />
-//                           </button>
-//                         </div>
-//                       </div>
-//                     </div>
-//                   );
-//                 })}
-//               </div>
-//             )}
-//           </div>
-
-//           {/* 📅 UPDATED: Delivery Date with Green Circle Calendar */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-//               <Calendar size={20} className="text-blue-600" />
-//               Order Delivery Details
-//             </h2>
-            
-//             <div>
-//               <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-//                 Expected Delivery Date <span className="text-red-500">*</span>
-//               </label>
-              
-//               <div className="relative" ref={calendarRef}>
-//                 {/* Custom Date Picker Button */}
-//                 <button
-//                   type="button"
-//                   onClick={() => setShowCalendar(!showCalendar)}
-//                   className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-left"
-//                 >
-//                   <Calendar size={18} className="text-slate-400" />
-//                   <span className={formData.deliveryDate ? "text-slate-800" : "text-slate-400"}>
-//                     {formatDisplayDate(formData.deliveryDate || selectedDate)}
-//                   </span>
-//                   {calendarLoading && (
-//                     <div className="ml-auto w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-//                   )}
-//                 </button>
-
-//                 {/* Calendar Popup */}
-//                 {showCalendar && (
-//                   <div className="absolute z-20 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl p-4">
-//                     <DatePicker
-//                       inline
-//                       selected={selectedDate}
-//                       onChange={handleDateSelect}
-//                       onMonthChange={handleMonthChange}
-//                       minDate={new Date()}
-//                       renderDayContents={renderDayContents}
-//                       calendarClassName="!border-0"
-//                     />
-                    
-//                     {/* Simple Legend */}
-//                     <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100 text-xs">
-//                       <div className="flex items-center gap-2">
-//                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-//                         <span className="text-slate-600">Orders exist</span>
-//                       </div>
-//                       <div className="flex items-center gap-2">
-//                         <div className="w-3 h-3 bg-transparent border border-slate-300 rounded-full"></div>
-//                         <span className="text-slate-600">No orders</span>
-//                       </div>
-//                     </div>
-//                   </div>
-//                 )}
-//               </div>
-
-//               {/* Selected Date Info */}
-//               {formData.deliveryDate && (
-//                 <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-//                   <p className="text-sm text-blue-700">
-//                     ✓ Delivery selected: {new Date(formData.deliveryDate).toLocaleDateString('en-IN', {
-//                       weekday: 'long',
-//                       year: 'numeric',
-//                       month: 'long',
-//                       day: 'numeric'
-//                     })}
-//                   </p>
-//                 </div>
-//               )}
-              
-//               <p className="text-xs text-slate-400 mt-2">
-//                 This is the overall order delivery date. Each garment can have its own estimated delivery date.
-//               </p>
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Right Column - Payment Summary */}
-//         <div className="lg:col-span-1">
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sticky top-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4">Price Summary</h2>
-            
-//             <div className="space-y-4">
-//               <div className="bg-blue-50 p-4 rounded-xl">
-//                 <p className="text-xs text-blue-600 font-black uppercase mb-1">Total Amount</p>
-//                 <p className="text-2xl font-black text-blue-700">
-//                   ₹{priceSummary.totalMin} - ₹{priceSummary.totalMax}
-//                 </p>
-//               </div>
-
-//               {/* Garment Delivery Range */}
-//               {garments.length > 0 && (
-//                 <div className="bg-purple-50 p-4 rounded-xl">
-//                   <p className="text-xs text-purple-600 font-black uppercase mb-1">
-//                     Garment Delivery Range
-//                   </p>
-//                   <p className="text-sm font-bold text-purple-700">
-//                     {new Date(Math.min(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()} - {new Date(Math.max(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()}
-//                   </p>
-//                 </div>
-//               )}
-
-//               {/* Payments Section */}
-//               <div className="border-t border-slate-100 pt-4">
-//                 <div className="flex items-center justify-between mb-3">
-//                   <h3 className="text-sm font-black text-slate-700">Payments</h3>
-//                   <button
-//                     type="button"
-//                     onClick={handleAddPayment}
-//                     className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1"
-//                   >
-//                     <Plus size={14} />
-//                     Add Payment
-//                   </button>
-//                 </div>
-
-//                 {payments.length === 0 ? (
-//                   <p className="text-sm text-slate-400 italic text-center py-2">
-//                     No payments added yet
-//                   </p>
-//                 ) : (
-//                   <div className="space-y-2 max-h-48 overflow-y-auto">
-//                     {payments.map((payment, index) => (
-//                       <div
-//                         key={payment.tempId}
-//                         className="bg-slate-50 rounded-lg p-3 border border-slate-200"
-//                       >
-//                         <div className="flex items-start justify-between">
-//                           <div className="flex-1">
-//                             <div className="flex items-center gap-2">
-//                               <p className="font-bold text-green-600">₹{payment.amount}</p>
-//                               <span className={`text-xs px-2 py-0.5 rounded-full ${
-//                                 payment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
-//                                 payment.type === 'part-payment' ? 'bg-orange-100 text-orange-700' :
-//                                 payment.type === 'final-settlement' ? 'bg-green-100 text-green-700' :
-//                                 'bg-purple-100 text-purple-700'
-//                               }`}>
-//                                 {payment.type === 'advance' ? 'Advance' :
-//                                  payment.type === 'part-payment' ? 'Part' :
-//                                  payment.type === 'final-settlement' ? 'Full' : 'Extra'}
-//                               </span>
-//                             </div>
-//                             <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-//                               <PaymentMethodIcon method={payment.method} />
-//                               <span className="capitalize">{payment.method}</span>
-//                             </div>
-//                             {payment.referenceNumber && (
-//                               <p className="text-xs text-purple-600 font-mono mt-0.5">
-//                                 Ref: {payment.referenceNumber}
-//                               </p>
-//                             )}
-//                             <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-//                               <span>{new Date(payment.date).toLocaleDateString()}</span>
-//                               <span>•</span>
-//                               <span>{payment.time}</span>
-//                             </div>
-//                             {payment.notes && (
-//                               <p className="text-xs text-slate-400 mt-1 italic">
-//                                 {payment.notes}
-//                               </p>
-//                             )}
-//                           </div>
-//                           <div className="flex gap-1 ml-2">
-//                             <button
-//                               type="button"
-//                               onClick={() => handleEditPayment(payment)}
-//                               className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
-//                               title="Edit"
-//                             >
-//                               Edit
-//                             </button>
-//                             <button
-//                               type="button"
-//                               onClick={() => handleDeletePayment(index)}
-//                               className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200"
-//                               title="Delete"
-//                             >
-//                               <Trash2 size={14} />
-//                             </button>
-//                           </div>
-//                         </div>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 )}
-
-//                 {payments.length > 0 && (
-//                   <div className="mt-3 pt-2 border-t border-slate-200">
-//                     <div className="flex justify-between text-sm">
-//                       <span className="font-medium text-slate-600">Total Paid:</span>
-//                       <span className="font-bold text-green-600">₹{totalPayments}</span>
-//                     </div>
-//                   </div>
-//                 )}
-//               </div>
-
-//               <div className="bg-orange-50 p-4 rounded-xl">
-//                 <p className="text-xs text-orange-600 font-black uppercase mb-1">Balance Amount</p>
-//                 <p className="text-xl font-black text-orange-700">
-//                   ₹{balanceAmount.min} - ₹{balanceAmount.max}
-//                 </p>
-//               </div>
-
-//               <button
-//                 type="submit"
-//                 disabled={isSubmitting || !userId}
-//                 className={`w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-4 rounded-xl font-black uppercase tracking-wider shadow-lg shadow-blue-500/30 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 mt-6 ${
-//                   isSubmitting || !userId ? 'opacity-50 cursor-not-allowed' : ''
-//                 }`}
-//               >
-//                 {isSubmitting ? (
-//                   <>
-//                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-//                     Creating...
-//                   </>
-//                 ) : !userId ? (
-//                   'Please log in to create order'
-//                 ) : (
-//                   <>
-//                     <Save size={18} />
-//                     Create Order
-//                   </>
-//                 )}
-//               </button>
-
-//               <button
-//                 type="button"
-//                 onClick={() => navigate(`${basePath}/orders`)}
-//                 className="w-full px-6 py-4 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-black uppercase tracking-wider transition-all"
-//               >
-//                 Cancel
-//               </button>
-//             </div>
-//           </div>
-//         </div>
-//       </form>
-
-//       {/* Garment Form Modal with customerId prop */}
-//       {showGarmentModal && (
-//         <GarmentForm
-//           onClose={() => setShowGarmentModal(false)}
-//           onSave={handleSaveGarment}
-//           editingGarment={editingGarment}
-//           customerId={formData.customer}
-//         />
-//       )}
-//     </div>
-//   );
-// }
-
-
-
-
-
-// import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-// import { useDispatch, useSelector } from "react-redux";
-// import { useNavigate, useLocation } from "react-router-dom";
-// import {
-//   ArrowLeft,
-//   Save,
-//   Plus,
-//   Trash2,
-//   User,
-//   Calendar,
-//   CreditCard,
-//   IndianRupee,
-//   Package,
-//   Clock,
-//   Wallet,
-//   Banknote,
-//   Smartphone,
-//   Landmark,
-//   X,
-//   AlertCircle,
-//   CheckCircle,
-//   Info,
-//   Bug,
-// } from "lucide-react";
-// import { createNewOrder } from "../../../features/order/orderSlice";
-// import { createGarment } from "../../../features/garment/garmentSlice";
-// import { fetchAllCustomers } from "../../../features/customer/customerSlice";
-// // 📅 NEW: Import calendar functions and selectors
-// import { fetchOrderDates, selectOrderDates, selectCalendarLoading } from "../../../features/order/orderSlice";
-// import DatePicker from "react-datepicker";
-// import "react-datepicker/dist/react-datepicker.css";
-// import GarmentForm from "../garment/GarmentForm";
-// import AddPaymentModal from "../../../components/AddPaymentModal";
-// import showToast from "../../../utils/toast";
-
-
-// export default function NewOrder() {
-//   const dispatch = useDispatch();
-//   const navigate = useNavigate();
-//   const location = useLocation();
-  
-//   // Enhanced Debug configuration
-//   const DEBUG = {
-//     ENABLED: true,
-//     LOG_LEVEL: 'verbose',
-//     SHOW_PANEL: true,
-//     LOG_REDUX: true,
-//     LOG_API: true,
-//     LOG_VALIDATION: true,
-//     LOG_FORM_DATA: true
-//   };
-  
-//   // Debug logger
-//   const logDebug = (level, category, message, data = null) => {
-//     if (!DEBUG.ENABLED) return;
-    
-//     const levels = { minimal: 1, normal: 2, verbose: 3 };
-//     const currentLevel = levels[DEBUG.LOG_LEVEL] || 2;
-//     const msgLevel = levels[level] || 2;
-    
-//     if (msgLevel > currentLevel) return;
-    
-//     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
-//     console.log(
-//       `%c[${timestamp}][${category}] ${message}`,
-//       `color: #00ff00; font-weight: bold;`,
-//       data || ''
-//     );
-//   };
-
-//   // Error logger
-//   const logError = (context, error, additionalData = {}) => {
-//     console.group(`❌ ERROR [${context}] - ${new Date().toISOString()}`);
-//     console.error('Error object:', error);
-//     console.error('Error message:', error?.message);
-    
-//     if (error?.response) {
-//       console.log('🔍 Response Data:', error.response.data);
-//       console.log('🔍 Status:', error.response.status);
-//       console.log('🔍 Status Text:', error.response.statusText);
-//       console.log('🔍 Headers:', error.response.headers);
-      
-//       if (error.response.data?.errors) {
-//         console.log('📋 Validation Errors:', error.response.data.errors);
-//       }
-//       if (error.response.data?.message) {
-//         console.log('📋 Server Message:', error.response.data.message);
-//       }
-//     }
-    
-//     if (error?.request) {
-//       console.log('📡 Request:', error.request);
-//     }
-    
-//     if (Object.keys(additionalData).length > 0) {
-//       console.log('📦 Additional Data:', additionalData);
-//     }
-    
-//     console.groupEnd();
-//   };
-
-//   // Validation helper
-//   const validateMongoId = (id) => {
-//     if (!id) return { valid: false, reason: 'ID is empty' };
-//     const isValid = /^[0-9a-fA-F]{24}$/.test(id);
-//     return { 
-//       valid: isValid, 
-//       reason: isValid ? 'Valid' : 'Invalid format - must be 24 hex characters' 
-//     };
-//   };
-
-//   // Get passed customer from Customer Page (if any)
-//   const passedCustomer = location.state?.customer;
-  
-//   logDebug('normal', 'INIT', 'Component initialized', {
-//     hasPassedCustomer: !!passedCustomer,
-//     passedCustomerId: passedCustomer?._id
-//   });
-
-//   useEffect(() => {
-//     logDebug('normal', 'LIFECYCLE', 'Component mounted');
-//     return () => logDebug('normal', 'LIFECYCLE', 'Component unmounted');
-//   }, []);
-
-//   // Fixed Redux selectors
-//   const { customers, loading: customersLoading } = useSelector((state) => {
-//     const customerData = state.customers?.customers || state.customer?.customers || [];
-//     const customersArray = Array.isArray(customerData) ? customerData : [];
-    
-//     return {
-//       customers: customersArray,
-//       loading: state.customers?.loading || state.customer?.loading || false
-//     };
-//   });
-
-//   // ✅ Add categories selector to get category names
-//   const { categories } = useSelector((state) => {
-//     const categoriesData = state.categories?.categories || [];
-//     return {
-//       categories: Array.isArray(categoriesData) ? categoriesData : []
-//     };
-//   });
-
-//   const { user } = useSelector((state) => {
-//     return { user: state.auth?.user };
-//   });
-  
-//   // 📅 NEW: Calendar state from Redux
-//   const orderDates = useSelector(selectOrderDates);
-//   const calendarLoading = useSelector(selectCalendarLoading);
-  
-//   const [formData, setFormData] = useState({
-//     customer: "",
-//     deliveryDate: "",
-//     specialNotes: "",
-//     advancePayment: {
-//       amount: 0,
-//       method: "cash",
-//     },
-//   });
-
-//   // State for multiple payments
-//   const [payments, setPayments] = useState([]);
-//   const [showPaymentModal, setShowPaymentModal] = useState(false);
-//   const [editingPayment, setEditingPayment] = useState(null);
-
-//   const [garments, setGarments] = useState([]);
-//   const [showGarmentModal, setShowGarmentModal] = useState(false);
-//   const [editingGarment, setEditingGarment] = useState(null);
-//   const [searchTerm, setSearchTerm] = useState("");
-//   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
-//   const [selectedCustomerDisplay, setSelectedCustomerDisplay] = useState("");
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-//   const [serverErrors, setServerErrors] = useState(null);
-
-//   // 📅 NEW: Calendar state
-//   const [selectedDate, setSelectedDate] = useState(null);
-//   const [showCalendar, setShowCalendar] = useState(false);
-//   const [currentMonth, setCurrentMonth] = useState(new Date());
-//   const calendarRef = useRef(null);
-
-//   // Get user ID
-//   const userId = user?.id || user?._id;
-//   const userRole = user?.role;
-
-//   // Validate user ID
-//   const userIdValidation = validateMongoId(userId);
-
-//   logDebug('normal', 'AUTH', 'User authentication details', {
-//     userId,
-//     userIdValid: userIdValidation.valid,
-//     userRole
-//   });
-
-//   // Get base path based on user role
-//   const basePath = user?.role === "ADMIN" ? "/admin" : 
-//                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
-//                    "/cuttingmaster";
-
-//   // Load customers on mount
-//   useEffect(() => {
-//     logDebug('normal', 'API', 'Fetching customers');
-//     dispatch(fetchAllCustomers())
-//       .unwrap()
-//       .then((result) => {
-//         logDebug('normal', 'API', 'Customers fetched', { count: result?.length });
-//       })
-//       .catch((error) => {
-//         logError('fetchCustomers', error);
-//         showToast.error("Failed to load customers");
-//       });
-//   }, [dispatch]);
-
-//   // AUTO-FILL LOGIC: When passedCustomer is available, auto-select them
-//   useEffect(() => {
-//     if (passedCustomer) {
-//       logDebug('normal', 'AUTO-FILL', 'Auto-filling customer', {
-//         passedCustomerId: passedCustomer._id
-//       });
-      
-//       const fullCustomer = customers?.find(c => c._id === passedCustomer._id) || passedCustomer;
-      
-//       setFormData(prev => ({
-//         ...prev,
-//         customer: fullCustomer._id
-//       }));
-
-//       const fullName = getCustomerFullName(fullCustomer);
-//       const displayId = getCustomerDisplayId(fullCustomer);
-//       let displayText = `${fullName} (${displayId})`;
-      
-//       setSelectedCustomerDisplay(displayText);
-//       setSearchTerm(displayText);
-//       setShowCustomerDropdown(false);
-//     }
-//   }, [passedCustomer, customers]);
-
-//   // 📅 NEW: Fetch order dates when month changes
-//   useEffect(() => {
-//     const month = currentMonth.getMonth();
-//     const year = currentMonth.getFullYear();
-    
-//     logDebug('normal', 'CALENDAR', `Fetching order dates for month: ${month}, year: ${year}`);
-//     dispatch(fetchOrderDates({ month, year }));
-//   }, [currentMonth, dispatch]);
-
-//   // 📅 NEW: Close calendar when clicking outside
-//   useEffect(() => {
-//     function handleClickOutside(event) {
-//       if (calendarRef.current && !calendarRef.current.contains(event.target)) {
-//         setShowCalendar(false);
-//       }
-//     }
-//     document.addEventListener("mousedown", handleClickOutside);
-//     return () => document.removeEventListener("mousedown", handleClickOutside);
-//   }, []);
-
-//   // Helper functions for customer display
-//   const getCustomerFullName = (customer) => {
-//     if (!customer) return 'Unknown Customer';
-    
-//     if (customer.firstName || customer.lastName) {
-//       const firstName = customer.firstName || '';
-//       const lastName = customer.lastName || '';
-//       const fullName = `${firstName} ${lastName}`.trim();
-//       if (fullName) return fullName;
-//     }
-    
-//     if (customer.name) return customer.name;
-    
-//     return 'Unknown Customer';
-//   };
-
-//   const getCustomerDisplayId = (customer) => {
-//     if (!customer) return '';
-//     return customer.customerId || customer._id?.slice(-6) || '';
-//   };
-
-//   const getCustomerPhone = (customer) => {
-//     if (!customer) return 'No phone';
-//     return customer.phone || customer.whatsappNumber || 'No phone';
-//   };
-
-//   // Filter customers
-//   const filteredCustomers = useMemo(() => {
-//     if (!customers || !Array.isArray(customers) || customers.length === 0) {
-//       return [];
-//     }
-    
-//     if (formData.customer && searchTerm === selectedCustomerDisplay) {
-//       return [];
-//     }
-    
-//     return customers.filter(customer => {
-//       if (!customer) return false;
-
-//       const fullName = getCustomerFullName(customer).toLowerCase();
-//       const customerId = getCustomerDisplayId(customer).toLowerCase();
-//       const phone = getCustomerPhone(customer).toLowerCase();
-//       const firstName = (customer.firstName || '').toLowerCase();
-//       const lastName = (customer.lastName || '').toLowerCase();
-      
-//       const searchLower = searchTerm.toLowerCase();
-      
-//       return fullName.includes(searchLower) ||
-//              firstName.includes(searchLower) ||
-//              lastName.includes(searchLower) ||
-//              phone.includes(searchLower) ||
-//              customerId.includes(searchLower);
-//     });
-//   }, [customers, searchTerm, formData.customer, selectedCustomerDisplay]);
-
-//   // Calculate total payments
-//   const totalPayments = useMemo(() => {
-//     return payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-//   }, [payments]);
-
-//   // Calculate price summary
-//   const priceSummary = useMemo(() => {
-//     const totalMin = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.min || 0);
-//     }, 0);
-    
-//     const totalMax = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.max || 0);
-//     }, 0);
-    
-//     return { totalMin, totalMax };
-//   }, [garments]);
-
-//   // Calculate balance
-//   const balanceAmount = useMemo(() => {
-//     return {
-//       min: Number(priceSummary.totalMin) - totalPayments,
-//       max: Number(priceSummary.totalMax) - totalPayments,
-//     };
-//   }, [priceSummary, totalPayments]);
-
-//   // Payment handlers
-//   const handleAddPayment = useCallback(() => {
-//     setEditingPayment(null);
-//     setShowPaymentModal(true);
-//   }, []);
-
-//   const handleEditPayment = useCallback((payment) => {
-//     setEditingPayment(payment);
-//     setShowPaymentModal(true);
-//   }, []);
-
-//   const handleDeletePayment = useCallback((index) => {
-//     if (window.confirm("Are you sure you want to delete this payment?")) {
-//       const newPayments = [...payments];
-//       newPayments.splice(index, 1);
-//       setPayments(newPayments);
-//       showToast.success("Payment removed");
-//     }
-//   }, [payments]);
-
-//   // Handle Save Payment with proper type mapping
-//   const handleSavePayment = useCallback((paymentData) => {
-//     logDebug('normal', 'PAYMENT', 'Saving payment', { 
-//       isEdit: !!editingPayment,
-//       paymentData
-//     });
-    
-//     // Map frontend type to backend enum
-//     let backendType = paymentData.type || 'advance';
-//     if (backendType === 'partial') {
-//       backendType = 'part-payment';
-//     } else if (backendType === 'full') {
-//       backendType = 'final-settlement';
-//     }
-    
-//     const paymentWithMappedType = {
-//       ...paymentData,
-//       type: backendType,
-//       date: paymentData.paymentDate || paymentData.date || new Date().toISOString().split('T')[0],
-//       time: paymentData.paymentTime || paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false })
-//     };
-    
-//     if (editingPayment) {
-//       // Update existing payment
-//       const index = payments.findIndex(p => p.tempId === editingPayment.tempId);
-//       if (index !== -1) {
-//         const newPayments = [...payments];
-//         newPayments[index] = { 
-//           ...paymentWithMappedType, 
-//           tempId: editingPayment.tempId
-//         };
-//         setPayments(newPayments);
-//         showToast.success("Payment updated");
-//       }
-//     } else {
-//       // Add new payment
-//       const newPayment = {
-//         ...paymentWithMappedType,
-//         tempId: Date.now() + Math.random()
-//       };
-//       setPayments([...payments, newPayment]);
-//       showToast.success("Payment added");
-//     }
-    
-//     setShowPaymentModal(false);
-//     setEditingPayment(null);
-//   }, [payments, editingPayment]);
-
-//   // ✅ UPDATED: Garment handlers with customer validation
-//   const handleAddGarment = useCallback(() => {
-//     // Validate customer selected first
-//     if (!formData.customer) {
-//       showToast.error("Please select a customer first before adding garments");
-//       return;
-//     }
-    
-//     setEditingGarment(null);
-//     setShowGarmentModal(true);
-//   }, [formData.customer]);
-
-//   const handleEditGarment = useCallback((garment) => {
-//     setEditingGarment(garment);
-//     setShowGarmentModal(true);
-//   }, []);
-
-//   const handleDeleteGarment = useCallback((index, garment) => {
-//     if (window.confirm(`Are you sure you want to remove ${garment.name || 'this garment'}?`)) {
-//       const newGarments = [...garments];
-//       newGarments.splice(index, 1);
-//       setGarments(newGarments);
-//       showToast.success("Garment removed");
-//     }
-//   }, [garments]);
-
-//   // Handle Save Garment
-//   const handleSaveGarment = useCallback((garmentData) => {
-//     logDebug('normal', 'GARMENT', 'Saving garment', {
-//       isEdit: !!editingGarment
-//     });
-    
-//     if (garmentData instanceof FormData) {
-//       // Convert FormData to object
-//       const garmentObj = {
-//         tempId: editingGarment?.tempId || Date.now() + Math.random(),
-//         referenceImages: [],
-//         customerImages: [],
-//         customerClothImages: []
-//       };
-      
-//       for (let [key, value] of garmentData.entries()) {
-//         if (value instanceof File) {
-//           if (key === 'referenceImages') {
-//             garmentObj.referenceImages.push(value);
-//           } else if (key === 'customerImages') {
-//             garmentObj.customerImages.push(value);
-//           } else if (key === 'customerClothImages') {
-//             garmentObj.customerClothImages.push(value);
-//           }
-//         } else {
-//           if (key === 'measurements' || key === 'priceRange') {
-//             try {
-//               garmentObj[key] = JSON.parse(value);
-//             } catch (e) {
-//               garmentObj[key] = value;
-//             }
-//           } else {
-//             garmentObj[key] = value;
-//           }
-//         }
-//       }
-      
-//       if (editingGarment) {
-//         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-//         if (index !== -1) {
-//           const newGarments = [...garments];
-//           newGarments[index] = garmentObj;
-//           setGarments(newGarments);
-//           showToast.success("Garment updated");
-//         }
-//       } else {
-//         setGarments([...garments, garmentObj]);
-//         showToast.success("Garment added");
-//       }
-//     } else {
-//       if (editingGarment) {
-//         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
-//         if (index !== -1) {
-//           const newGarments = [...garments];
-//           newGarments[index] = { ...garmentData, tempId: editingGarment.tempId };
-//           setGarments(newGarments);
-//           showToast.success("Garment updated");
-//         }
-//       } else {
-//         const newGarment = {
-//           ...garmentData,
-//           tempId: Date.now() + Math.random()
-//         };
-//         setGarments([...garments, newGarment]);
-//         showToast.success("Garment added");
-//       }
-//     }
-    
-//     setShowGarmentModal(false);
-//   }, [garments, editingGarment]);
-
-//   const handleCustomerSelect = useCallback((customer) => {
-//     const fullName = getCustomerFullName(customer);
-//     const displayId = getCustomerDisplayId(customer);
-    
-//     setFormData(prev => ({
-//       ...prev,
-//       customer: customer._id
-//     }));
-
-//     let displayText = `${fullName} (${displayId})`;
-//     setSelectedCustomerDisplay(displayText);
-//     setSearchTerm(displayText);
-//     setShowCustomerDropdown(false);
-//   }, []);
-
-//   const handleSearchChange = useCallback((e) => {
-//     const value = e.target.value;
-//     setSearchTerm(value);
-//     setShowCustomerDropdown(true);
-    
-//     if (!value.trim()) {
-//       setFormData(prev => ({ ...prev, customer: "" }));
-//       setSelectedCustomerDisplay("");
-//     }
-//   }, []);
-
-//   // ✅ Helper function to get category name from ID
-//   const getCategoryName = useCallback((categoryId) => {
-//     if (!categoryId) return 'Unknown';
-//     const category = categories?.find(c => c._id === categoryId);
-//     return category?.name || category?.categoryName || categoryId;
-//   }, [categories]);
-
-//   // ✅ Helper function to get item name from garment object
-//   const getItemName = useCallback((garment) => {
-//     // First check if itemName is directly available (from GarmentForm)
-//     if (garment.itemName) return garment.itemName;
-    
-//     // If not, try to find in categories
-//     if (garment.item && categories) {
-//       for (const category of categories) {
-//         if (category.items && Array.isArray(category.items)) {
-//           const foundItem = category.items.find(item => 
-//             item._id === garment.item || item._id?.toString() === garment.item?.toString()
-//           );
-//           if (foundItem) return foundItem.name || foundItem.itemName;
-//         }
-//       }
-//     }
-    
-//     return garment.item || 'Unknown';
-//   }, [categories]);
-
-//   // 📅 NEW: Handle date selection from calendar
-//   const handleDateSelect = useCallback((date) => {
-//     setSelectedDate(date);
-//     setShowCalendar(false);
-    
-//     const dateStr = date.toISOString().split('T')[0];
-//     setFormData(prev => ({
-//       ...prev,
-//       deliveryDate: dateStr
-//     }));
-    
-//     logDebug('normal', 'CALENDAR', `Date selected: ${dateStr}`);
-//   }, []);
-
-//   // 📅 NEW: Handle month change in calendar
-//   const handleMonthChange = useCallback((date) => {
-//     setCurrentMonth(date);
-//   }, []);
-
-//   // 📅 NEW: Format date for display
-//   const formatDisplayDate = useCallback((date) => {
-//     if (!date) return "Select delivery date";
-//     return new Date(date).toLocaleDateString('en-IN', {
-//       weekday: 'short',
-//       year: 'numeric',
-//       month: 'short',
-//       day: 'numeric'
-//     });
-//   }, []);
-
-//   // 📅 NEW: Simple green dot for dates with orders
-//   const renderDayContents = useCallback((day, date) => {
-//     const dateStr = date.toISOString().split('T')[0];
-//     const hasOrders = orderDates.includes(dateStr);
-    
-//     return (
-//       <div className="relative">
-//         <div>{day}</div>
-//         {hasOrders && (
-//           <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
-//         )}
-//       </div>
-//     );
-//   }, [orderDates]);
-
-//   // Payment Method Icon Component
-//   const PaymentMethodIcon = ({ method }) => {
-//     switch(method) {
-//       case 'cash':
-//         return <Banknote size={14} className="text-green-600" />;
-//       case 'upi':
-//         return <Smartphone size={14} className="text-blue-600" />;
-//       case 'bank-transfer':
-//         return <Landmark size={14} className="text-purple-600" />;
-//       case 'card':
-//         return <CreditCard size={14} className="text-orange-600" />;
-//       default:
-//         return <Wallet size={14} className="text-slate-600" />;
-//     }
-//   };
-
-//   // COMPLETELY FIXED handleSubmit with proper validation and garments included
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-    
-//     logDebug('normal', 'SUBMIT', 'Form submission started');
-//     setServerErrors(null);
-
-//     // Validation
-//     if (!formData.customer) {
-//       showToast.error("Please select a customer");
-//       return;
-//     }
-
-//     if (garments.length === 0) {
-//       showToast.error("Please add at least one garment");
-//       return;
-//     }
-
-//     if (!formData.deliveryDate) {
-//       showToast.error("Please select delivery date");
-//       return;
-//     }
-
-//     const finalUserId = userId;
-//     if (!finalUserId) {
-//       showToast.error("You must be logged in to create an order");
-//       return;
-//     }
-
-//     // Validate MongoDB IDs
-//     const customerIdValid = /^[0-9a-fA-F]{24}$/.test(formData.customer);
-//     const userIdValid = /^[0-9a-fA-F]{24}$/.test(finalUserId);
-
-//     if (!customerIdValid) {
-//       showToast.error("Invalid customer ID format");
-//       return;
-//     }
-
-//     if (!userIdValid) {
-//       showToast.error("Invalid user ID format. Please log in again.");
-//       return;
-//     }
-
-//     setIsSubmitting(true);
-
-//     try {
-//       // Log garments before creating order data
-//       console.log("🔍 GARMENTS BEFORE ORDER CREATION:", JSON.stringify(garments, null, 2));
-//       console.log("📦 Garments count:", garments.length);
-
-//       // Map payment types to match model enum EXACTLY
-//       const mappedPayments = payments.map(payment => {
-//         let modelType = payment.type || 'advance';
-        
-//         if (modelType === 'partial') {
-//           modelType = 'part-payment';
-//         } else if (modelType === 'full') {
-//           modelType = 'final-settlement';
-//         }
-        
-//         const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-//         if (!validTypes.includes(modelType)) {
-//           console.error(`Invalid payment type after mapping: ${modelType}`);
-//           modelType = 'advance';
-//         }
-        
-//         return {
-//           amount: Number(payment.amount),
-//           type: modelType,
-//           method: payment.method || 'cash',
-//           referenceNumber: payment.referenceNumber || '',
-//           date: payment.date || new Date().toISOString().split('T')[0],
-//           notes: payment.notes || ''
-//         };
-//       });
-
-//       console.log("💰 Mapped Payments:", JSON.stringify(mappedPayments, null, 2));
-
-//       const validMethods = ['cash', 'upi', 'bank-transfer', 'card'];
-//       const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-      
-//       for (const payment of mappedPayments) {
-//         if (!validTypes.includes(payment.type)) {
-//           throw new Error(`Invalid payment type: ${payment.type}. Must be one of: ${validTypes.join(', ')}`);
-//         }
-//         if (!validMethods.includes(payment.method)) {
-//           throw new Error(`Invalid payment method: ${payment.method}`);
-//         }
-//         if (isNaN(payment.amount) || payment.amount <= 0) {
-//           throw new Error(`Invalid payment amount: ${payment.amount}`);
-//         }
-//       }
-
-//       // Create order data WITH GARMENTS INCLUDED
-//       const orderData = {
-//         customer: formData.customer,
-//         deliveryDate: formData.deliveryDate,
-//         specialNotes: formData.specialNotes || "",
-//         payments: mappedPayments,
-//         advancePayment: {
-//           amount: mappedPayments.length > 0 ? mappedPayments[0]?.amount || 0 : 0,
-//           method: mappedPayments.length > 0 ? mappedPayments[0]?.method || "cash" : "cash",
-//           date: new Date().toISOString()
-//         },
-//         priceSummary: {
-//           totalMin: Number(priceSummary.totalMin),
-//           totalMax: Number(priceSummary.totalMax)
-//         },
-//         balanceAmount: Number(balanceAmount.min),
-//         createdBy: finalUserId,
-//         status: "draft",
-//         orderDate: new Date().toISOString(),
-//         // ✅ FIXED: Include garments in the order data
-//         garments: garments.map(g => ({
-//           name: g.name,
-//           category: g.category,
-//           item: g.item,
-//           categoryName: g.categoryName,
-//           itemName: g.itemName,
-//           measurementTemplate: g.measurementTemplate,
-//           measurementSource: g.measurementSource,
-//           measurements: g.measurements,
-//           additionalInfo: g.additionalInfo,
-//           estimatedDelivery: g.estimatedDelivery || formData.deliveryDate,
-//           priority: g.priority || 'normal',
-//           priceRange: {
-//             min: Number(g.priceRange?.min) || 0,
-//             max: Number(g.priceRange?.max) || 0
-//           }
-//         }))
-//       };
-
-//       // Log the final order data
-//       console.log("🔍 FINAL ORDER DATA BEING SENT:", JSON.stringify(orderData, null, 2));
-//       console.log("📦 Order data garments count:", orderData.garments.length);
-
-//       const requiredFields = ['customer', 'deliveryDate', 'createdBy', 'priceSummary', 'balanceAmount', 'status', 'orderDate', 'garments'];
-//       const missingFields = requiredFields.filter(field => !orderData[field] || (field === 'garments' && orderData.garments.length === 0));
-      
-//       if (missingFields.length > 0) {
-//         throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
-//       }
-
-//       const result = await dispatch(createNewOrder(orderData)).unwrap();
-//       logDebug('normal', 'SUBMIT', 'Order created', result);
-      
-//       const orderId = result.order?._id || result._id;
-
-//       if (!orderId) {
-//         throw new Error("Order created but no ID returned");
-//       }
-
-//       // Now create garments with files if any
-//       for (const garment of garments) {
-//         const garmentFormData = new FormData();
-        
-//         garmentFormData.append("name", garment.name);
-//         garmentFormData.append("category", garment.category);
-//         garmentFormData.append("item", garment.item);
-        
-//         // ✅ Add categoryName and itemName if available
-//         if (garment.categoryName) {
-//           garmentFormData.append("categoryName", garment.categoryName);
-//         }
-        
-//         if (garment.itemName) {
-//           garmentFormData.append("itemName", garment.itemName);
-//         }
-        
-//         garmentFormData.append("measurementTemplate", garment.measurementTemplate || "");
-//         garmentFormData.append("measurementSource", garment.measurementSource || "template");
-//         garmentFormData.append("measurements", JSON.stringify(garment.measurements || []));
-//         garmentFormData.append("additionalInfo", garment.additionalInfo || "");
-//         garmentFormData.append("estimatedDelivery", garment.estimatedDelivery || formData.deliveryDate);
-//         garmentFormData.append("priority", garment.priority || "normal");
-//         garmentFormData.append("priceRange", JSON.stringify({
-//           min: Number(garment.priceRange?.min) || 0,
-//           max: Number(garment.priceRange?.max) || 0
-//         }));
-//         garmentFormData.append("orderId", orderId);
-//         garmentFormData.append("createdBy", finalUserId);
-
-//         // Append images if they exist
-//         if (garment.referenceImages?.length > 0) {
-//           garment.referenceImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("referenceImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerImages?.length > 0) {
-//           garment.customerImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerClothImages?.length > 0) {
-//           garment.customerClothImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerClothImages", img);
-//             }
-//           });
-//         }
-
-//         await dispatch(createGarment({ orderId, garmentData: garmentFormData })).unwrap();
-//       }
-
-//       showToast.success("Order created successfully! 🎉");
-//       navigate(`${basePath}/orders`);
-//     } catch (error) {
-//       logError('createOrder', error, { 
-//         formData, 
-//         garmentsCount: garments.length,
-//         paymentsCount: payments.length 
-//       });
-      
-//       if (error.response?.data) {
-//         setServerErrors(error.response.data);
-//       }
-      
-//       let errorMessage = "Failed to create order";
-      
-//       if (error.response?.data?.message) {
-//         errorMessage = error.response.data.message;
-//       } else if (error.response?.data?.errors) {
-//         errorMessage = `Validation failed: ${error.response.data.errors.join(', ')}`;
-//       } else if (error.message) {
-//         errorMessage = error.message;
-//       }
-      
-//       showToast.error(errorMessage);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Enhanced Debug Panel
-//   const DebugPanel = () => {
-//     if (!DEBUG.SHOW_PANEL || process.env.NODE_ENV !== 'development') return null;
-    
-//     return (
-//       <div className="bg-gray-900 text-green-400 p-4 rounded-2xl font-mono text-sm mb-4 overflow-auto max-h-[600px] border border-green-500/30">
-//         <div className="flex justify-between items-center mb-3 sticky top-0 bg-gray-900 pb-2 border-b border-gray-700">
-//           <div className="flex items-center gap-2">
-//             <Bug size={16} className="text-yellow-400" />
-//             <span className="font-bold text-yellow-400">DEBUG PANEL v3.0</span>
-//             <span className="text-xs bg-blue-600 px-2 py-0.5 rounded-full">DEV MODE</span>
-//           </div>
-//           <div className="flex gap-2">
-//             <button 
-//               onClick={() => window.location.reload()} 
-//               className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-//             >
-//               🔄 Refresh
-//             </button>
-//             <button 
-//               onClick={() => console.clear()} 
-//               className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-//             >
-//               🧹 Clear
-//             </button>
-//           </div>
-//         </div>
-        
-//         <div className="space-y-2 mb-3">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <Info size={14} /> STATE OVERVIEW
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Customer:</div>
-//             <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
-//               {formData.customer ? '✅ Selected' : '❌ Not selected'}
-//             </div>
-            
-//             <div className="text-gray-400">Customer ID:</div>
-//             <div className="font-mono text-xs">
-//               {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
-//             </div>
-            
-//             <div className="text-gray-400">ID Valid:</div>
-//             <div className={validateMongoId(formData.customer).valid ? 'text-green-400' : 'text-red-400'}>
-//               {validateMongoId(formData.customer).valid ? '✅' : '❌'}
-//             </div>
-            
-//             <div className="text-gray-400">Garments:</div>
-//             <div className="text-blue-400 font-bold">{garments.length}</div>
-            
-//             <div className="text-gray-400">Payments:</div>
-//             <div className="text-green-400 font-bold">{payments.length}</div>
-            
-//             <div className="text-gray-400">Total Paid:</div>
-//             <div className="text-green-400 font-bold">₹{totalPayments}</div>
-            
-//             {/* 📅 NEW: Order dates info */}
-//             <div className="text-gray-400">📅 Dates with orders:</div>
-//             <div className="text-green-400 font-bold">{orderDates.length}</div>
-//           </div>
-//         </div>
-
-//         <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <User size={14} /> USER INFO
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">User ID:</div>
-//             <div className="font-mono">{userId ? `${userId.substring(0,8)}...` : '❌'}</div>
-            
-//             <div className="text-gray-400">ID Valid:</div>
-//             <div className={userIdValidation.valid ? 'text-green-400' : 'text-red-400'}>
-//               {userIdValidation.valid ? '✅' : '❌'}
-//             </div>
-            
-//             <div className="text-gray-400">Role:</div>
-//             <div className="text-purple-400">{userRole || 'N/A'}</div>
-            
-//             <div className="text-gray-400">Base Path:</div>
-//             <div className="text-blue-400">{basePath}</div>
-//           </div>
-//         </div>
-
-//         {/* ✅ NEW: Garment Form Props Debug */}
-//         <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <Package size={14} /> GARMENT FORM PROPS
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Customer ID passed:</div>
-//             <div className={formData.customer ? 'text-green-400 font-bold' : 'text-red-400'}>
-//               {formData.customer ? '✅ Yes' : '❌ No'}
-//             </div>
-//             <div className="text-gray-400">Customer ID:</div>
-//             <div className="font-mono text-xs">
-//               {formData.customer ? `${formData.customer.substring(0,8)}...` : 'N/A'}
-//             </div>
-//             <div className="text-gray-400">Can add garments:</div>
-//             <div className={formData.customer ? 'text-green-400' : 'text-red-400'}>
-//               {formData.customer ? '✅ Yes' : '❌ Select customer first'}
-//             </div>
-//           </div>
-//         </div>
-
-//         {payments.length > 0 && (
-//           <div className="space-y-2 mb-3 border-t border-gray-700 pt-2">
-//             <div className="font-bold text-yellow-400 flex items-center gap-1">
-//               <Wallet size={14} /> PAYMENT DETAILS
-//             </div>
-//             {payments.map((p, idx) => {
-//               const validTypes = ['advance', 'part-payment', 'final-settlement', 'extra'];
-//               const typeValid = validTypes.includes(p.type);
-              
-//               return (
-//                 <div key={p.tempId} className="bg-gray-800 p-2 rounded text-xs">
-//                   <div className="grid grid-cols-2 gap-1">
-//                     <span className="text-gray-400">#{idx+1}:</span>
-//                     <span className="text-green-400">₹{p.amount}</span>
-                    
-//                     <span className="text-gray-400">Type:</span>
-//                     <div className="flex items-center gap-1">
-//                       <span className={`${
-//                         p.type === 'advance' ? 'text-blue-400' :
-//                         p.type === 'part-payment' ? 'text-orange-400' :
-//                         p.type === 'final-settlement' ? 'text-green-400' : 
-//                         p.type === 'extra' ? 'text-purple-400' : 'text-red-400'
-//                       }`}>
-//                         {p.type}
-//                       </span>
-//                       {!typeValid && (
-//                         <span className="text-red-400 font-bold ml-1">❌ INVALID</span>
-//                       )}
-//                     </div>
-                    
-//                     <span className="text-gray-400">Method:</span>
-//                     <span className="capitalize">{p.method}</span>
-                    
-//                     <span className="text-gray-400">Will map to:</span>
-//                     <span className="text-yellow-400">
-//                       {p.type === 'partial' ? 'part-payment' : 
-//                        p.type === 'full' ? 'final-settlement' : p.type}
-//                     </span>
-//                   </div>
-//                 </div>
-//               );
-//             })}
-//           </div>
-//         )}
-
-//         <div className="space-y-2 border-t border-gray-700 pt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <IndianRupee size={14} /> PRICE SUMMARY
-//           </div>
-//           <div className="grid grid-cols-2 gap-2 text-xs">
-//             <div className="text-gray-400">Total Min:</div>
-//             <div className="text-blue-400">₹{priceSummary.totalMin}</div>
-//             <div className="text-gray-400">Total Max:</div>
-//             <div className="text-blue-400">₹{priceSummary.totalMax}</div>
-//             <div className="text-gray-400">Balance Min:</div>
-//             <div className="text-orange-400">₹{balanceAmount.min}</div>
-//             <div className="text-gray-400">Balance Max:</div>
-//             <div className="text-orange-400">₹{balanceAmount.max}</div>
-//           </div>
-//         </div>
-
-//         <div className="space-y-2 border-t border-gray-700 pt-2 mt-2">
-//           <div className="font-bold text-yellow-400 flex items-center gap-1">
-//             <CheckCircle size={14} /> VALIDATION STATUS
-//           </div>
-//           <div className="space-y-1 text-xs">
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Customer Selected:</span>
-//               {formData.customer ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Garments Added:</span>
-//               {garments.length > 0 ? 
-//                 <span className="text-green-400">✅ ({garments.length})</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Delivery Date:</span>
-//               {formData.deliveryDate ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">User Logged In:</span>
-//               {userId ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//             <div className="flex items-center justify-between">
-//               <span className="text-gray-400">Payment Types Valid:</span>
-//               {payments.every(p => ['advance', 'part-payment', 'final-settlement', 'extra', 'partial', 'full'].includes(p.type)) ? 
-//                 <span className="text-green-400">✅</span> : 
-//                 <span className="text-red-400">❌</span>}
-//             </div>
-//           </div>
-//         </div>
-
-//         {serverErrors && (
-//           <div className="space-y-2 border-t border-red-700 pt-2 mt-2">
-//             <div className="font-bold text-red-400 flex items-center gap-1">
-//               <AlertCircle size={14} /> SERVER ERRORS
-//             </div>
-//             <div className="bg-red-900/50 p-2 rounded text-xs text-red-300">
-//               <pre className="whitespace-pre-wrap">
-//                 {JSON.stringify(serverErrors, null, 2)}
-//               </pre>
-//             </div>
-//           </div>
-//         )}
-
-//         <div className="text-xs text-gray-500 mt-4 text-center border-t border-gray-700 pt-2">
-//           <div>Last updated: {new Date().toLocaleTimeString()}</div>
-//           <div>Log Level: {DEBUG.LOG_LEVEL}</div>
-//         </div>
-//       </div>
-//     );
-//   };
-
-//   return (
-//     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 p-6">
-//       <DebugPanel />
-
-//       {/* Add Payment Modal */}
-//       <AddPaymentModal
-//         isOpen={showPaymentModal}
-//         onClose={() => {
-//           setShowPaymentModal(false);
-//           setEditingPayment(null);
-//         }}
-//         onSave={handleSavePayment}
-//         orderTotalMin={priceSummary.totalMin}
-//         orderTotalMax={priceSummary.totalMax}
-//         orderId="temp"
-//         customerId={formData.customer}
-//         initialData={editingPayment}
-//         title={editingPayment ? "Edit Payment" : "Add Payment"}
-//       />
-
-//       {/* Header */}
-//       <div className="flex items-center gap-4">
-//         <button
-//           onClick={() => navigate(`${basePath}/orders`)}
-//           className="p-2 hover:bg-slate-100 rounded-xl transition-all"
-//         >
-//           <ArrowLeft size={20} className="text-slate-600" />
-//         </button>
-//         <div>
-//           <h1 className="text-3xl font-black text-slate-800 tracking-tight">Create New Order</h1>
-//           <p className="text-slate-500">Add customer details and garments to create an order</p>
-//         </div>
-//       </div>
-
-//       {/* Main Form */}
-//       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-//         {/* Left Column - Customer & Order Details */}
-//         <div className="lg:col-span-2 space-y-6">
-//           {/* Customer Selection */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-//               <User size={20} className="text-blue-600" />
-//               Customer Details
-//             </h2>
-
-//             <div className="relative">
-//               <input
-//                 type="text"
-//                 placeholder="Search customer by name, phone or ID..."
-//                 value={searchTerm}
-//                 onChange={handleSearchChange}
-//                 onFocus={() => setShowCustomerDropdown(true)}
-//                 onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
-//                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-//               />
-
-//               {showCustomerDropdown && (
-//                 <>
-//                   {customersLoading && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-//                       <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent"></div>
-//                       <p className="text-sm text-slate-500 mt-2">Loading customers...</p>
-//                     </div>
-//                   )}
-
-//                   {!customersLoading && filteredCustomers.length > 0 && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-//                       {filteredCustomers.map((customer) => {
-//                         const fullName = getCustomerFullName(customer);
-//                         const displayId = getCustomerDisplayId(customer);
-//                         const phone = getCustomerPhone(customer);
-                        
-//                         return (
-//                           <button
-//                             key={customer._id}
-//                             type="button"
-//                             onClick={() => handleCustomerSelect(customer)}
-//                             className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-100 last:border-0"
-//                           >
-//                             <p className="font-medium text-slate-800">{fullName}</p>
-//                             <p className="text-xs text-slate-400">
-//                               <span className="font-mono">{displayId}</span> • {phone}
-//                             </p>
-//                           </button>
-//                         );
-//                       })}
-//                     </div>
-//                   )}
-
-//                   {!customersLoading && filteredCustomers.length === 0 && searchTerm && (
-//                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center">
-//                       <p className="text-slate-500">No customers found</p>
-//                       <button
-//                         type="button"
-//                         onClick={() => navigate(`${basePath}/add-customer`)}
-//                         className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-//                       >
-//                         + Create new customer
-//                       </button>
-//                     </div>
-//                   )}
-//                 </>
-//               )}
-
-//               {formData.customer && !showCustomerDropdown && (
-//                 <div className="mt-2 text-xs text-green-600 font-medium">
-//                   ✓ Customer selected: {selectedCustomerDisplay}
-//                 </div>
-//               )}
-//             </div>
-
-//             {/* Special Notes */}
-//             <div className="mt-4">
-//               <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-//                 Special Notes
-//               </label>
-//               <textarea
-//                 value={formData.specialNotes}
-//                 onChange={(e) => setFormData({ ...formData, specialNotes: e.target.value })}
-//                 rows="3"
-//                 placeholder="Any special instructions for this order..."
-//                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
-//               />
-//             </div>
-//           </div>
-
-//           {/* Garments Section - UPDATED with Category/Item Names */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <div className="flex items-center justify-between mb-4">
-//               <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-//                 <Package size={20} className="text-blue-600" />
-//                 Garments
-//               </h2>
-//               <button
-//                 type="button"
-//                 onClick={handleAddGarment}
-//                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2"
-//               >
-//                 <Plus size={16} />
-//                 Add Garment
-//               </button>
-//             </div>
-
-//             {garments.length === 0 ? (
-//               <div className="text-center py-8 bg-slate-50 rounded-xl">
-//                 <Package size={40} className="mx-auto text-slate-300 mb-2" />
-//                 <p className="text-slate-500">No garments added yet</p>
-//                 <button
-//                   type="button"
-//                   onClick={handleAddGarment}
-//                   className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-//                 >
-//                   + Add your first garment
-//                 </button>
-//               </div>
-//             ) : (
-//               <div className="space-y-3">
-//                 {garments.map((garment, index) => {
-//                   // Get category name
-//                   const categoryName = garment.categoryName || getCategoryName(garment.category);
-                  
-//                   // Get item name
-//                   const itemName = garment.itemName || getItemName(garment);
-                  
-//                   return (
-//                     <div
-//                       key={garment.tempId}
-//                       className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:shadow-md transition-all"
-//                     >
-//                       <div className="flex items-start justify-between">
-//                         <div className="flex-1">
-//                           <div className="flex items-center gap-2">
-//                             <h3 className="font-black text-slate-800">{garment.name}</h3>
-//                             <span className={`text-xs px-2 py-1 rounded-full ${
-//                               garment.priority === 'urgent' ? 'bg-red-100 text-red-600' :
-//                               garment.priority === 'high' ? 'bg-orange-100 text-orange-600' :
-//                               'bg-blue-100 text-blue-600'
-//                             }`}>
-//                               {garment.priority}
-//                             </span>
-//                             {(garment.referenceImages?.length > 0 || 
-//                               garment.customerImages?.length > 0 || 
-//                               garment.customerClothImages?.length > 0) && (
-//                               <span className="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded-full">
-//                                 📸 {garment.referenceImages?.length || 0}/
-//                                 {garment.customerImages?.length || 0}/
-//                                 {garment.customerClothImages?.length || 0}
-//                               </span>
-//                             )}
-//                           </div>
-                          
-//                           <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
-//                             {/* ✅ UPDATED: Show Category/Item Names instead of IDs */}
-//                             <div>
-//                               <p className="text-xs text-slate-400">Category/Item</p>
-//                               <p className="font-medium text-blue-700">
-//                                 {categoryName} / {itemName}
-//                               </p>
-//                               {/* Optional: Show IDs in small text for debugging */}
-//                               {process.env.NODE_ENV === 'development' && (
-//                                 <p className="text-xs text-slate-300 font-mono mt-0.5">
-//                                   {garment.category?.substring(0,6)}.../{garment.item?.substring(0,6)}...
-//                                 </p>
-//                               )}
-//                             </div>
-                            
-//                             <div>
-//                               <p className="text-xs text-slate-400">Garment Delivery</p>
-//                               <p className="font-medium text-purple-600">
-//                                 {garment.estimatedDelivery ? new Date(garment.estimatedDelivery).toLocaleDateString() : 'Not set'}
-//                               </p>
-//                             </div>
-                            
-//                             <div>
-//                               <p className="text-xs text-slate-400">Price Range</p>
-//                               <p className="font-medium">₹{garment.priceRange?.min} - ₹{garment.priceRange?.max}</p>
-//                             </div>
-//                           </div>
-                          
-//                           {garment.additionalInfo && (
-//                             <p className="text-sm text-slate-500 mt-2 italic">
-//                               Note: {garment.additionalInfo}
-//                             </p>
-//                           )}
-//                         </div>
-                        
-//                         <div className="flex gap-2 ml-4">
-//                           <button
-//                             type="button"
-//                             onClick={() => handleEditGarment(garment)}
-//                             className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
-//                             title="Edit"
-//                           >
-//                             Edit
-//                           </button>
-//                           <button
-//                             type="button"
-//                             onClick={() => handleDeleteGarment(index, garment)}
-//                             className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
-//                             title="Delete"
-//                           >
-//                             <Trash2 size={16} />
-//                           </button>
-//                         </div>
-//                       </div>
-//                     </div>
-//                   );
-//                 })}
-//               </div>
-//             )}
-//           </div>
-
-//           {/* 📅 UPDATED: Delivery Date with Green Circle Calendar */}
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-//               <Calendar size={20} className="text-blue-600" />
-//               Order Delivery Details
-//             </h2>
-            
-//             <div>
-//               <label className="block text-xs font-black uppercase text-slate-500 mb-2">
-//                 Expected Delivery Date <span className="text-red-500">*</span>
-//               </label>
-              
-//               <div className="relative" ref={calendarRef}>
-//                 {/* Custom Date Picker Button */}
-//                 <button
-//                   type="button"
-//                   onClick={() => setShowCalendar(!showCalendar)}
-//                   className="w-full flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-left"
-//                 >
-//                   <Calendar size={18} className="text-slate-400" />
-//                   <span className={formData.deliveryDate ? "text-slate-800" : "text-slate-400"}>
-//                     {formatDisplayDate(formData.deliveryDate || selectedDate)}
-//                   </span>
-//                   {calendarLoading && (
-//                     <div className="ml-auto w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-//                   )}
-//                 </button>
-
-//                 {/* Calendar Popup */}
-//                 {showCalendar && (
-//                   <div className="absolute z-20 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl p-4">
-//                     <DatePicker
-//                       inline
-//                       selected={selectedDate}
-//                       onChange={handleDateSelect}
-//                       onMonthChange={handleMonthChange}
-//                       minDate={new Date()}
-//                       renderDayContents={renderDayContents}
-//                       calendarClassName="!border-0"
-//                     />
-                    
-//                     {/* Simple Legend */}
-//                     <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100 text-xs">
-//                       <div className="flex items-center gap-2">
-//                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-//                         <span className="text-slate-600">Orders exist</span>
-//                       </div>
-//                       <div className="flex items-center gap-2">
-//                         <div className="w-3 h-3 bg-transparent border border-slate-300 rounded-full"></div>
-//                         <span className="text-slate-600">No orders</span>
-//                       </div>
-//                     </div>
-//                   </div>
-//                 )}
-//               </div>
-
-//               {/* Selected Date Info */}
-//               {formData.deliveryDate && (
-//                 <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-//                   <p className="text-sm text-blue-700">
-//                     ✓ Delivery selected: {new Date(formData.deliveryDate).toLocaleDateString('en-IN', {
-//                       weekday: 'long',
-//                       year: 'numeric',
-//                       month: 'long',
-//                       day: 'numeric'
-//                     })}
-//                   </p>
-//                 </div>
-//               )}
-              
-//               <p className="text-xs text-slate-400 mt-2">
-//                 This is the overall order delivery date. Each garment can have its own estimated delivery date.
-//               </p>
-//             </div>
-//           </div>
-//         </div>
-
-//         {/* Right Column - Payment Summary */}
-//         <div className="lg:col-span-1">
-//           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 sticky top-6">
-//             <h2 className="text-lg font-black text-slate-800 mb-4">Price Summary</h2>
-            
-//             <div className="space-y-4">
-//               <div className="bg-blue-50 p-4 rounded-xl">
-//                 <p className="text-xs text-blue-600 font-black uppercase mb-1">Total Amount</p>
-//                 <p className="text-2xl font-black text-blue-700">
-//                   ₹{priceSummary.totalMin} - ₹{priceSummary.totalMax}
-//                 </p>
-//               </div>
-
-//               {/* Garment Delivery Range */}
-//               {garments.length > 0 && (
-//                 <div className="bg-purple-50 p-4 rounded-xl">
-//                   <p className="text-xs text-purple-600 font-black uppercase mb-1">
-//                     Garment Delivery Range
-//                   </p>
-//                   <p className="text-sm font-bold text-purple-700">
-//                     {new Date(Math.min(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()} - {new Date(Math.max(...garments.map(g => new Date(g.estimatedDelivery || formData.deliveryDate)))).toLocaleDateString()}
-//                   </p>
-//                 </div>
-//               )}
-
-//               {/* Payments Section */}
-//               <div className="border-t border-slate-100 pt-4">
-//                 <div className="flex items-center justify-between mb-3">
-//                   <h3 className="text-sm font-black text-slate-700">Payments</h3>
-//                   <button
-//                     type="button"
-//                     onClick={handleAddPayment}
-//                     className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1"
-//                   >
-//                     <Plus size={14} />
-//                     Add Payment
-//                   </button>
-//                 </div>
-
-//                 {payments.length === 0 ? (
-//                   <p className="text-sm text-slate-400 italic text-center py-2">
-//                     No payments added yet
-//                   </p>
-//                 ) : (
-//                   <div className="space-y-2 max-h-48 overflow-y-auto">
-//                     {payments.map((payment, index) => (
-//                       <div
-//                         key={payment.tempId}
-//                         className="bg-slate-50 rounded-lg p-3 border border-slate-200"
-//                       >
-//                         <div className="flex items-start justify-between">
-//                           <div className="flex-1">
-//                             <div className="flex items-center gap-2">
-//                               <p className="font-bold text-green-600">₹{payment.amount}</p>
-//                               <span className={`text-xs px-2 py-0.5 rounded-full ${
-//                                 payment.type === 'advance' ? 'bg-blue-100 text-blue-700' :
-//                                 payment.type === 'part-payment' ? 'bg-orange-100 text-orange-700' :
-//                                 payment.type === 'final-settlement' ? 'bg-green-100 text-green-700' :
-//                                 'bg-purple-100 text-purple-700'
-//                               }`}>
-//                                 {payment.type === 'advance' ? 'Advance' :
-//                                  payment.type === 'part-payment' ? 'Part' :
-//                                  payment.type === 'final-settlement' ? 'Full' : 'Extra'}
-//                               </span>
-//                             </div>
-//                             <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-//                               <PaymentMethodIcon method={payment.method} />
-//                               <span className="capitalize">{payment.method}</span>
-//                             </div>
-//                             {payment.referenceNumber && (
-//                               <p className="text-xs text-purple-600 font-mono mt-0.5">
-//                                 Ref: {payment.referenceNumber}
-//                               </p>
-//                             )}
-//                             <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-//                               <span>{new Date(payment.date).toLocaleDateString()}</span>
-//                               <span>•</span>
-//                               <span>{payment.time}</span>
-//                             </div>
-//                             {payment.notes && (
-//                               <p className="text-xs text-slate-400 mt-1 italic">
-//                                 {payment.notes}
-//                               </p>
-//                             )}
-//                           </div>
-//                           <div className="flex gap-1 ml-2">
-//                             <button
-//                               type="button"
-//                               onClick={() => handleEditPayment(payment)}
-//                               className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
-//                               title="Edit"
-//                             >
-//                               Edit
-//                             </button>
-//                             <button
-//                               type="button"
-//                               onClick={() => handleDeletePayment(index)}
-//                               className="p-1.5 bg-red-100 text-red-600 rounded hover:bg-red-200"
-//                               title="Delete"
-//                             >
-//                               <Trash2 size={14} />
-//                             </button>
-//                           </div>
-//                         </div>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 )}
-
-//                 {payments.length > 0 && (
-//                   <div className="mt-3 pt-2 border-t border-slate-200">
-//                     <div className="flex justify-between text-sm">
-//                       <span className="font-medium text-slate-600">Total Paid:</span>
-//                       <span className="font-bold text-green-600">₹{totalPayments}</span>
-//                     </div>
-//                   </div>
-//                 )}
-//               </div>
-
-//               <div className="bg-orange-50 p-4 rounded-xl">
-//                 <p className="text-xs text-orange-600 font-black uppercase mb-1">Balance Amount</p>
-//                 <p className="text-xl font-black text-orange-700">
-//                   ₹{balanceAmount.min} - ₹{balanceAmount.max}
-//                 </p>
-//               </div>
-
-//               <button
-//                 type="submit"
-//                 disabled={isSubmitting || !userId}
-//                 className={`w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-4 rounded-xl font-black uppercase tracking-wider shadow-lg shadow-blue-500/30 transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 mt-6 ${
-//                   isSubmitting || !userId ? 'opacity-50 cursor-not-allowed' : ''
-//                 }`}
-//               >
-//                 {isSubmitting ? (
-//                   <>
-//                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-//                     Creating...
-//                   </>
-//                 ) : !userId ? (
-//                   'Please log in to create order'
-//                 ) : (
-//                   <>
-//                     <Save size={18} />
-//                     Create Order
-//                   </>
-//                 )}
-//               </button>
-
-//               <button
-//                 type="button"
-//                 onClick={() => navigate(`${basePath}/orders`)}
-//                 className="w-full px-6 py-4 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-black uppercase tracking-wider transition-all"
-//               >
-//                 Cancel
-//               </button>
-//             </div>
-//           </div>
-//         </div>
-//       </form>
-
-//       {/* Garment Form Modal with customerId prop */}
-//       {showGarmentModal && (
-//         <GarmentForm
-//           onClose={() => setShowGarmentModal(false)}
-//           onSave={handleSaveGarment}
-//           editingGarment={editingGarment}
-//           customerId={formData.customer}
-//         />
-//       )}
-//     </div>
-//   );
-// }
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-// import { useDispatch, useSelector } from "react-redux";
-// import { useNavigate, useLocation } from "react-router-dom";
-// import {
-//   ArrowLeft,
-//   Save,
-//   Plus,
-//   Trash2,
-//   User,
-//   Calendar,
-//   CreditCard,
-//   IndianRupee,
-//   Package,
-//   Clock,
-//   Wallet,
-//   Banknote,
-//   Smartphone,
-//   Landmark,
-//   X,
-//   AlertCircle,
-//   CheckCircle,
+//   Image as ImageIcon,
+//   Eye,
 // } from "lucide-react";
 // import { createNewOrder } from "../../../features/order/orderSlice";
 // import { createGarment } from "../../../features/garment/garmentSlice";
@@ -5992,6 +30,7 @@
 // import "react-datepicker/dist/react-datepicker.css";
 // import GarmentForm from "../garment/GarmentForm";
 // import AddPaymentModal from "../../../components/AddPaymentModal";
+// import ImagePreviewModal from "../../../components/ImagePreviewModal";
 // import showToast from "../../../utils/toast";
 
 // export default function NewOrder() {
@@ -5999,10 +38,10 @@
 //   const navigate = useNavigate();
 //   const location = useLocation();
 
-//   // Get passed customer from Customer Page (if any)
+//   // 🎯 Customer Page-la irundhu varum customer details (passed through navigation state)
 //   const passedCustomer = location.state?.customer;
 
-//   // Redux selectors
+//   // 📦 Redux selectors - Global state-la irundhu data eduthukom
 //   const { customers, loading: customersLoading } = useSelector((state) => {
 //     const customerData = state.customers?.customers || state.customer?.customers || [];
 //     const customersArray = Array.isArray(customerData) ? customerData : [];
@@ -6021,10 +60,11 @@
 
 //   const { user } = useSelector((state) => state.auth);
   
-//   // Calendar state from Redux
+//   // 📅 Calendar state from Redux (delivery dates with existing orders)
 //   const orderDates = useSelector(selectOrderDates);
 //   const calendarLoading = useSelector(selectCalendarLoading);
   
+//   // 📝 Main form state - customer, delivery date, notes
 //   const [formData, setFormData] = useState({
 //     customer: "",
 //     deliveryDate: "",
@@ -6035,31 +75,52 @@
 //     },
 //   });
 
-//   // State for multiple payments
+//   // 💰 Multiple payments management
 //   const [payments, setPayments] = useState([]);
 //   const [showPaymentModal, setShowPaymentModal] = useState(false);
 //   const [editingPayment, setEditingPayment] = useState(null);
+  
+//   // 🔥 NEW: Track current order ID for payments after creation
+//   const [currentOrderId, setCurrentOrderId] = useState("temp");
 
+//   // 👕 Garments management
 //   const [garments, setGarments] = useState([]);
 //   const [showGarmentModal, setShowGarmentModal] = useState(false);
 //   const [editingGarment, setEditingGarment] = useState(null);
+  
+//   // 🔍 Customer search and selection
 //   const [searchTerm, setSearchTerm] = useState("");
 //   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 //   const [selectedCustomerDisplay, setSelectedCustomerDisplay] = useState("");
+  
+//   // ⏳ Form submission states
 //   const [isSubmitting, setIsSubmitting] = useState(false);
 //   const [serverErrors, setServerErrors] = useState(null);
 
-//   // Calendar state
+//   // 📅 Calendar states
 //   const [selectedDate, setSelectedDate] = useState(null);
 //   const [showCalendar, setShowCalendar] = useState(false);
 //   const [currentMonth, setCurrentMonth] = useState(new Date());
 //   const calendarRef = useRef(null);
 
-//   // Get user ID
+//   // 🖼️ Image preview states
+//   const [showImagePreview, setShowImagePreview] = useState(false);
+//   const [previewImages, setPreviewImages] = useState([]);
+//   const [previewTitle, setPreviewTitle] = useState("");
+
+//   // 🔒 DUPLICATE SUBMISSION PREVENTION - using ref for instant lock
+//   const isSubmittingRef = useRef(false);
+  
+//   // 🆔 Generate unique request ID for tracking submissions
+//   const generateRequestId = () => {
+//     return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${Math.random().toString(36).substring(2, 15)}`;
+//   };
+
+//   // 👤 Get user ID from auth
 //   const userId = user?.id || user?._id;
 //   const userRole = user?.role;
 
-//   // Get base path based on user role
+//   // 🧭 Base path based on user role (navigation purpose)
 //   const basePath = user?.role === "ADMIN" ? "/admin" : 
 //                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
 //                    "/cuttingmaster";
@@ -6073,7 +134,7 @@
 //       });
 //   }, [dispatch]);
 
-//   // AUTO-FILL LOGIC: When passedCustomer is available, auto-select them
+//   // AUTO-FILL: When customer passed from Customer page, auto-select them
 //   useEffect(() => {
 //     if (passedCustomer) {
 //       const fullCustomer = customers?.find(c => c._id === passedCustomer._id) || passedCustomer;
@@ -6093,7 +154,7 @@
 //     }
 //   }, [passedCustomer, customers]);
 
-//   // Fetch order dates when month changes
+//   // Fetch order dates for calendar when month changes
 //   useEffect(() => {
 //     const month = currentMonth.getMonth();
 //     const year = currentMonth.getFullYear();
@@ -6111,7 +172,7 @@
 //     return () => document.removeEventListener("mousedown", handleClickOutside);
 //   }, []);
 
-//   // Helper functions for customer display
+//   // 👤 Helper: Get customer full name from various possible fields
 //   const getCustomerFullName = (customer) => {
 //     if (!customer) return 'Unknown Customer';
     
@@ -6127,17 +188,19 @@
 //     return 'Unknown Customer';
 //   };
 
+//   // 🔢 Helper: Get customer display ID (customerId or last 6 digits of _id)
 //   const getCustomerDisplayId = (customer) => {
 //     if (!customer) return '';
 //     return customer.customerId || customer._id?.slice(-6) || '';
 //   };
 
+//   // 📞 Helper: Get customer phone number
 //   const getCustomerPhone = (customer) => {
 //     if (!customer) return 'No phone';
 //     return customer.phone || customer.whatsappNumber || 'No phone';
 //   };
 
-//   // Filter customers
+//   // Filter customers based on search term
 //   const filteredCustomers = useMemo(() => {
 //     if (!customers || !Array.isArray(customers) || customers.length === 0) {
 //       return [];
@@ -6166,55 +229,134 @@
 //     });
 //   }, [customers, searchTerm, formData.customer, selectedCustomerDisplay]);
 
-//   // Calculate total payments
+//   // Calculate total payments - with NaN protection and DEBUG
 //   const totalPayments = useMemo(() => {
-//     return payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+//     console.log("%c💰💰💰 CALCULATING TOTAL PAYMENTS 💰💰💰", "background: purple; color: white; font-size: 12px");
+//     console.log("Payments array:", payments);
+    
+//     const total = payments.reduce((sum, payment, idx) => {
+//       const rawAmount = payment.amount;
+//       const numAmount = Number(rawAmount);
+//       const safeAmount = isNaN(numAmount) ? 0 : numAmount;
+      
+//       console.log(`  Payment ${idx + 1}:`, {
+//         raw: rawAmount,
+//         type: typeof rawAmount,
+//         converted: numAmount,
+//         safe: safeAmount,
+//         isNaN: isNaN(numAmount)
+//       });
+      
+//       return sum + safeAmount;
+//     }, 0);
+    
+//     console.log("✅ Total payments:", total);
+//     return total;
 //   }, [payments]);
 
-//   // Calculate price summary
+//   // Calculate price summary - with NaN protection and DEBUG
 //   const priceSummary = useMemo(() => {
-//     const totalMin = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.min || 0);
+//     console.log("%c👕👕👕 CALCULATING PRICE SUMMARY 👕👕👕", "background: blue; color: white; font-size: 12px");
+//     console.log("Garments count:", garments.length);
+    
+//     const totalMin = garments.reduce((sum, g, idx) => {
+//       const rawMin = g.priceRange?.min;
+//       const numMin = Number(rawMin);
+//       const safeMin = isNaN(numMin) ? 0 : numMin;
+      
+//       console.log(`  Garment ${idx + 1} (${g.name}):`, {
+//         raw: rawMin,
+//         type: typeof rawMin,
+//         converted: numMin,
+//         safe: safeMin,
+//         isNaN: isNaN(numMin)
+//       });
+      
+//       return sum + safeMin;
 //     }, 0);
     
-//     const totalMax = garments.reduce((sum, g) => {
-//       return sum + Number(g.priceRange?.max || 0);
+//     const totalMax = garments.reduce((sum, g, idx) => {
+//       const rawMax = g.priceRange?.max;
+//       const numMax = Number(rawMax);
+//       const safeMax = isNaN(numMax) ? 0 : numMax;
+      
+//       console.log(`  Garment ${idx + 1} max:`, {
+//         raw: rawMax,
+//         type: typeof rawMax,
+//         converted: numMax,
+//         safe: safeMax,
+//         isNaN: isNaN(numMax)
+//       });
+      
+//       return sum + safeMax;
 //     }, 0);
     
+//     console.log("✅ Price summary - Min:", totalMin, "Max:", totalMax);
 //     return { totalMin, totalMax };
 //   }, [garments]);
 
-//   // Calculate balance
+//   // Calculate balance - with NaN protection and DEBUG
 //   const balanceAmount = useMemo(() => {
-//     return {
-//       min: Number(priceSummary.totalMin) - totalPayments,
-//       max: Number(priceSummary.totalMax) - totalPayments,
+//     console.log("%c⚖️⚖️⚖️ CALCULATING BALANCE ⚖️⚖️⚖️", "background: orange; color: white; font-size: 12px");
+    
+//     const totalMin = isNaN(priceSummary.totalMin) ? 0 : Number(priceSummary.totalMin);
+//     const totalMax = isNaN(priceSummary.totalMax) ? 0 : Number(priceSummary.totalMax);
+//     const paid = isNaN(totalPayments) ? 0 : Number(totalPayments);
+    
+//     console.log("  Total Min:", totalMin);
+//     console.log("  Total Max:", totalMax);
+//     console.log("  Total Paid:", paid);
+    
+//     const balance = {
+//       min: totalMin - paid,
+//       max: totalMax - paid,
 //     };
+    
+//     console.log("✅ Balance - Min:", balance.min, "Max:", balance.max);
+//     return balance;
 //   }, [priceSummary, totalPayments]);
 
 //   // Payment handlers
 //   const handleAddPayment = useCallback(() => {
+//     console.log("%c➕➕➕ ADD PAYMENT BUTTON CLICKED ➕➕➕", "background: green; color: white; font-size: 12px");
 //     setEditingPayment(null);
 //     setShowPaymentModal(true);
 //   }, []);
 
 //   const handleEditPayment = useCallback((payment) => {
+//     console.log("%c✏️✏️✏️ EDIT PAYMENT ✏️✏️✏️", "background: orange; color: white; font-size: 12px");
+//     console.log("Payment to edit:", payment);
 //     setEditingPayment(payment);
 //     setShowPaymentModal(true);
 //   }, []);
 
 //   const handleDeletePayment = useCallback((index) => {
+//     console.log("%c🗑️🗑️🗑️ DELETE PAYMENT 🗑️🗑️🗑️", "background: red; color: white; font-size: 12px");
+//     console.log("Deleting payment at index:", index);
+//     console.log("Payment:", payments[index]);
+    
 //     if (window.confirm("Are you sure you want to delete this payment?")) {
 //       const newPayments = [...payments];
 //       newPayments.splice(index, 1);
 //       setPayments(newPayments);
+//       console.log("✅ Payment deleted, remaining:", newPayments.length);
 //       showToast.success("Payment removed");
 //     }
 //   }, [payments]);
 
-//   // Handle Save Payment with proper type mapping
+//   // 🔥 FIXED: Handle Save Payment - Works for both new and existing orders
 //   const handleSavePayment = useCallback((paymentData) => {
-//     // Map frontend type to backend enum
+//     console.log("%c💾💾💾 SAVE PAYMENT CALLED 💾💾💾", "background: purple; color: white; font-size: 14px");
+//     console.log("📦 Payment data received:", JSON.parse(JSON.stringify(paymentData)));
+//     console.log("📦 Current Order ID:", currentOrderId);
+//     console.log("📦 Is New Order?", currentOrderId === "temp");
+    
+//     // 🔥 CRITICAL: Check if amount is valid
+//     console.log("💰 Amount in paymentData:", paymentData.amount);
+//     console.log("💰 Amount type:", typeof paymentData.amount);
+//     console.log("💰 Is NaN:", isNaN(paymentData.amount));
+    
+//     // Map type
 //     let backendType = paymentData.type || 'advance';
 //     if (backendType === 'partial') {
 //       backendType = 'part-payment';
@@ -6229,35 +371,83 @@
 //       time: paymentData.paymentTime || paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false })
 //     };
     
-//     if (editingPayment) {
-//       // Update existing payment
-//       const index = payments.findIndex(p => p.tempId === editingPayment.tempId);
-//       if (index !== -1) {
-//         const newPayments = [...payments];
-//         newPayments[index] = { 
-//           ...paymentWithMappedType, 
-//           tempId: editingPayment.tempId
+//     console.log("📦 Payment with mapped type:", JSON.parse(JSON.stringify(paymentWithMappedType)));
+    
+//     // 🔥 NEW: Check if this is a new order (before creation) or existing order (after creation)
+//     if (currentOrderId === "temp") {
+//       // NEW ORDER - Store in local state
+//       console.log("📝 New order - storing payment locally");
+      
+//       if (editingPayment) {
+//         console.log("✏️ Updating existing payment, tempId:", editingPayment.tempId);
+//         const index = payments.findIndex(p => p.tempId === editingPayment.tempId);
+//         console.log("Found at index:", index);
+        
+//         if (index !== -1) {
+//           const newPayments = [...payments];
+//           newPayments[index] = { 
+//             ...paymentWithMappedType, 
+//             tempId: editingPayment.tempId
+//           };
+//           setPayments(newPayments);
+//           console.log("✅ Payment updated, new payments array:", newPayments);
+//           showToast.success("Payment updated");
+//         }
+//       } else {
+//         const newPayment = {
+//           ...paymentWithMappedType,
+//           tempId: Date.now() + Math.random()
 //         };
-//         setPayments(newPayments);
-//         showToast.success("Payment updated");
+//         console.log("➕ Adding new payment with tempId:", newPayment.tempId);
+//         setPayments(prev => {
+//           const updated = [...prev, newPayment];
+//           console.log("✅ Payment added, new payments array:", updated);
+//           return updated;
+//         });
+//         showToast.success("Payment added");
 //       }
 //     } else {
-//       // Add new payment
-//       const newPayment = {
-//         ...paymentWithMappedType,
-//         tempId: Date.now() + Math.random()
-//       };
-//       setPayments([...payments, newPayment]);
-//       showToast.success("Payment added");
+//       // EXISTING ORDER - Call API directly
+//       console.log("📡 Existing order - calling API to add payment");
+      
+//       // Show loading toast
+//       const toastId = showToast.loading("Adding payment...");
+      
+//       // Call API to add payment (you need to implement this in Redux)
+//       dispatch(addPaymentToOrder({
+//         orderId: currentOrderId,
+//         paymentData: {
+//           amount: paymentData.amount,
+//           type: paymentData.type,
+//           method: paymentData.method,
+//           referenceNumber: paymentData.referenceNumber,
+//           paymentDate: paymentData.paymentDate,
+//           paymentTime: paymentData.paymentTime,
+//           notes: paymentData.notes
+//         }
+//       })).then((result) => {
+//         console.log("✅ Payment added via API:", result);
+//         showToast.dismiss(toastId);
+//         showToast.success("Payment added successfully!");
+        
+//         // Refresh order data to show updated payments
+//         dispatch(fetchOrderById(currentOrderId));
+//       }).catch((error) => {
+//         console.error("❌ Error adding payment:", error);
+//         showToast.dismiss(toastId);
+//         showToast.error(error.response?.data?.message || "Failed to add payment");
+//       });
 //     }
     
 //     setShowPaymentModal(false);
 //     setEditingPayment(null);
-//   }, [payments, editingPayment]);
+//   }, [payments, editingPayment, currentOrderId, dispatch]);
 
 //   // Garment handlers with customer validation
 //   const handleAddGarment = useCallback(() => {
+//     console.log("%c➕➕➕ ADD GARMENT BUTTON CLICKED ➕➕➕", "background: blue; color: white; font-size: 12px");
 //     if (!formData.customer) {
+//       console.log("❌ Cannot add garment - no customer selected");
 //       showToast.error("Please select a customer first before adding garments");
 //       return;
 //     }
@@ -6267,21 +457,217 @@
 //   }, [formData.customer]);
 
 //   const handleEditGarment = useCallback((garment) => {
+//     console.log("%c✏️✏️✏️ EDIT GARMENT ✏️✏️✏️", "background: orange; color: white; font-size: 12px");
+//     console.log("Garment to edit:", garment);
 //     setEditingGarment(garment);
 //     setShowGarmentModal(true);
 //   }, []);
 
 //   const handleDeleteGarment = useCallback((index, garment) => {
+//     console.log("%c🗑️🗑️🗑️ DELETE GARMENT 🗑️🗑️🗑️", "background: red; color: white; font-size: 12px");
+//     console.log("Deleting garment at index:", index);
+//     console.log("Garment:", garment);
+    
 //     if (window.confirm(`Are you sure you want to remove ${garment.name || 'this garment'}?`)) {
 //       const newGarments = [...garments];
 //       newGarments.splice(index, 1);
 //       setGarments(newGarments);
+//       console.log("✅ Garment deleted, remaining:", newGarments.length);
 //       showToast.success("Garment removed");
 //     }
 //   }, [garments]);
 
-//   // Handle Save Garment
+//   // 🖼️ FIXED: Image preview handlers with better logging
+//   const handleViewImages = useCallback((images, type) => {
+//     console.log(`%c👁️👁️👁️ VIEW IMAGES: ${type} 👁️👁️👁️`, "background: purple; color: white; font-size: 12px");
+//     console.log("Images:", images);
+//     console.log("Image count:", images?.length);
+    
+//     if (images && images.length > 0) {
+//       try {
+//         // Create object URLs for File objects
+//         const imageUrls = images.map((img, idx) => {
+//           if (img instanceof File) {
+//             console.log(`  Creating URL for File ${idx + 1}:`, img.name);
+//             return URL.createObjectURL(img);
+//           } else if (img?.url) {
+//             console.log(`  Using URL from object:`, img.url);
+//             return img.url;
+//           } else if (typeof img === 'string') {
+//             console.log(`  Using string URL:`, img);
+//             return img;
+//           } else {
+//             console.log(`  Unknown image type:`, img);
+//             return null;
+//           }
+//         }).filter(url => url !== null);
+        
+//         console.log(`  Setting ${imageUrls.length} preview images`);
+//         setPreviewImages(imageUrls);
+//         setPreviewTitle(type);
+//         setShowImagePreview(true);
+//       } catch (error) {
+//         console.error("❌ Error in handleViewImages:", error);
+//         showToast.error("Failed to load images");
+//       }
+//     } else {
+//       console.warn("⚠️ No images to view");
+//       showToast.warning("No images to display");
+//     }
+//   }, []);
+
+//   // Clean up object URLs when modal closes
+//   const handleClosePreview = useCallback(() => {
+//     console.log("%c🗑️🗑️🗑️ CLOSING PREVIEW, CLEANING UP URLs 🗑️🗑️🗑️", "background: red; color: white; font-size: 12px");
+    
+//     // Revoke object URLs to avoid memory leaks
+//     previewImages.forEach(url => {
+//       if (url && typeof url === 'string' && url.startsWith('blob:')) {
+//         try {
+//           URL.revokeObjectURL(url);
+//           console.log("  Revoked URL:", url);
+//         } catch (e) {
+//           console.error("Error revoking URL:", e);
+//         }
+//       }
+//     });
+    
+//     setShowImagePreview(false);
+//     setPreviewImages([]);
+//     setPreviewTitle("");
+//   }, [previewImages]);
+
+//   // 🖼️ FIXED: Image Gallery Component with HORIZONTAL scroll
+//   const ImageGallery = ({ images, type, onView }) => {
+//     // State to store object URLs
+//     const [imageUrls, setImageUrls] = useState([]);
+//     const [loading, setLoading] = useState(true);
+    
+//     // Create object URLs when images change
+//     useEffect(() => {
+//       console.log(`🖼️ ImageGallery for ${type}:`, images?.length || 0, "images");
+//       setLoading(true);
+      
+//       if (!images || images.length === 0) {
+//         setImageUrls([]);
+//         setLoading(false);
+//         return;
+//       }
+      
+//       const urls = images.map((img, idx) => {
+//         if (img instanceof File) {
+//           console.log(`  Creating URL for File ${idx + 1}:`, img.name);
+//           return URL.createObjectURL(img);
+//         } else if (img?.url) {
+//           console.log(`  Using URL from object ${idx + 1}:`, img.url);
+//           return img.url;
+//         } else if (typeof img === 'string') {
+//           console.log(`  Using string URL ${idx + 1}:`, img);
+//           return img;
+//         } else {
+//           console.log(`  Unknown image type ${idx + 1}:`, img);
+//           return null;
+//         }
+//       }).filter(url => url !== null);
+      
+//       console.log(`  Generated ${urls.length} URLs for ${type}`);
+//       setImageUrls(urls);
+//       setLoading(false);
+      
+//       // Cleanup function
+//       return () => {
+//         urls.forEach(url => {
+//           if (url && url.startsWith('blob:')) {
+//             URL.revokeObjectURL(url);
+//           }
+//         });
+//       };
+//     }, [images, type]);
+    
+//     const handleImageClick = (e) => {
+//       e.preventDefault();
+//       e.stopPropagation();
+//       console.log(`👆 Image clicked: ${type} with`, images.length, "images");
+//       onView(images, type);
+//     };
+    
+//     if (!images || images.length === 0) {
+//       return null;
+//     }
+    
+//     if (loading) {
+//       return (
+//         <div className="mt-3">
+//           <p className="text-xs font-medium text-slate-500 mb-2">{type}:</p>
+//           <div className="flex items-center gap-2">
+//             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+//             <span className="text-xs text-slate-400">Loading images...</span>
+//           </div>
+//         </div>
+//       );
+//     }
+    
+//     if (imageUrls.length === 0) {
+//       return (
+//         <div className="mt-3">
+//           <p className="text-xs font-medium text-slate-500 mb-2">{type}:</p>
+//           <p className="text-xs text-red-400">Failed to load images</p>
+//         </div>
+//       );
+//     }
+    
+//     // 🔥 FIXED: HORIZONTAL SCROLL instead of vertical
+//     return (
+//       <div className="mt-3">
+//         <p className="text-xs font-medium text-slate-500 mb-2">{type} ({images.length}):</p>
+//         <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
+//           {imageUrls.map((url, idx) => (
+//             <div 
+//               key={idx}
+//               onClick={handleImageClick}
+//               className="flex-shrink-0 relative w-20 h-20 rounded-lg border-2 border-slate-200 overflow-hidden cursor-pointer hover:border-blue-500 hover:shadow-lg transition-all group"
+//             >
+//               <img 
+//                 src={url} 
+//                 alt={`${type} ${idx + 1}`}
+//                 className="w-full h-full object-cover"
+//                 onError={(e) => {
+//                   console.error(`❌ Image failed to load:`, url);
+//                   e.target.src = 'https://via.placeholder.com/80?text=Error';
+//                 }}
+//                 onLoad={() => console.log(`✅ Image loaded:`, url)}
+//               />
+//               {/* Hover overlay */}
+//               <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center">
+//                 <Eye size={24} className="text-white opacity-0 group-hover:opacity-100 transition-all" />
+//               </div>
+//               {/* Image number badge */}
+//               <div className="absolute bottom-1 right-1 bg-black bg-opacity-60 text-white text-xs px-1.5 py-0.5 rounded">
+//                 {idx + 1}
+//               </div>
+//             </div>
+//           ))}
+          
+//           {/* "More" indicator if needed - but with horizontal scroll, we show all */}
+//           {images.length > imageUrls.length && (
+//             <div 
+//               onClick={handleImageClick}
+//               className="flex-shrink-0 w-20 h-20 rounded-lg bg-slate-100 border-2 border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-200 hover:border-blue-500 transition-all group"
+//             >
+//               <span className="text-lg font-bold text-slate-600">+{images.length - imageUrls.length}</span>
+//               <span className="text-xs text-slate-500">more</span>
+//             </div>
+//           )}
+//         </div>
+//       </div>
+//     );
+//   };
+
+//   // FIXED: Handle Save Garment with better image handling and DEBUG
 //   const handleSaveGarment = useCallback((garmentData) => {
+//     console.log("%c📥📥📥 HANDLE SAVE GARMENT CALLED 📥📥📥", "background: blue; color: white; font-size: 14px");
+//     console.log("Type:", garmentData instanceof FormData ? "FormData" : "Object");
+    
 //     if (garmentData instanceof FormData) {
 //       // Convert FormData to object
 //       const garmentObj = {
@@ -6291,8 +677,11 @@
 //         customerClothImages: []
 //       };
       
+//       console.log("📦 Processing FormData entries:");
 //       for (let [key, value] of garmentData.entries()) {
 //         if (value instanceof File) {
+//           console.log(`  📸 ${key}: File - ${value.name} (${value.type}, ${value.size} bytes)`);
+          
 //           if (key === 'referenceImages') {
 //             garmentObj.referenceImages.push(value);
 //           } else if (key === 'customerImages') {
@@ -6301,6 +690,10 @@
 //             garmentObj.customerClothImages.push(value);
 //           }
 //         } else {
+//           // Truncate long strings for display
+//           const displayValue = value && value.length > 50 ? value.substring(0, 50) + '...' : value;
+//           console.log(`  📝 ${key}: ${displayValue}`);
+          
 //           if (key === 'measurements' || key === 'priceRange') {
 //             try {
 //               garmentObj[key] = JSON.parse(value);
@@ -6313,19 +706,45 @@
 //         }
 //       }
       
+//       // Verify images were captured
+//       console.log("✅ Garment object created:", {
+//         name: garmentObj.name,
+//         category: garmentObj.category,
+//         item: garmentObj.item,
+//         referenceImages: garmentObj.referenceImages?.length || 0,
+//         customerImages: garmentObj.customerImages?.length || 0,
+//         customerClothImages: garmentObj.customerClothImages?.length || 0
+//       });
+      
 //       if (editingGarment) {
+//         // Update existing garment
+//         console.log("✏️ Updating existing garment, tempId:", editingGarment.tempId);
 //         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
+//         console.log("Found at index:", index);
+        
 //         if (index !== -1) {
 //           const newGarments = [...garments];
 //           newGarments[index] = garmentObj;
 //           setGarments(newGarments);
 //           showToast.success("Garment updated");
+//           console.log("🔄 Updated garment at index:", index);
+//           console.log("New garments array:", newGarments);
 //         }
 //       } else {
-//         setGarments([...garments, garmentObj]);
+//         // Add new garment
+//         console.log("➕ Adding new garment");
+//         setGarments(prev => {
+//           const updated = [...prev, garmentObj];
+//           console.log("New garments array:", updated);
+//           return updated;
+//         });
 //         showToast.success("Garment added");
+//         console.log("➕ Added new garment, total garments:", garments.length + 1);
 //       }
 //     } else {
+//       // Handle regular object (no images)
+//       console.log("📦 Received regular object:", garmentData);
+      
 //       if (editingGarment) {
 //         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
 //         if (index !== -1) {
@@ -6348,6 +767,9 @@
 //   }, [garments, editingGarment]);
 
 //   const handleCustomerSelect = useCallback((customer) => {
+//     console.log("%c👤👤👤 CUSTOMER SELECTED 👤👤👤", "background: green; color: white; font-size: 12px");
+//     console.log("Customer:", customer);
+    
 //     const fullName = getCustomerFullName(customer);
 //     const displayId = getCustomerDisplayId(customer);
     
@@ -6360,10 +782,13 @@
 //     setSelectedCustomerDisplay(displayText);
 //     setSearchTerm(displayText);
 //     setShowCustomerDropdown(false);
+    
+//     console.log("✅ Customer selected:", displayText);
 //   }, []);
 
 //   const handleSearchChange = useCallback((e) => {
 //     const value = e.target.value;
+//     console.log("🔍 Search term changed:", value);
 //     setSearchTerm(value);
 //     setShowCustomerDropdown(true);
     
@@ -6398,25 +823,40 @@
 //     return garment.item || 'Unknown';
 //   }, [categories]);
 
-//   // Calendar handlers
+//   // 📅 Calendar handlers - FIXED VERSION
 //   const handleDateSelect = useCallback((date) => {
+//     console.log("%c📅📅📅 DATE SELECTED 📅📅📅", "background: green; color: white; font-size: 12px");
+//     console.log("Date object:", date);
+    
 //     setSelectedDate(date);
 //     setShowCalendar(false);
     
-//     const dateStr = date.toISOString().split('T')[0];
+//     // Get local date string considering timezone
+//     const year = date.getFullYear();
+//     const month = String(date.getMonth() + 1).padStart(2, '0');
+//     const day = String(date.getDate()).padStart(2, '0');
+//     const localDateStr = `${year}-${month}-${day}`;
+    
 //     setFormData(prev => ({
 //       ...prev,
-//       deliveryDate: dateStr
+//       deliveryDate: localDateStr
 //     }));
+    
+//     console.log("Local date string:", localDateStr);
 //   }, []);
 
 //   const handleMonthChange = useCallback((date) => {
+//     console.log("📅 Month changed to:", date.toLocaleString('default', { month: 'long', year: 'numeric' }));
 //     setCurrentMonth(date);
 //   }, []);
 
-//   const formatDisplayDate = useCallback((date) => {
-//     if (!date) return "Select delivery date";
-//     return new Date(date).toLocaleDateString('en-IN', {
+//   const formatDisplayDate = useCallback((dateStr) => {
+//     if (!dateStr) return "Select delivery date";
+    
+//     const [year, month, day] = dateStr.split('-').map(Number);
+//     const date = new Date(year, month - 1, day);
+    
+//     return date.toLocaleDateString('en-IN', {
 //       weekday: 'short',
 //       year: 'numeric',
 //       month: 'short',
@@ -6426,8 +866,12 @@
 
 //   // Simple green dot for dates with orders
 //   const renderDayContents = useCallback((day, date) => {
-//     const dateStr = date.toISOString().split('T')[0];
-//     const hasOrders = orderDates.includes(dateStr);
+//     const year = date.getFullYear();
+//     const month = String(date.getMonth() + 1).padStart(2, '0');
+//     const dayOfMonth = String(date.getDate()).padStart(2, '0');
+//     const localDateStr = `${year}-${month}-${dayOfMonth}`;
+    
+//     const hasOrders = orderDates.includes(localDateStr);
     
 //     return (
 //       <div className="relative">
@@ -6455,30 +899,58 @@
 //     }
 //   };
 
-//   // Main submit handler
+//   // 🔥 FIXED: MAIN SUBMIT HANDLER with NaN prevention and ULTRA DEBUGGING
 //   const handleSubmit = async (e) => {
 //     e.preventDefault();
     
+//     console.log("\n");
+//     console.log("%c🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥", "background: red; color: white; font-size: 16px; font-weight: bold");
+//     console.log("%c🔥          FORM SUBMISSION STARTED          🔥", "background: red; color: white; font-size: 16px; font-weight: bold");
+//     console.log("%c🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥", "background: red; color: white; font-size: 16px; font-weight: bold");
+//     console.log("\n");
+    
+//     console.log("📋 FORM DATA:", JSON.parse(JSON.stringify(formData)));
+//     console.log("💰 PAYMENTS:", JSON.parse(JSON.stringify(payments)));
+//     console.log("👕 GARMENTS COUNT:", garments.length);
+//     console.log("👕 GARMENTS DETAILS:", JSON.parse(JSON.stringify(garments.map(g => ({
+//       name: g.name,
+//       priceMin: g.priceRange?.min,
+//       priceMax: g.priceRange?.max,
+//       refImages: g.referenceImages?.length || 0,
+//       custImages: g.customerImages?.length || 0,
+//       clothImages: g.customerClothImages?.length || 0
+//     })))));
+    
+//     if (isSubmittingRef.current) {
+//       console.log("⚠️ Submission already in progress, preventing duplicate");
+//       showToast.warning("Order creation in progress, please wait...");
+//       return;
+//     }
+
 //     setServerErrors(null);
 
 //     // Validation
 //     if (!formData.customer) {
+//       console.error("❌ Missing customer");
 //       showToast.error("Please select a customer");
 //       return;
 //     }
 
 //     if (garments.length === 0) {
+//       console.error("❌ No garments");
 //       showToast.error("Please add at least one garment");
 //       return;
 //     }
 
 //     if (!formData.deliveryDate) {
+//       console.error("❌ Missing delivery date");
 //       showToast.error("Please select delivery date");
 //       return;
 //     }
 
 //     const finalUserId = userId;
 //     if (!finalUserId) {
+//       console.error("❌ No user ID");
 //       showToast.error("You must be logged in to create an order");
 //       return;
 //     }
@@ -6488,20 +960,40 @@
 //     const userIdValid = /^[0-9a-fA-F]{24}$/.test(finalUserId);
 
 //     if (!customerIdValid) {
+//       console.error("❌ Invalid customer ID:", formData.customer);
 //       showToast.error("Invalid customer ID format");
 //       return;
 //     }
 
 //     if (!userIdValid) {
+//       console.error("❌ Invalid user ID:", finalUserId);
 //       showToast.error("Invalid user ID format. Please log in again.");
 //       return;
 //     }
 
+//     // 🔥 Set submission lock
+//     isSubmittingRef.current = true;
 //     setIsSubmitting(true);
 
+//     // 🔥 Generate unique request ID
+//     const requestId = generateRequestId();
+//     console.log("🔒 Request ID:", requestId);
+
 //     try {
-//       // Map payment types to match model enum EXACTLY
-//       const mappedPayments = payments.map(payment => {
+//       // Disable submit button
+//       const submitButton = e.target.querySelector('button[type="submit"]');
+//       if (submitButton) {
+//         submitButton.disabled = true;
+//       }
+
+//       console.log("\n");
+//       console.log("%c💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰", "background: purple; color: white; font-size: 14px");
+//       console.log("%c💰       PROCESSING PAYMENTS (SAFE MODE)       💰", "background: purple; color: white; font-size: 14px");
+//       console.log("%c💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰", "background: purple; color: white; font-size: 14px");
+//       console.log("\n");
+      
+//       console.log("💰 Processing payments:", payments.length);
+//       const mappedPayments = payments.map((payment, idx) => {
 //         let modelType = payment.type || 'advance';
         
 //         if (modelType === 'partial') {
@@ -6510,8 +1002,41 @@
 //           modelType = 'final-settlement';
 //         }
         
+//         // 🔥 CRITICAL: Safe number conversion with multiple checks
+//         const rawAmount = payment.amount;
+//         console.log(`\n📌 Payment ${idx + 1} amount analysis:`);
+//         console.log(`  Raw value:`, rawAmount);
+//         console.log(`  Type:`, typeof rawAmount);
+        
+//         let safeAmount = 0;
+        
+//         if (rawAmount === undefined || rawAmount === null) {
+//           console.log(`  ❌ Amount is undefined/null`);
+//         } else {
+//           const strAmount = String(rawAmount).trim();
+//           console.log(`  String:`, strAmount);
+//           console.log(`  Length:`, strAmount.length);
+          
+//           if (strAmount === '') {
+//             console.log(`  ❌ Amount is empty string`);
+//           } else {
+//             const numAmount = Number(strAmount);
+//             console.log(`  Number():`, numAmount);
+//             console.log(`  Is NaN:`, isNaN(numAmount));
+            
+//             if (!isNaN(numAmount) && numAmount > 0) {
+//               safeAmount = numAmount;
+//               console.log(`  ✅ Valid amount:`, safeAmount);
+//             } else {
+//               console.log(`  ❌ Invalid amount (using 0)`);
+//             }
+//           }
+//         }
+        
+//         console.log(`  ✅ Final safe amount:`, safeAmount);
+        
 //         return {
-//           amount: Number(payment.amount),
+//           amount: safeAmount,
 //           type: modelType,
 //           method: payment.method || 'cash',
 //           referenceNumber: payment.referenceNumber || '',
@@ -6520,49 +1045,190 @@
 //         };
 //       });
 
-//       // Create order data WITH GARMENTS INCLUDED and garmentType field
+//       console.log("\n✅ Mapped payments:", JSON.parse(JSON.stringify(mappedPayments)));
+
+//       console.log("\n");
+//       console.log("%c👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕", "background: blue; color: white; font-size: 14px");
+//       console.log("%c👕       PROCESSING GARMENTS (SAFE MODE)       👕", "background: blue; color: white; font-size: 14px");
+//       console.log("%c👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕", "background: blue; color: white; font-size: 14px");
+//       console.log("\n");
+
+//       // 📝 Prepare order data with ALL fields properly formatted
+//       console.log("📦 Preparing order data...");
+      
+//       // Safe number conversions for all values
+//       const safeTotalMin = isNaN(Number(priceSummary.totalMin)) ? 0 : Number(priceSummary.totalMin);
+//       const safeTotalMax = isNaN(Number(priceSummary.totalMax)) ? 0 : Number(priceSummary.totalMax);
+//       const safeTotalPayments = isNaN(Number(totalPayments)) ? 0 : Number(totalPayments);
+      
+//       console.log("💰 Price summary:", { safeTotalMin, safeTotalMax, safeTotalPayments });
+      
 //       const orderData = {
 //         customer: formData.customer,
 //         deliveryDate: formData.deliveryDate,
 //         specialNotes: formData.specialNotes || "",
 //         payments: mappedPayments,
 //         advancePayment: {
-//           amount: mappedPayments.length > 0 ? mappedPayments[0]?.amount || 0 : 0,
-//           method: mappedPayments.length > 0 ? mappedPayments[0]?.method || "cash" : "cash",
+//           amount: mappedPayments.length > 0 ? (isNaN(Number(mappedPayments[0].amount)) ? 0 : Number(mappedPayments[0].amount)) : 0,
+//           method: mappedPayments.length > 0 ? mappedPayments[0].method : "cash",
 //           date: new Date().toISOString()
 //         },
 //         priceSummary: {
-//           totalMin: Number(priceSummary.totalMin),
-//           totalMax: Number(priceSummary.totalMax)
+//           totalMin: safeTotalMin,
+//           totalMax: safeTotalMax
 //         },
-//         balanceAmount: Number(balanceAmount.min),
+//         balanceAmount: safeTotalMax - safeTotalPayments,
 //         createdBy: finalUserId,
-//         status: "draft",
+//         status: "confirmed",
 //         orderDate: new Date().toISOString(),
-//         // Include garments with garmentType field (required by backend)
-//         garments: garments.map(g => ({
-//           name: g.name,
-//           garmentType: g.item || g.garmentType || g.itemName || g.name,
-//           category: g.category,
-//           item: g.item,
-//           categoryName: g.categoryName,
-//           itemName: g.itemName,
-//           measurementTemplate: g.measurementTemplate,
-//           measurementSource: g.measurementSource,
-//           measurements: g.measurements,
-//           additionalInfo: g.additionalInfo,
-//           estimatedDelivery: g.estimatedDelivery || formData.deliveryDate,
-//           priority: g.priority || 'normal',
-//           priceRange: {
-//             min: Number(g.priceRange?.min) || 0,
-//             max: Number(g.priceRange?.max) || 0
-//           },
-//           fabricSource: g.fabricSource || 'customer',
-//           fabricPrice: g.fabricPrice || '0'
-//         }))
+//         requestId: requestId,
+//         garments: garments.map((g, idx) => {
+//           console.log(`\n👕 Processing garment ${idx + 1}: ${g.name}`);
+          
+//           // Safe number conversions for garment prices
+//           const minPrice = isNaN(Number(g.priceRange?.min)) ? 0 : Number(g.priceRange?.min);
+//           const maxPrice = isNaN(Number(g.priceRange?.max)) ? 0 : Number(g.priceRange?.max);
+//           const fabricPrice = isNaN(Number(g.fabricPrice)) ? 0 : Number(g.fabricPrice);
+          
+//           console.log(`  Price range: ${minPrice} - ${maxPrice}`);
+//           console.log(`  Fabric price: ${fabricPrice}`);
+//           console.log(`  Images: Ref:${g.referenceImages?.length || 0}, Cust:${g.customerImages?.length || 0}, Cloth:${g.customerClothImages?.length || 0}`);
+          
+//           return {
+//             name: g.name,
+//             garmentType: g.item || g.garmentType || g.itemName || g.name,
+//             category: g.category,
+//             item: g.item,
+//             categoryName: g.categoryName,
+//             itemName: g.itemName,
+//             measurementTemplate: g.measurementTemplate,
+//             measurementSource: g.measurementSource,
+//             measurements: g.measurements || [],
+//             additionalInfo: g.additionalInfo || '',
+//             estimatedDelivery: g.estimatedDelivery || formData.deliveryDate,
+//             priority: g.priority || 'normal',
+//             priceRange: {
+//               min: minPrice,
+//               max: maxPrice
+//             },
+//             fabricSource: g.fabricSource || 'customer',
+//             fabricPrice: fabricPrice,
+//             referenceImages: g.referenceImages || [],
+//             customerImages: g.customerImages || [],
+//             customerClothImages: g.customerClothImages || []
+//           };
+//         })
 //       };
 
+//       console.log("\n");
+//       console.log("%c✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅", "background: green; color: white; font-size: 14px");
+//       console.log("%c✅       FINAL ORDER DATA VALIDATION       ✅", "background: green; color: white; font-size: 14px");
+//       console.log("%c✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅", "background: green; color: white; font-size: 14px");
+//       console.log("\n");
+      
+//       console.log("  Customer:", orderData.customer);
+//       console.log("  Delivery Date:", orderData.deliveryDate);
+//       console.log("  Payments count:", orderData.payments.length);
+//       console.log("  Garments count:", orderData.garments.length);
+//       console.log("  Total Min:", orderData.priceSummary.totalMin);
+//       console.log("  Total Max:", orderData.priceSummary.totalMax);
+//       console.log("  Balance:", orderData.balanceAmount);
+      
+//       // 🔍 Check for any NaN values
+//       console.log("\n🔍 NAN DETECTION SCAN:");
+//       let hasNaN = false;
+      
+//       if (isNaN(orderData.priceSummary.totalMin)) { 
+//         console.error("❌ totalMin is NaN"); 
+//         hasNaN = true; 
+//       } else {
+//         console.log("✅ totalMin OK");
+//       }
+      
+//       if (isNaN(orderData.priceSummary.totalMax)) { 
+//         console.error("❌ totalMax is NaN"); 
+//         hasNaN = true; 
+//       } else {
+//         console.log("✅ totalMax OK");
+//       }
+      
+//       if (isNaN(orderData.balanceAmount)) { 
+//         console.error("❌ balanceAmount is NaN"); 
+//         hasNaN = true; 
+//       } else {
+//         console.log("✅ balanceAmount OK");
+//       }
+      
+//       orderData.payments.forEach((p, i) => {
+//         if (isNaN(p.amount)) { 
+//           console.error(`❌ payment[${i}].amount is NaN`); 
+//           hasNaN = true; 
+//         } else {
+//           console.log(`✅ payment[${i}].amount OK (${p.amount})`);
+//         }
+//       });
+      
+//       orderData.garments.forEach((g, i) => {
+//         if (isNaN(g.priceRange.min)) { 
+//           console.error(`❌ garment[${i}].priceRange.min is NaN`); 
+//           hasNaN = true; 
+//         } else {
+//           console.log(`✅ garment[${i}].priceRange.min OK (${g.priceRange.min})`);
+//         }
+        
+//         if (isNaN(g.priceRange.max)) { 
+//           console.error(`❌ garment[${i}].priceRange.max is NaN`); 
+//           hasNaN = true; 
+//         } else {
+//           console.log(`✅ garment[${i}].priceRange.max OK (${g.priceRange.max})`);
+//         }
+        
+//         if (isNaN(g.fabricPrice)) { 
+//           console.error(`❌ garment[${i}].fabricPrice is NaN`); 
+//           hasNaN = true; 
+//         } else {
+//           console.log(`✅ garment[${i}].fabricPrice OK (${g.fabricPrice})`);
+//         }
+//       });
+      
+//       if (hasNaN) {
+//         console.error("\n❌❌❌ NAN VALUES DETECTED! Stopping submission. ❌❌❌");
+//         throw new Error("NaN values detected in order data. Please check all number fields.");
+//       }
+
+//       // Check if there are any images
+//       const hasImages = orderData.garments.some(g => 
+//         g.referenceImages?.length > 0 || 
+//         g.customerImages?.length > 0 || 
+//         g.customerClothImages?.length > 0
+//       );
+//       console.log("\n📸 Has images:", hasImages ? "YES" : "NO");
+//       if (hasImages) {
+//         console.log("📸 Image details:");
+//         orderData.garments.forEach((g, i) => {
+//           if (g.referenceImages?.length > 0) console.log(`  Garment ${i+1}: ${g.referenceImages.length} reference images`);
+//           if (g.customerImages?.length > 0) console.log(`  Garment ${i+1}: ${g.customerImages.length} customer images`);
+//           if (g.customerClothImages?.length > 0) console.log(`  Garment ${i+1}: ${g.customerClothImages.length} cloth images`);
+//         });
+//       }
+
+//       console.log("\n");
+//       console.log("%c📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡", "background: blue; color: white; font-size: 14px");
+//       console.log("%c📡       DISPATCHING TO REDUX       📡", "background: blue; color: white; font-size: 14px");
+//       console.log("%c📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡", "background: blue; color: white; font-size: 14px");
+//       console.log("\n");
+
+//       // 🔥 Create the order
+//       console.log("📡 Dispatching createNewOrder...");
 //       const result = await dispatch(createNewOrder(orderData)).unwrap();
+      
+//       console.log("\n");
+//       console.log("%c✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅", "background: green; color: white; font-size: 16px; font-weight: bold");
+//       console.log("%c✅       ORDER CREATED SUCCESSFULLY       ✅", "background: green; color: white; font-size: 16px; font-weight: bold");
+//       console.log("%c✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅", "background: green; color: white; font-size: 16px; font-weight: bold");
+//       console.log("\n");
+      
+//       console.log("Result:", result);
       
 //       const orderId = result.order?._id || result._id;
 
@@ -6570,67 +1236,24 @@
 //         throw new Error("Order created but no ID returned");
 //       }
 
-//       // Now create garments with files if any
-//       for (const garment of garments) {
-//         const garmentFormData = new FormData();
-        
-//         garmentFormData.append("name", garment.name);
-//         garmentFormData.append("category", garment.category);
-//         garmentFormData.append("item", garment.item);
-        
-//         if (garment.categoryName) {
-//           garmentFormData.append("categoryName", garment.categoryName);
-//         }
-        
-//         if (garment.itemName) {
-//           garmentFormData.append("itemName", garment.itemName);
-//         }
-        
-//         garmentFormData.append("measurementTemplate", garment.measurementTemplate || "");
-//         garmentFormData.append("measurementSource", garment.measurementSource || "template");
-//         garmentFormData.append("measurements", JSON.stringify(garment.measurements || []));
-//         garmentFormData.append("additionalInfo", garment.additionalInfo || "");
-//         garmentFormData.append("estimatedDelivery", garment.estimatedDelivery || formData.deliveryDate);
-//         garmentFormData.append("priority", garment.priority || "normal");
-//         garmentFormData.append("priceRange", JSON.stringify({
-//           min: Number(garment.priceRange?.min) || 0,
-//           max: Number(garment.priceRange?.max) || 0
-//         }));
-//         garmentFormData.append("orderId", orderId);
-//         garmentFormData.append("createdBy", finalUserId);
-
-//         // Append images if they exist
-//         if (garment.referenceImages?.length > 0) {
-//           garment.referenceImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("referenceImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerImages?.length > 0) {
-//           garment.customerImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerImages", img);
-//             }
-//           });
-//         }
-        
-//         if (garment.customerClothImages?.length > 0) {
-//           garment.customerClothImages.forEach(img => {
-//             if (img instanceof File) {
-//               garmentFormData.append("customerClothImages", img);
-//             }
-//           });
-//         }
-
-//         await dispatch(createGarment({ orderId, garmentData: garmentFormData })).unwrap();
-//       }
-
+//       // 🔥 UPDATE currentOrderId to real ID for future payments
+//       setCurrentOrderId(orderId);
+//       console.log("✅ Updated currentOrderId to:", orderId);
+      
 //       showToast.success("Order created successfully! 🎉");
 //       navigate(`${basePath}/orders`);
+      
 //     } catch (error) {
+//       console.error("\n");
+//       console.log("%c❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌", "background: red; color: white; font-size: 16px; font-weight: bold");
+//       console.log("%c❌       SUBMISSION ERROR       ❌", "background: red; color: white; font-size: 16px; font-weight: bold");
+//       console.log("%c❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌", "background: red; color: white; font-size: 16px; font-weight: bold");
+//       console.log("\n");
+      
+//       console.error("❌ ERROR:", error);
+      
 //       if (error.response?.data) {
+//         console.error("Server error response:", error.response.data);
 //         setServerErrors(error.response.data);
 //       }
       
@@ -6640,29 +1263,55 @@
 //         errorMessage = error.response.data.message;
 //       } else if (error.response?.data?.errors) {
 //         errorMessage = `Validation failed: ${error.response.data.errors.join(', ')}`;
+//         console.error("Validation errors:", error.response.data.errors);
 //       } else if (error.message) {
 //         errorMessage = error.message;
 //       }
       
 //       showToast.error(errorMessage);
+      
 //     } finally {
+//       // 🔓 Release locks
+//       isSubmittingRef.current = false;
 //       setIsSubmitting(false);
+      
+//       // Re-enable submit button
+//       const submitButton = document.querySelector('button[type="submit"]');
+//       if (submitButton) {
+//         submitButton.disabled = false;
+//       }
+      
+//       console.log("\n");
+//       console.log("%c🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓", "background: orange; color: white; font-size: 14px");
+//       console.log("%c🔓       SUBMISSION LOCK RELEASED       🔓", "background: orange; color: white; font-size: 14px");
+//       console.log("%c🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓", "background: orange; color: white; font-size: 14px");
+//       console.log("\n");
 //     }
 //   };
 
 //   return (
 //     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 p-6">
-//       {/* Add Payment Modal */}
+//       {/* 🖼️ Image Preview Modal */}
+//       {showImagePreview && (
+//         <ImagePreviewModal
+//           images={previewImages}
+//           title={previewTitle}
+//           onClose={handleClosePreview}
+//         />
+//       )}
+
+//       {/* Add Payment Modal - NOW USING currentOrderId */}
 //       <AddPaymentModal
 //         isOpen={showPaymentModal}
 //         onClose={() => {
+//           console.log("🚪 Closing payment modal");
 //           setShowPaymentModal(false);
 //           setEditingPayment(null);
 //         }}
 //         onSave={handleSavePayment}
 //         orderTotalMin={priceSummary.totalMin}
 //         orderTotalMax={priceSummary.totalMax}
-//         orderId="temp"
+//         orderId={currentOrderId}  // 🔥 FIXED: Using state instead of "temp"
 //         customerId={formData.customer}
 //         initialData={editingPayment}
 //         title={editingPayment ? "Edit Payment" : "Add Payment"}
@@ -6686,7 +1335,8 @@
 //       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 //         {/* Left Column - Customer & Order Details */}
 //         <div className="lg:col-span-2 space-y-6">
-//           {/* Customer Selection */}
+          
+//           {/* Customer Selection Section */}
 //           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
 //             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
 //               <User size={20} className="text-blue-600" />
@@ -6816,7 +1466,8 @@
 //                     >
 //                       <div className="flex items-start justify-between">
 //                         <div className="flex-1">
-//                           <div className="flex items-center gap-2">
+//                           {/* Garment Header with Badges */}
+//                           <div className="flex items-center gap-2 flex-wrap">
 //                             <h3 className="font-black text-slate-800">{garment.name}</h3>
 //                             <span className={`text-xs px-2 py-1 rounded-full ${
 //                               garment.priority === 'urgent' ? 'bg-red-100 text-red-600' :
@@ -6825,17 +1476,21 @@
 //                             }`}>
 //                               {garment.priority}
 //                             </span>
+                            
+//                             {/* Image Count Badge */}
 //                             {(garment.referenceImages?.length > 0 || 
 //                               garment.customerImages?.length > 0 || 
 //                               garment.customerClothImages?.length > 0) && (
-//                               <span className="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded-full">
-//                                 📸 {garment.referenceImages?.length || 0}/
+//                               <span className="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded-full flex items-center gap-1">
+//                                 <ImageIcon size={12} />
+//                                 {garment.referenceImages?.length || 0}/
 //                                 {garment.customerImages?.length || 0}/
 //                                 {garment.customerClothImages?.length || 0}
 //                               </span>
 //                             )}
 //                           </div>
                           
+//                           {/* Garment Details Grid */}
 //                           <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
 //                             <div>
 //                               <p className="text-xs text-slate-400">Category/Item</p>
@@ -6856,7 +1511,40 @@
 //                               <p className="font-medium">₹{garment.priceRange?.min} - ₹{garment.priceRange?.max}</p>
 //                             </div>
 //                           </div>
+
+//                           {/* Debug info */}
+//                           <div className="text-xs text-gray-400 mb-1">
+//                             Ref: {garment.referenceImages?.length || 0}, 
+//                             Cust: {garment.customerImages?.length || 0}, 
+//                             Cloth: {garment.customerClothImages?.length || 0}
+//                           </div>
+
+//                           {/* 🖼️ Image Galleries - NOW HORIZONTAL */}
+//                           {garment.referenceImages?.length > 0 && (
+//                             <ImageGallery 
+//                               images={garment.referenceImages} 
+//                               type="Reference Images" 
+//                               onView={handleViewImages}
+//                             />
+//                           )}
+
+//                           {garment.customerImages?.length > 0 && (
+//                             <ImageGallery 
+//                               images={garment.customerImages} 
+//                               type="Customer Images" 
+//                               onView={handleViewImages}
+//                             />
+//                           )}
+
+//                           {garment.customerClothImages?.length > 0 && (
+//                             <ImageGallery 
+//                               images={garment.customerClothImages} 
+//                               type="Cloth Images" 
+//                               onView={handleViewImages}
+//                             />
+//                           )}
                           
+//                           {/* Additional Info */}
 //                           {garment.additionalInfo && (
 //                             <p className="text-sm text-slate-500 mt-2 italic">
 //                               Note: {garment.additionalInfo}
@@ -6864,6 +1552,7 @@
 //                           )}
 //                         </div>
                         
+//                         {/* Action Buttons */}
 //                         <div className="flex gap-2 ml-4">
 //                           <button
 //                             type="button"
@@ -6888,9 +1577,8 @@
 //                 })}
 //               </div>
 //             )}
-//           </div>
-
-//           {/* Delivery Date with Green Circle Calendar */}
+//           </div> 
+//           {/* Delivery Date Section */}
 //           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
 //             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
 //               <Calendar size={20} className="text-blue-600" />
@@ -6946,12 +1634,7 @@
 //               {formData.deliveryDate && (
 //                 <div className="mt-3 p-3 bg-blue-50 rounded-lg">
 //                   <p className="text-sm text-blue-700">
-//                     ✓ Delivery selected: {new Date(formData.deliveryDate).toLocaleDateString('en-IN', {
-//                       weekday: 'long',
-//                       year: 'numeric',
-//                       month: 'long',
-//                       day: 'numeric'
-//                     })}
+//                     ✓ Delivery selected: {formatDisplayDate(formData.deliveryDate)}
 //                   </p>
 //                 </div>
 //               )}
@@ -7121,7 +1804,7 @@
 //         </div>
 //       </form>
 
-//       {/* Garment Form Modal with customerId prop */}
+//       {/* Garment Form Modal */}
 //       {showGarmentModal && (
 //         <GarmentForm
 //           onClose={() => setShowGarmentModal(false)}
@@ -7133,6 +1816,181 @@
 //     </div>
 //   );
 // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7159,6 +2017,11 @@ import {
   X,
   AlertCircle,
   CheckCircle,
+  Image as ImageIcon,
+  Eye,
+  Camera,
+  Scissors,
+  Edit
 } from "lucide-react";
 import { createNewOrder } from "../../../features/order/orderSlice";
 import { createGarment } from "../../../features/garment/garmentSlice";
@@ -7168,6 +2031,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import GarmentForm from "../garment/GarmentForm";
 import AddPaymentModal from "../../../components/AddPaymentModal";
+import ImagePreviewModal from "../../../components/ImagePreviewModal";
 import showToast from "../../../utils/toast";
 
 export default function NewOrder() {
@@ -7175,10 +2039,34 @@ export default function NewOrder() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get passed customer from Customer Page (if any)
+
+
+
+
+
+  /* Inga irukkura classes hover matrum selection-ai Red-ku mathum */
+const calendarStyles = `
+  .react-datepicker__day:hover {
+    background-color: #fee2e2 !important; /* Light Red background on hover */
+    color: #b91c1c !important;           /* Dark Red text on hover */
+    border-radius: 12px !important;
+  }
+  .react-datepicker__day--selected, 
+  .react-datepicker__day--keyboard-selected {
+    background-color: #ef4444 !important; /* Solid Red when selected */
+    color: white !important;
+    border-radius: 12px !important;
+  }
+  .react-datepicker__day--today {
+    border: 1px solid #ef4444 !important; /* Today's date border */
+    border-radius: 12px !important;
+  }
+`;
+
+  // 🎯 Customer Page-la irundhu varum customer details (passed through navigation state)
   const passedCustomer = location.state?.customer;
 
-  // Redux selectors
+  // 📦 Redux selectors - Global state-la irundhu data eduthukom
   const { customers, loading: customersLoading } = useSelector((state) => {
     const customerData = state.customers?.customers || state.customer?.customers || [];
     const customersArray = Array.isArray(customerData) ? customerData : [];
@@ -7197,10 +2085,11 @@ export default function NewOrder() {
 
   const { user } = useSelector((state) => state.auth);
   
-  // Calendar state from Redux
+  // 📅 Calendar state from Redux (delivery dates with existing orders)
   const orderDates = useSelector(selectOrderDates);
   const calendarLoading = useSelector(selectCalendarLoading);
   
+  // 📝 Main form state - customer, delivery date, notes
   const [formData, setFormData] = useState({
     customer: "",
     deliveryDate: "",
@@ -7211,39 +2100,55 @@ export default function NewOrder() {
     },
   });
 
-  // State for multiple payments
+  // 💰 Multiple payments management
   const [payments, setPayments] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
+  
+  // 🔥 NEW: Track current order ID for payments after creation
+  const [currentOrderId, setCurrentOrderId] = useState("temp");
 
+  // 👕 Garments management
   const [garments, setGarments] = useState([]);
   const [showGarmentModal, setShowGarmentModal] = useState(false);
   const [editingGarment, setEditingGarment] = useState(null);
+  
+  // 🔍 Customer search and selection
   const [searchTerm, setSearchTerm] = useState("");
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [selectedCustomerDisplay, setSelectedCustomerDisplay] = useState("");
+  
+  // ⏳ Form submission states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverErrors, setServerErrors] = useState(null);
 
-  // Calendar state
+  // 📅 Calendar states
   const [selectedDate, setSelectedDate] = useState(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const calendarRef = useRef(null);
 
-  // 🔥 FIX: Use ref for immediate locking (faster than state)
+  // 🖼️ Image preview states
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [previewImages, setPreviewImages] = useState([]);
+  const [previewTitle, setPreviewTitle] = useState("");
+  
+  // 🔥 NEW: State for expanded garment images
+  const [expandedGarment, setExpandedGarment] = useState(null);
+
+  // 🔒 DUPLICATE SUBMISSION PREVENTION - using ref for instant lock
   const isSubmittingRef = useRef(false);
   
-  // 🔥 Generate unique request ID for this submission
+  // 🆔 Generate unique request ID for tracking submissions
   const generateRequestId = () => {
     return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}-${Math.random().toString(36).substring(2, 15)}`;
   };
 
-  // Get user ID
+  // 👤 Get user ID from auth
   const userId = user?.id || user?._id;
   const userRole = user?.role;
 
-  // Get base path based on user role
+  // 🧭 Base path based on user role (navigation purpose)
   const basePath = user?.role === "ADMIN" ? "/admin" : 
                    user?.role === "STORE_KEEPER" ? "/storekeeper" : 
                    "/cuttingmaster";
@@ -7257,7 +2162,7 @@ export default function NewOrder() {
       });
   }, [dispatch]);
 
-  // AUTO-FILL LOGIC: When passedCustomer is available, auto-select them
+  // AUTO-FILL: When customer passed from Customer page, auto-select them
   useEffect(() => {
     if (passedCustomer) {
       const fullCustomer = customers?.find(c => c._id === passedCustomer._id) || passedCustomer;
@@ -7277,7 +2182,7 @@ export default function NewOrder() {
     }
   }, [passedCustomer, customers]);
 
-  // Fetch order dates when month changes
+  // Fetch order dates for calendar when month changes
   useEffect(() => {
     const month = currentMonth.getMonth();
     const year = currentMonth.getFullYear();
@@ -7295,7 +2200,7 @@ export default function NewOrder() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Helper functions for customer display
+  // 👤 Helper: Get customer full name from various possible fields
   const getCustomerFullName = (customer) => {
     if (!customer) return 'Unknown Customer';
     
@@ -7311,17 +2216,19 @@ export default function NewOrder() {
     return 'Unknown Customer';
   };
 
+  // 🔢 Helper: Get customer display ID (customerId or last 6 digits of _id)
   const getCustomerDisplayId = (customer) => {
     if (!customer) return '';
     return customer.customerId || customer._id?.slice(-6) || '';
   };
 
+  // 📞 Helper: Get customer phone number
   const getCustomerPhone = (customer) => {
     if (!customer) return 'No phone';
     return customer.phone || customer.whatsappNumber || 'No phone';
   };
 
-  // Filter customers
+  // Filter customers based on search term
   const filteredCustomers = useMemo(() => {
     if (!customers || !Array.isArray(customers) || customers.length === 0) {
       return [];
@@ -7350,55 +2257,170 @@ export default function NewOrder() {
     });
   }, [customers, searchTerm, formData.customer, selectedCustomerDisplay]);
 
-  // Calculate total payments
+  // Calculate total payments - with NaN protection and DEBUG
   const totalPayments = useMemo(() => {
-    return payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    console.log("%c💰💰💰 CALCULATING TOTAL PAYMENTS 💰💰💰", "background: purple; color: white; font-size: 12px");
+    console.log("Payments array:", payments);
+    
+    const total = payments.reduce((sum, payment, idx) => {
+      const rawAmount = payment.amount;
+      const numAmount = Number(rawAmount);
+      const safeAmount = isNaN(numAmount) ? 0 : numAmount;
+      
+      console.log(`  Payment ${idx + 1}:`, {
+        raw: rawAmount,
+        type: typeof rawAmount,
+        converted: numAmount,
+        safe: safeAmount,
+        isNaN: isNaN(numAmount)
+      });
+      
+      return sum + safeAmount;
+    }, 0);
+    
+    console.log("✅ Total payments:", total);
+    return total;
   }, [payments]);
 
-  // Calculate price summary
+  // Calculate price summary - with NaN protection and DEBUG
   const priceSummary = useMemo(() => {
-    const totalMin = garments.reduce((sum, g) => {
-      return sum + Number(g.priceRange?.min || 0);
+    console.log("%c👕👕👕 CALCULATING PRICE SUMMARY 👕👕👕", "background: blue; color: white; font-size: 12px");
+    console.log("Garments count:", garments.length);
+    
+    const totalMin = garments.reduce((sum, g, idx) => {
+      const rawMin = g.priceRange?.min;
+      const numMin = Number(rawMin);
+      const safeMin = isNaN(numMin) ? 0 : numMin;
+      
+      console.log(`  Garment ${idx + 1} (${g.name}):`, {
+        raw: rawMin,
+        type: typeof rawMin,
+        converted: numMin,
+        safe: safeMin,
+        isNaN: isNaN(numMin)
+      });
+      
+      return sum + safeMin;
     }, 0);
     
-    const totalMax = garments.reduce((sum, g) => {
-      return sum + Number(g.priceRange?.max || 0);
+    const totalMax = garments.reduce((sum, g, idx) => {
+      const rawMax = g.priceRange?.max;
+      const numMax = Number(rawMax);
+      const safeMax = isNaN(numMax) ? 0 : numMax;
+      
+      console.log(`  Garment ${idx + 1} max:`, {
+        raw: rawMax,
+        type: typeof rawMax,
+        converted: numMax,
+        safe: safeMax,
+        isNaN: isNaN(numMax)
+      });
+      
+      return sum + safeMax;
     }, 0);
     
+    console.log("✅ Price summary - Min:", totalMin, "Max:", totalMax);
     return { totalMin, totalMax };
   }, [garments]);
 
-  // Calculate balance
+  // Calculate balance - with NaN protection and DEBUG
   const balanceAmount = useMemo(() => {
-    return {
-      min: Number(priceSummary.totalMin) - totalPayments,
-      max: Number(priceSummary.totalMax) - totalPayments,
+    console.log("%c⚖️⚖️⚖️ CALCULATING BALANCE ⚖️⚖️⚖️", "background: orange; color: white; font-size: 12px");
+    
+    const totalMin = isNaN(priceSummary.totalMin) ? 0 : Number(priceSummary.totalMin);
+    const totalMax = isNaN(priceSummary.totalMax) ? 0 : Number(priceSummary.totalMax);
+    const paid = isNaN(totalPayments) ? 0 : Number(totalPayments);
+    
+    console.log("  Total Min:", totalMin);
+    console.log("  Total Max:", totalMax);
+    console.log("  Total Paid:", paid);
+    
+    const balance = {
+      min: totalMin - paid,
+      max: totalMax - paid,
     };
+    
+    console.log("✅ Balance - Min:", balance.min, "Max:", balance.max);
+    return balance;
   }, [priceSummary, totalPayments]);
 
-  // Payment handlers
+  // 🔍🔍🔍 CUSTOMER HANDLERS 🔍🔍🔍
+  
+  // Handle customer search input change
+  const handleSearchChange = useCallback((e) => {
+    const value = e.target.value;
+    console.log("🔍 Search term changed:", value);
+    setSearchTerm(value);
+    setShowCustomerDropdown(true);
+    
+    if (!value.trim()) {
+      setFormData(prev => ({ ...prev, customer: "" }));
+      setSelectedCustomerDisplay("");
+    }
+  }, []);
+
+  // Handle customer selection from dropdown
+  const handleCustomerSelect = useCallback((customer) => {
+    console.log("%c👤👤👤 CUSTOMER SELECTED 👤👤👤", "background: green; color: white; font-size: 12px");
+    console.log("Customer:", customer);
+    
+    const fullName = getCustomerFullName(customer);
+    const displayId = getCustomerDisplayId(customer);
+    
+    setFormData(prev => ({
+      ...prev,
+      customer: customer._id
+    }));
+
+    let displayText = `${fullName} (${displayId})`;
+    setSelectedCustomerDisplay(displayText);
+    setSearchTerm(displayText);
+    setShowCustomerDropdown(false);
+    
+    console.log("✅ Customer selected:", displayText);
+  }, []);
+
+  // 💰 PAYMENT HANDLERS
   const handleAddPayment = useCallback(() => {
+    console.log("%c➕➕➕ ADD PAYMENT BUTTON CLICKED ➕➕➕", "background: green; color: white; font-size: 12px");
     setEditingPayment(null);
     setShowPaymentModal(true);
   }, []);
 
   const handleEditPayment = useCallback((payment) => {
+    console.log("%c✏️✏️✏️ EDIT PAYMENT ✏️✏️✏️", "background: orange; color: white; font-size: 12px");
+    console.log("Payment to edit:", payment);
     setEditingPayment(payment);
     setShowPaymentModal(true);
   }, []);
 
   const handleDeletePayment = useCallback((index) => {
+    console.log("%c🗑️🗑️🗑️ DELETE PAYMENT 🗑️🗑️🗑️", "background: red; color: white; font-size: 12px");
+    console.log("Deleting payment at index:", index);
+    console.log("Payment:", payments[index]);
+    
     if (window.confirm("Are you sure you want to delete this payment?")) {
       const newPayments = [...payments];
       newPayments.splice(index, 1);
       setPayments(newPayments);
+      console.log("✅ Payment deleted, remaining:", newPayments.length);
       showToast.success("Payment removed");
     }
   }, [payments]);
 
-  // Handle Save Payment with proper type mapping
+  // 🔥 Handle Save Payment - Works for both new and existing orders
   const handleSavePayment = useCallback((paymentData) => {
-    // Map frontend type to backend enum
+    console.log("%c💾💾💾 SAVE PAYMENT CALLED 💾💾💾", "background: purple; color: white; font-size: 14px");
+    console.log("📦 Payment data received:", JSON.parse(JSON.stringify(paymentData)));
+    console.log("📦 Current Order ID:", currentOrderId);
+    console.log("📦 Is New Order?", currentOrderId === "temp");
+    
+    // 🔥 CRITICAL: Check if amount is valid
+    console.log("💰 Amount in paymentData:", paymentData.amount);
+    console.log("💰 Amount type:", typeof paymentData.amount);
+    console.log("💰 Is NaN:", isNaN(paymentData.amount));
+    
+    // Map type
     let backendType = paymentData.type || 'advance';
     if (backendType === 'partial') {
       backendType = 'part-payment';
@@ -7413,35 +2435,83 @@ export default function NewOrder() {
       time: paymentData.paymentTime || paymentData.time || new Date().toLocaleTimeString('en-US', { hour12: false })
     };
     
-    if (editingPayment) {
-      // Update existing payment
-      const index = payments.findIndex(p => p.tempId === editingPayment.tempId);
-      if (index !== -1) {
-        const newPayments = [...payments];
-        newPayments[index] = { 
-          ...paymentWithMappedType, 
-          tempId: editingPayment.tempId
+    console.log("📦 Payment with mapped type:", JSON.parse(JSON.stringify(paymentWithMappedType)));
+    
+    // 🔥 NEW: Check if this is a new order (before creation) or existing order (after creation)
+    if (currentOrderId === "temp") {
+      // NEW ORDER - Store in local state
+      console.log("📝 New order - storing payment locally");
+      
+      if (editingPayment) {
+        console.log("✏️ Updating existing payment, tempId:", editingPayment.tempId);
+        const index = payments.findIndex(p => p.tempId === editingPayment.tempId);
+        console.log("Found at index:", index);
+        
+        if (index !== -1) {
+          const newPayments = [...payments];
+          newPayments[index] = { 
+            ...paymentWithMappedType, 
+            tempId: editingPayment.tempId
+          };
+          setPayments(newPayments);
+          console.log("✅ Payment updated, new payments array:", newPayments);
+          showToast.success("Payment updated");
+        }
+      } else {
+        const newPayment = {
+          ...paymentWithMappedType,
+          tempId: Date.now() + Math.random()
         };
-        setPayments(newPayments);
-        showToast.success("Payment updated");
+        console.log("➕ Adding new payment with tempId:", newPayment.tempId);
+        setPayments(prev => {
+          const updated = [...prev, newPayment];
+          console.log("✅ Payment added, new payments array:", updated);
+          return updated;
+        });
+        showToast.success("Payment added");
       }
     } else {
-      // Add new payment
-      const newPayment = {
-        ...paymentWithMappedType,
-        tempId: Date.now() + Math.random()
-      };
-      setPayments([...payments, newPayment]);
-      showToast.success("Payment added");
+      // EXISTING ORDER - Call API directly
+      console.log("📡 Existing order - calling API to add payment");
+      
+      // Show loading toast
+      const toastId = showToast.loading("Adding payment...");
+      
+      // Call API to add payment (you need to implement this in Redux)
+      dispatch(addPaymentToOrder({
+        orderId: currentOrderId,
+        paymentData: {
+          amount: paymentData.amount,
+          type: paymentData.type,
+          method: paymentData.method,
+          referenceNumber: paymentData.referenceNumber,
+          paymentDate: paymentData.paymentDate,
+          paymentTime: paymentData.paymentTime,
+          notes: paymentData.notes
+        }
+      })).then((result) => {
+        console.log("✅ Payment added via API:", result);
+        showToast.dismiss(toastId);
+        showToast.success("Payment added successfully!");
+        
+        // Refresh order data to show updated payments
+        dispatch(fetchOrderById(currentOrderId));
+      }).catch((error) => {
+        console.error("❌ Error adding payment:", error);
+        showToast.dismiss(toastId);
+        showToast.error(error.response?.data?.message || "Failed to add payment");
+      });
     }
     
     setShowPaymentModal(false);
     setEditingPayment(null);
-  }, [payments, editingPayment]);
+  }, [payments, editingPayment, currentOrderId, dispatch]);
 
-  // Garment handlers with customer validation
+  // 👕 GARMENT HANDLERS
   const handleAddGarment = useCallback(() => {
+    console.log("%c➕➕➕ ADD GARMENT BUTTON CLICKED ➕➕➕", "background: blue; color: white; font-size: 12px");
     if (!formData.customer) {
+      console.log("❌ Cannot add garment - no customer selected");
       showToast.error("Please select a customer first before adding garments");
       return;
     }
@@ -7451,21 +2521,31 @@ export default function NewOrder() {
   }, [formData.customer]);
 
   const handleEditGarment = useCallback((garment) => {
+    console.log("%c✏️✏️✏️ EDIT GARMENT ✏️✏️✏️", "background: orange; color: white; font-size: 12px");
+    console.log("Garment to edit:", garment);
     setEditingGarment(garment);
     setShowGarmentModal(true);
   }, []);
 
   const handleDeleteGarment = useCallback((index, garment) => {
+    console.log("%c🗑️🗑️🗑️ DELETE GARMENT 🗑️🗑️🗑️", "background: red; color: white; font-size: 12px");
+    console.log("Deleting garment at index:", index);
+    console.log("Garment:", garment);
+    
     if (window.confirm(`Are you sure you want to remove ${garment.name || 'this garment'}?`)) {
       const newGarments = [...garments];
       newGarments.splice(index, 1);
       setGarments(newGarments);
+      console.log("✅ Garment deleted, remaining:", newGarments.length);
       showToast.success("Garment removed");
     }
   }, [garments]);
 
-  // Handle Save Garment
+  // 🎯 ADD THIS MISSING FUNCTION - handleSaveGarment
   const handleSaveGarment = useCallback((garmentData) => {
+    console.log("%c📥📥📥 HANDLE SAVE GARMENT CALLED 📥📥📥", "background: blue; color: white; font-size: 14px");
+    console.log("Type:", garmentData instanceof FormData ? "FormData" : "Object");
+    
     if (garmentData instanceof FormData) {
       // Convert FormData to object
       const garmentObj = {
@@ -7475,8 +2555,11 @@ export default function NewOrder() {
         customerClothImages: []
       };
       
+      console.log("📦 Processing FormData entries:");
       for (let [key, value] of garmentData.entries()) {
         if (value instanceof File) {
+          console.log(`  📸 ${key}: File - ${value.name} (${value.type}, ${value.size} bytes)`);
+          
           if (key === 'referenceImages') {
             garmentObj.referenceImages.push(value);
           } else if (key === 'customerImages') {
@@ -7485,6 +2568,10 @@ export default function NewOrder() {
             garmentObj.customerClothImages.push(value);
           }
         } else {
+          // Truncate long strings for display
+          const displayValue = value && value.length > 50 ? value.substring(0, 50) + '...' : value;
+          console.log(`  📝 ${key}: ${displayValue}`);
+          
           if (key === 'measurements' || key === 'priceRange') {
             try {
               garmentObj[key] = JSON.parse(value);
@@ -7497,19 +2584,45 @@ export default function NewOrder() {
         }
       }
       
+      // Verify images were captured
+      console.log("✅ Garment object created:", {
+        name: garmentObj.name,
+        category: garmentObj.category,
+        item: garmentObj.item,
+        referenceImages: garmentObj.referenceImages?.length || 0,
+        customerImages: garmentObj.customerImages?.length || 0,
+        customerClothImages: garmentObj.customerClothImages?.length || 0
+      });
+      
       if (editingGarment) {
+        // Update existing garment
+        console.log("✏️ Updating existing garment, tempId:", editingGarment.tempId);
         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
+        console.log("Found at index:", index);
+        
         if (index !== -1) {
           const newGarments = [...garments];
           newGarments[index] = garmentObj;
           setGarments(newGarments);
           showToast.success("Garment updated");
+          console.log("🔄 Updated garment at index:", index);
+          console.log("New garments array:", newGarments);
         }
       } else {
-        setGarments([...garments, garmentObj]);
+        // Add new garment
+        console.log("➕ Adding new garment");
+        setGarments(prev => {
+          const updated = [...prev, garmentObj];
+          console.log("New garments array:", updated);
+          return updated;
+        });
         showToast.success("Garment added");
+        console.log("➕ Added new garment, total garments:", garments.length + 1);
       }
     } else {
+      // Handle regular object (no images)
+      console.log("📦 Received regular object:", garmentData);
+      
       if (editingGarment) {
         const index = garments.findIndex(g => g.tempId === editingGarment.tempId);
         if (index !== -1) {
@@ -7531,31 +2644,65 @@ export default function NewOrder() {
     setShowGarmentModal(false);
   }, [garments, editingGarment]);
 
-  const handleCustomerSelect = useCallback((customer) => {
-    const fullName = getCustomerFullName(customer);
-    const displayId = getCustomerDisplayId(customer);
+  // 🖼️ IMAGE PREVIEW HANDLERS
+  const handleViewImages = useCallback((images, type) => {
+    console.log(`%c👁️👁️👁️ VIEW IMAGES: ${type} 👁️👁️👁️`, "background: purple; color: white; font-size: 12px");
+    console.log("Images:", images);
+    console.log("Image count:", images?.length);
     
-    setFormData(prev => ({
-      ...prev,
-      customer: customer._id
-    }));
-
-    let displayText = `${fullName} (${displayId})`;
-    setSelectedCustomerDisplay(displayText);
-    setSearchTerm(displayText);
-    setShowCustomerDropdown(false);
-  }, []);
-
-  const handleSearchChange = useCallback((e) => {
-    const value = e.target.value;
-    setSearchTerm(value);
-    setShowCustomerDropdown(true);
-    
-    if (!value.trim()) {
-      setFormData(prev => ({ ...prev, customer: "" }));
-      setSelectedCustomerDisplay("");
+    if (images && images.length > 0) {
+      try {
+        // Create object URLs for File objects
+        const imageUrls = images.map((img, idx) => {
+          if (img instanceof File) {
+            console.log(`  Creating URL for File ${idx + 1}:`, img.name);
+            return URL.createObjectURL(img);
+          } else if (img?.url) {
+            console.log(`  Using URL from object:`, img.url);
+            return img.url;
+          } else if (typeof img === 'string') {
+            console.log(`  Using string URL:`, img);
+            return img;
+          } else {
+            console.log(`  Unknown image type:`, img);
+            return null;
+          }
+        }).filter(url => url !== null);
+        
+        console.log(`  Setting ${imageUrls.length} preview images`);
+        setPreviewImages(imageUrls);
+        setPreviewTitle(type);
+        setShowImagePreview(true);
+      } catch (error) {
+        console.error("❌ Error in handleViewImages:", error);
+        showToast.error("Failed to load images");
+      }
+    } else {
+      console.warn("⚠️ No images to view");
+      showToast.warning("No images to display");
     }
   }, []);
+
+  // Clean up object URLs when modal closes
+  const handleClosePreview = useCallback(() => {
+    console.log("%c🗑️🗑️🗑️ CLOSING PREVIEW, CLEANING UP URLs 🗑️🗑️🗑️", "background: red; color: white; font-size: 12px");
+    
+    // Revoke object URLs to avoid memory leaks
+    previewImages.forEach(url => {
+      if (url && typeof url === 'string' && url.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(url);
+          console.log("  Revoked URL:", url);
+        } catch (e) {
+          console.error("Error revoking URL:", e);
+        }
+      }
+    });
+    
+    setShowImagePreview(false);
+    setPreviewImages([]);
+    setPreviewTitle("");
+  }, [previewImages]);
 
   // Helper function to get category name from ID
   const getCategoryName = useCallback((categoryId) => {
@@ -7582,25 +2729,40 @@ export default function NewOrder() {
     return garment.item || 'Unknown';
   }, [categories]);
 
-  // Calendar handlers
+  // 📅 CALENDAR HANDLERS
   const handleDateSelect = useCallback((date) => {
+    console.log("%c📅📅📅 DATE SELECTED 📅📅📅", "background: green; color: white; font-size: 12px");
+    console.log("Date object:", date);
+    
     setSelectedDate(date);
     setShowCalendar(false);
     
-    const dateStr = date.toISOString().split('T')[0];
+    // Get local date string considering timezone
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const localDateStr = `${year}-${month}-${day}`;
+    
     setFormData(prev => ({
       ...prev,
-      deliveryDate: dateStr
+      deliveryDate: localDateStr
     }));
+    
+    console.log("Local date string:", localDateStr);
   }, []);
 
   const handleMonthChange = useCallback((date) => {
+    console.log("📅 Month changed to:", date.toLocaleString('default', { month: 'long', year: 'numeric' }));
     setCurrentMonth(date);
   }, []);
 
-  const formatDisplayDate = useCallback((date) => {
-    if (!date) return "Select delivery date";
-    return new Date(date).toLocaleDateString('en-IN', {
+  const formatDisplayDate = useCallback((dateStr) => {
+    if (!dateStr) return "Select delivery date";
+    
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    
+    return date.toLocaleDateString('en-IN', {
       weekday: 'short',
       year: 'numeric',
       month: 'short',
@@ -7609,20 +2771,53 @@ export default function NewOrder() {
   }, []);
 
   // Simple green dot for dates with orders
-  const renderDayContents = useCallback((day, date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    const hasOrders = orderDates.includes(dateStr);
+  // const renderDayContents = useCallback((day, date) => {
+  //   const year = date.getFullYear();
+  //   const month = String(date.getMonth() + 1).padStart(2, '0');
+  //   const dayOfMonth = String(date.getDate()).padStart(2, '0');
+  //   const localDateStr = `${year}-${month}-${dayOfMonth}`;
     
-    return (
-      <div className="relative">
-        <div>{day}</div>
-        {hasOrders && (
-          <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></div>
-        )}
-      </div>
-    );
-  }, [orderDates]);
+  //   const hasOrders = orderDates.includes(localDateStr);
+    
+  //   return (
+  //     <div className="relative">
+  //       <div>{day}</div>
+  //       {hasOrders && (
+  //         <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white  style={{ 
+  //           backgroundColor: '#ef4444',  // 🔴 Force red
+  //           boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+  //         }}"></div>
+          
+  //       )}
+  //     </div>
+  //   );
+  // }, [orderDates]);
 
+
+  // 📅 CALENDAR HANDLERS - Indha section-ai replace pannunga
+const renderDayContents = useCallback((day, date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const dayOfMonth = String(date.getDate()).padStart(2, '0');
+  const localDateStr = `${year}-${month}-${dayOfMonth}`;
+  
+  const hasOrders = orderDates.includes(localDateStr);
+  
+  return (
+    <div className="relative">
+      <div>{day}</div>
+      {hasOrders && (
+        <div 
+          className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm"
+          style={{ 
+            backgroundColor: '#ef4444', // 🔴 Absolute Red
+            zIndex: 10 
+          }}
+        ></div>
+      )}
+    </div>
+  );
+}, [orderDates]);
   // Payment Method Icon Component
   const PaymentMethodIcon = ({ method }) => {
     switch(method) {
@@ -7639,11 +2834,28 @@ export default function NewOrder() {
     }
   };
 
-  // 🔥 COMPLETELY FIXED: Main submit handler with duplicate prevention
+  // 🔥 MAIN SUBMIT HANDLER
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // 🔥 Use ref for instant lock (faster than state)
+    console.log("\n");
+    console.log("%c🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥", "background: red; color: white; font-size: 16px; font-weight: bold");
+    console.log("%c🔥          FORM SUBMISSION STARTED          🔥", "background: red; color: white; font-size: 16px; font-weight: bold");
+    console.log("%c🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥", "background: red; color: white; font-size: 16px; font-weight: bold");
+    console.log("\n");
+    
+    console.log("📋 FORM DATA:", JSON.parse(JSON.stringify(formData)));
+    console.log("💰 PAYMENTS:", JSON.parse(JSON.stringify(payments)));
+    console.log("👕 GARMENTS COUNT:", garments.length);
+    console.log("👕 GARMENTS DETAILS:", JSON.parse(JSON.stringify(garments.map(g => ({
+      name: g.name,
+      priceMin: g.priceRange?.min,
+      priceMax: g.priceRange?.max,
+      refImages: g.referenceImages?.length || 0,
+      custImages: g.customerImages?.length || 0,
+      clothImages: g.customerClothImages?.length || 0
+    })))));
+    
     if (isSubmittingRef.current) {
       console.log("⚠️ Submission already in progress, preventing duplicate");
       showToast.warning("Order creation in progress, please wait...");
@@ -7654,22 +2866,26 @@ export default function NewOrder() {
 
     // Validation
     if (!formData.customer) {
+      console.error("❌ Missing customer");
       showToast.error("Please select a customer");
       return;
     }
 
     if (garments.length === 0) {
+      console.error("❌ No garments");
       showToast.error("Please add at least one garment");
       return;
     }
 
     if (!formData.deliveryDate) {
+      console.error("❌ Missing delivery date");
       showToast.error("Please select delivery date");
       return;
     }
 
     const finalUserId = userId;
     if (!finalUserId) {
+      console.error("❌ No user ID");
       showToast.error("You must be logged in to create an order");
       return;
     }
@@ -7679,11 +2895,13 @@ export default function NewOrder() {
     const userIdValid = /^[0-9a-fA-F]{24}$/.test(finalUserId);
 
     if (!customerIdValid) {
+      console.error("❌ Invalid customer ID:", formData.customer);
       showToast.error("Invalid customer ID format");
       return;
     }
 
     if (!userIdValid) {
+      console.error("❌ Invalid user ID:", finalUserId);
       showToast.error("Invalid user ID format. Please log in again.");
       return;
     }
@@ -7694,7 +2912,7 @@ export default function NewOrder() {
 
     // 🔥 Generate unique request ID
     const requestId = generateRequestId();
-    console.log("🔒 Submission started with requestId:", requestId);
+    console.log("🔒 Request ID:", requestId);
 
     try {
       // Disable submit button
@@ -7703,8 +2921,14 @@ export default function NewOrder() {
         submitButton.disabled = true;
       }
 
-      // Map payment types
-      const mappedPayments = payments.map(payment => {
+      console.log("\n");
+      console.log("%c💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰", "background: purple; color: white; font-size: 14px");
+      console.log("%c💰       PROCESSING PAYMENTS (SAFE MODE)       💰", "background: purple; color: white; font-size: 14px");
+      console.log("%c💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰💰", "background: purple; color: white; font-size: 14px");
+      console.log("\n");
+      
+      console.log("💰 Processing payments:", payments.length);
+      const mappedPayments = payments.map((payment, idx) => {
         let modelType = payment.type || 'advance';
         
         if (modelType === 'partial') {
@@ -7713,8 +2937,41 @@ export default function NewOrder() {
           modelType = 'final-settlement';
         }
         
+        // 🔥 CRITICAL: Safe number conversion with multiple checks
+        const rawAmount = payment.amount;
+        console.log(`\n📌 Payment ${idx + 1} amount analysis:`);
+        console.log(`  Raw value:`, rawAmount);
+        console.log(`  Type:`, typeof rawAmount);
+        
+        let safeAmount = 0;
+        
+        if (rawAmount === undefined || rawAmount === null) {
+          console.log(`  ❌ Amount is undefined/null`);
+        } else {
+          const strAmount = String(rawAmount).trim();
+          console.log(`  String:`, strAmount);
+          console.log(`  Length:`, strAmount.length);
+          
+          if (strAmount === '') {
+            console.log(`  ❌ Amount is empty string`);
+          } else {
+            const numAmount = Number(strAmount);
+            console.log(`  Number():`, numAmount);
+            console.log(`  Is NaN:`, isNaN(numAmount));
+            
+            if (!isNaN(numAmount) && numAmount > 0) {
+              safeAmount = numAmount;
+              console.log(`  ✅ Valid amount:`, safeAmount);
+            } else {
+              console.log(`  ❌ Invalid amount (using 0)`);
+            }
+          }
+        }
+        
+        console.log(`  ✅ Final safe amount:`, safeAmount);
+        
         return {
-          amount: Number(payment.amount),
+          amount: safeAmount,
           type: modelType,
           method: payment.method || 'cash',
           referenceNumber: payment.referenceNumber || '',
@@ -7723,55 +2980,190 @@ export default function NewOrder() {
         };
       });
 
-      // 🔥 Prepare order data (without duplicate garment info)
+      console.log("\n✅ Mapped payments:", JSON.parse(JSON.stringify(mappedPayments)));
+
+      console.log("\n");
+      console.log("%c👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕", "background: blue; color: white; font-size: 14px");
+      console.log("%c👕       PROCESSING GARMENTS (SAFE MODE)       👕", "background: blue; color: white; font-size: 14px");
+      console.log("%c👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕👕", "background: blue; color: white; font-size: 14px");
+      console.log("\n");
+
+      // 📝 Prepare order data with ALL fields properly formatted
+      console.log("📦 Preparing order data...");
+      
+      // Safe number conversions for all values
+      const safeTotalMin = isNaN(Number(priceSummary.totalMin)) ? 0 : Number(priceSummary.totalMin);
+      const safeTotalMax = isNaN(Number(priceSummary.totalMax)) ? 0 : Number(priceSummary.totalMax);
+      const safeTotalPayments = isNaN(Number(totalPayments)) ? 0 : Number(totalPayments);
+      
+      console.log("💰 Price summary:", { safeTotalMin, safeTotalMax, safeTotalPayments });
+      
       const orderData = {
         customer: formData.customer,
         deliveryDate: formData.deliveryDate,
         specialNotes: formData.specialNotes || "",
         payments: mappedPayments,
         advancePayment: {
-          amount: mappedPayments.length > 0 ? mappedPayments[0]?.amount || 0 : 0,
-          method: mappedPayments.length > 0 ? mappedPayments[0]?.method || "cash" : "cash",
+          amount: mappedPayments.length > 0 ? (isNaN(Number(mappedPayments[0].amount)) ? 0 : Number(mappedPayments[0].amount)) : 0,
+          method: mappedPayments.length > 0 ? mappedPayments[0].method : "cash",
           date: new Date().toISOString()
         },
         priceSummary: {
-          totalMin: Number(priceSummary.totalMin),
-          totalMax: Number(priceSummary.totalMax)
+          totalMin: safeTotalMin,
+          totalMax: safeTotalMax
         },
-        balanceAmount: Number(balanceAmount.min),
+        balanceAmount: safeTotalMax - safeTotalPayments,
         createdBy: finalUserId,
-        status: "draft",
+        status: "confirmed",
         orderDate: new Date().toISOString(),
         requestId: requestId,
-        // 🔥 Send garment data - backend will create garments from this
-        garments: garments.map(g => ({
-          name: g.name,
-          garmentType: g.item || g.garmentType || g.itemName || g.name,
-          category: g.category,
-          item: g.item,
-          categoryName: g.categoryName,
-          itemName: g.itemName,
-          measurementTemplate: g.measurementTemplate,
-          measurementSource: g.measurementSource,
-          measurements: g.measurements,
-          additionalInfo: g.additionalInfo,
-          estimatedDelivery: g.estimatedDelivery || formData.deliveryDate,
-          priority: g.priority || 'normal',
-          priceRange: {
-            min: Number(g.priceRange?.min) || 0,
-            max: Number(g.priceRange?.max) || 0
-          },
-          fabricSource: g.fabricSource || 'customer',
-          fabricPrice: g.fabricPrice || '0',
-          // Include image files
-          referenceImages: g.referenceImages?.filter(img => img instanceof File) || [],
-          customerImages: g.customerImages?.filter(img => img instanceof File) || [],
-          customerClothImages: g.customerClothImages?.filter(img => img instanceof File) || []
-        }))
+        garments: garments.map((g, idx) => {
+          console.log(`\n👕 Processing garment ${idx + 1}: ${g.name}`);
+          
+          // Safe number conversions for garment prices
+          const minPrice = isNaN(Number(g.priceRange?.min)) ? 0 : Number(g.priceRange?.min);
+          const maxPrice = isNaN(Number(g.priceRange?.max)) ? 0 : Number(g.priceRange?.max);
+          const fabricPrice = isNaN(Number(g.fabricPrice)) ? 0 : Number(g.fabricPrice);
+          
+          console.log(`  Price range: ${minPrice} - ${maxPrice}`);
+          console.log(`  Fabric price: ${fabricPrice}`);
+          console.log(`  Images: Ref:${g.referenceImages?.length || 0}, Cust:${g.customerImages?.length || 0}, Cloth:${g.customerClothImages?.length || 0}`);
+          
+          return {
+            name: g.name,
+            garmentType: g.item || g.garmentType || g.itemName || g.name,
+            category: g.category,
+            item: g.item,
+            categoryName: g.categoryName,
+            itemName: g.itemName,
+            measurementTemplate: g.measurementTemplate,
+            measurementSource: g.measurementSource,
+            measurements: g.measurements || [],
+            additionalInfo: g.additionalInfo || '',
+            estimatedDelivery: g.estimatedDelivery || formData.deliveryDate,
+            priority: g.priority || 'normal',
+            priceRange: {
+              min: minPrice,
+              max: maxPrice
+            },
+            fabricSource: g.fabricSource || 'customer',
+            fabricPrice: fabricPrice,
+            referenceImages: g.referenceImages || [],
+            customerImages: g.customerImages || [],
+            customerClothImages: g.customerClothImages || []
+          };
+        })
       };
 
-      // 🔥 Create the order (backend will create garments)
+      console.log("\n");
+      console.log("%c✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅", "background: green; color: white; font-size: 14px");
+      console.log("%c✅       FINAL ORDER DATA VALIDATION       ✅", "background: green; color: white; font-size: 14px");
+      console.log("%c✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅", "background: green; color: white; font-size: 14px");
+      console.log("\n");
+      
+      console.log("  Customer:", orderData.customer);
+      console.log("  Delivery Date:", orderData.deliveryDate);
+      console.log("  Payments count:", orderData.payments.length);
+      console.log("  Garments count:", orderData.garments.length);
+      console.log("  Total Min:", orderData.priceSummary.totalMin);
+      console.log("  Total Max:", orderData.priceSummary.totalMax);
+      console.log("  Balance:", orderData.balanceAmount);
+      
+      // 🔍 Check for any NaN values
+      console.log("\n🔍 NAN DETECTION SCAN:");
+      let hasNaN = false;
+      
+      if (isNaN(orderData.priceSummary.totalMin)) { 
+        console.error("❌ totalMin is NaN"); 
+        hasNaN = true; 
+      } else {
+        console.log("✅ totalMin OK");
+      }
+      
+      if (isNaN(orderData.priceSummary.totalMax)) { 
+        console.error("❌ totalMax is NaN"); 
+        hasNaN = true; 
+      } else {
+        console.log("✅ totalMax OK");
+      }
+      
+      if (isNaN(orderData.balanceAmount)) { 
+        console.error("❌ balanceAmount is NaN"); 
+        hasNaN = true; 
+      } else {
+        console.log("✅ balanceAmount OK");
+      }
+      
+      orderData.payments.forEach((p, i) => {
+        if (isNaN(p.amount)) { 
+          console.error(`❌ payment[${i}].amount is NaN`); 
+          hasNaN = true; 
+        } else {
+          console.log(`✅ payment[${i}].amount OK (${p.amount})`);
+        }
+      });
+      
+      orderData.garments.forEach((g, i) => {
+        if (isNaN(g.priceRange.min)) { 
+          console.error(`❌ garment[${i}].priceRange.min is NaN`); 
+          hasNaN = true; 
+        } else {
+          console.log(`✅ garment[${i}].priceRange.min OK (${g.priceRange.min})`);
+        }
+        
+        if (isNaN(g.priceRange.max)) { 
+          console.error(`❌ garment[${i}].priceRange.max is NaN`); 
+          hasNaN = true; 
+        } else {
+          console.log(`✅ garment[${i}].priceRange.max OK (${g.priceRange.max})`);
+        }
+        
+        if (isNaN(g.fabricPrice)) { 
+          console.error(`❌ garment[${i}].fabricPrice is NaN`); 
+          hasNaN = true; 
+        } else {
+          console.log(`✅ garment[${i}].fabricPrice OK (${g.fabricPrice})`);
+        }
+      });
+      
+      if (hasNaN) {
+        console.error("\n❌❌❌ NAN VALUES DETECTED! Stopping submission. ❌❌❌");
+        throw new Error("NaN values detected in order data. Please check all number fields.");
+      }
+
+      // Check if there are any images
+      const hasImages = orderData.garments.some(g => 
+        g.referenceImages?.length > 0 || 
+        g.customerImages?.length > 0 || 
+        g.customerClothImages?.length > 0
+      );
+      console.log("\n📸 Has images:", hasImages ? "YES" : "NO");
+      if (hasImages) {
+        console.log("📸 Image details:");
+        orderData.garments.forEach((g, i) => {
+          if (g.referenceImages?.length > 0) console.log(`  Garment ${i+1}: ${g.referenceImages.length} reference images`);
+          if (g.customerImages?.length > 0) console.log(`  Garment ${i+1}: ${g.customerImages.length} customer images`);
+          if (g.customerClothImages?.length > 0) console.log(`  Garment ${i+1}: ${g.customerClothImages.length} cloth images`);
+        });
+      }
+
+      console.log("\n");
+      console.log("%c📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡", "background: blue; color: white; font-size: 14px");
+      console.log("%c📡       DISPATCHING TO REDUX       📡", "background: blue; color: white; font-size: 14px");
+      console.log("%c📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡📡", "background: blue; color: white; font-size: 14px");
+      console.log("\n");
+
+      // 🔥 Create the order
+      console.log("📡 Dispatching createNewOrder...");
       const result = await dispatch(createNewOrder(orderData)).unwrap();
+      
+      console.log("\n");
+      console.log("%c✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅", "background: green; color: white; font-size: 16px; font-weight: bold");
+      console.log("%c✅       ORDER CREATED SUCCESSFULLY       ✅", "background: green; color: white; font-size: 16px; font-weight: bold");
+      console.log("%c✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅✅", "background: green; color: white; font-size: 16px; font-weight: bold");
+      console.log("\n");
+      
+      console.log("Result:", result);
       
       const orderId = result.order?._id || result._id;
 
@@ -7779,15 +3171,24 @@ export default function NewOrder() {
         throw new Error("Order created but no ID returned");
       }
 
-      console.log("✅ Order created with ID:", orderId);
-
+      // 🔥 UPDATE currentOrderId to real ID for future payments
+      setCurrentOrderId(orderId);
+      console.log("✅ Updated currentOrderId to:", orderId);
+      
       showToast.success("Order created successfully! 🎉");
       navigate(`${basePath}/orders`);
       
     } catch (error) {
-      console.error("❌ Submission Error:", error);
+      console.error("\n");
+      console.log("%c❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌", "background: red; color: white; font-size: 16px; font-weight: bold");
+      console.log("%c❌       SUBMISSION ERROR       ❌", "background: red; color: white; font-size: 16px; font-weight: bold");
+      console.log("%c❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌", "background: red; color: white; font-size: 16px; font-weight: bold");
+      console.log("\n");
+      
+      console.error("❌ ERROR:", error);
       
       if (error.response?.data) {
+        console.error("Server error response:", error.response.data);
         setServerErrors(error.response.data);
       }
       
@@ -7797,6 +3198,7 @@ export default function NewOrder() {
         errorMessage = error.response.data.message;
       } else if (error.response?.data?.errors) {
         errorMessage = `Validation failed: ${error.response.data.errors.join(', ')}`;
+        console.error("Validation errors:", error.response.data.errors);
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -7804,7 +3206,7 @@ export default function NewOrder() {
       showToast.error(errorMessage);
       
     } finally {
-      // 🔥 Release locks
+      // 🔓 Release locks
       isSubmittingRef.current = false;
       setIsSubmitting(false);
       
@@ -7814,23 +3216,37 @@ export default function NewOrder() {
         submitButton.disabled = false;
       }
       
-      console.log("🔓 Submission lock released");
+      console.log("\n");
+      console.log("%c🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓", "background: orange; color: white; font-size: 14px");
+      console.log("%c🔓       SUBMISSION LOCK RELEASED       🔓", "background: orange; color: white; font-size: 14px");
+      console.log("%c🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓🔓", "background: orange; color: white; font-size: 14px");
+      console.log("\n");
     }
   };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-500 p-6">
-      {/* Add Payment Modal */}
+      {/* 🖼️ Image Preview Modal */}
+      {showImagePreview && (
+        <ImagePreviewModal
+          images={previewImages}
+          title={previewTitle}
+          onClose={handleClosePreview}
+        />
+      )}
+
+      {/* Add Payment Modal - NOW USING currentOrderId */}
       <AddPaymentModal
         isOpen={showPaymentModal}
         onClose={() => {
+          console.log("🚪 Closing payment modal");
           setShowPaymentModal(false);
           setEditingPayment(null);
         }}
         onSave={handleSavePayment}
         orderTotalMin={priceSummary.totalMin}
         orderTotalMax={priceSummary.totalMax}
-        orderId="temp"
+        orderId={currentOrderId}
         customerId={formData.customer}
         initialData={editingPayment}
         title={editingPayment ? "Edit Payment" : "Add Payment"}
@@ -7854,7 +3270,8 @@ export default function NewOrder() {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Customer & Order Details */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Customer Selection */}
+          
+          {/* Customer Selection Section */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
               <User size={20} className="text-blue-600" />
@@ -7942,7 +3359,7 @@ export default function NewOrder() {
             </div>
           </div>
 
-          {/* Garments Section */}
+          {/* 🔥 GARMENTS SECTION - WITH UPDATED IMAGE LAYOUT */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
@@ -7977,6 +3394,11 @@ export default function NewOrder() {
                   const categoryName = garment.categoryName || getCategoryName(garment.category);
                   const itemName = garment.itemName || getItemName(garment);
                   
+                  // Calculate total images
+                  const totalImages = (garment.referenceImages?.length || 0) + 
+                                     (garment.customerImages?.length || 0) + 
+                                     (garment.customerClothImages?.length || 0);
+                  
                   return (
                     <div
                       key={garment.tempId}
@@ -7984,7 +3406,8 @@ export default function NewOrder() {
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                          {/* Garment Header with Badges */}
+                          <div className="flex items-center gap-2 flex-wrap mb-2">
                             <h3 className="font-black text-slate-800">{garment.name}</h3>
                             <span className={`text-xs px-2 py-1 rounded-full ${
                               garment.priority === 'urgent' ? 'bg-red-100 text-red-600' :
@@ -7993,17 +3416,17 @@ export default function NewOrder() {
                             }`}>
                               {garment.priority}
                             </span>
-                            {(garment.referenceImages?.length > 0 || 
-                              garment.customerImages?.length > 0 || 
-                              garment.customerClothImages?.length > 0) && (
-                              <span className="text-xs px-2 py-1 bg-purple-100 text-purple-600 rounded-full">
-                                📸 {garment.referenceImages?.length || 0}/
-                                {garment.customerImages?.length || 0}/
-                                {garment.customerClothImages?.length || 0}
+                            
+                            {/* 🔥 NEW: Total Image Count Badge */}
+                            {totalImages > 0 && (
+                              <span className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full flex items-center gap-1">
+                                <ImageIcon size={12} />
+                                {totalImages} {totalImages === 1 ? 'image' : 'images'}
                               </span>
                             )}
                           </div>
                           
+                          {/* Garment Details Grid */}
                           <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
                             <div>
                               <p className="text-xs text-slate-400">Category/Item</p>
@@ -8024,7 +3447,190 @@ export default function NewOrder() {
                               <p className="font-medium">₹{garment.priceRange?.min} - ₹{garment.priceRange?.max}</p>
                             </div>
                           </div>
+
+                          {/* Debug info */}
+                          <div className="text-xs text-gray-400 mb-1">
+                            Ref: {garment.referenceImages?.length || 0}, 
+                            Cust: {garment.customerImages?.length || 0}, 
+                            Cloth: {garment.customerClothImages?.length || 0}
+                          </div>
+
+                          {/* 🖼️🔥 NEW IMAGE GALLERY LAYOUT - EXACTLY LIKE YOUR EXAMPLE 🔥🖼️ */}
+                          {totalImages > 0 && (
+                            <div className="mt-3">
+                              {/* Thumbnail Previews - First 2 of each type */}
+                              <div className="flex flex-wrap gap-2">
+                                {/* Reference Images - Indigo border */}
+                                {garment.referenceImages?.slice(0, 2).map((img, idx) => {
+                                  const imgUrl = img instanceof File ? URL.createObjectURL(img) : (img?.url || img);
+                                  return (
+                                    <button
+                                      key={`ref-${idx}`}
+                                      onClick={() => handleViewImages(garment.referenceImages, 'reference')}
+                                      className="relative group"
+                                    >
+                                      <img
+                                        src={imgUrl}
+                                        alt={`Reference ${idx + 1}`}
+                                        className="w-12 h-12 object-cover rounded-lg border-2 border-indigo-200 hover:border-indigo-400 transition-all"
+                                      />
+                                    </button>
+                                  );
+                                })}
+
+                                {/* Customer Images - Green border */}
+                                {garment.customerImages?.slice(0, 2).map((img, idx) => {
+                                  const imgUrl = img instanceof File ? URL.createObjectURL(img) : (img?.url || img);
+                                  return (
+                                    <button
+                                      key={`cust-${idx}`}
+                                      onClick={() => handleViewImages(garment.customerImages, 'customer')}
+                                      className="relative group"
+                                    >
+                                      <img
+                                        src={imgUrl}
+                                        alt={`Customer ${idx + 1}`}
+                                        className="w-12 h-12 object-cover rounded-lg border-2 border-green-200 hover:border-green-400 transition-all"
+                                      />
+                                    </button>
+                                  );
+                                })}
+
+                                {/* Cloth Images - Orange border */}
+                                {garment.customerClothImages?.slice(0, 2).map((img, idx) => {
+                                  const imgUrl = img instanceof File ? URL.createObjectURL(img) : (img?.url || img);
+                                  return (
+                                    <button
+                                      key={`cloth-${idx}`}
+                                      onClick={() => handleViewImages(garment.customerClothImages, 'cloth')}
+                                      className="relative group"
+                                    >
+                                      <img
+                                        src={imgUrl}
+                                        alt={`Cloth ${idx + 1}`}
+                                        className="w-12 h-12 object-cover rounded-lg border-2 border-orange-200 hover:border-orange-400 transition-all"
+                                      />
+                                    </button>
+                                  );
+                                })}
+
+                                {/* More images indicator */}
+                                {totalImages > 6 && (
+                                  <div className="w-12 h-12 bg-slate-200 rounded-lg flex items-center justify-center text-sm font-bold text-slate-600">
+                                    +{totalImages - 6}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* View All Images Button */}
+                              {totalImages > 0 && (
+                                <button
+                                  onClick={() => setExpandedGarment(expandedGarment === garment.tempId ? null : garment.tempId)}
+                                  className="text-xs text-blue-600 hover:text-blue-700 font-medium mt-2 flex items-center gap-1"
+                                >
+                                  <ImageIcon size={14} />
+                                  {expandedGarment === garment.tempId ? 'Hide all images' : 'View all images'}
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* 🔥 EXPANDED VIEW - Full gallery when expanded */}
+                          {expandedGarment === garment.tempId && totalImages > 0 && (
+                            <div className="mt-4 pt-4 border-t border-slate-200">
+                              {/* Reference Images Full Gallery */}
+                              {garment.referenceImages?.length > 0 && (
+                                <div className="mb-4">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Camera size={16} className="text-indigo-600" />
+                                    <p className="text-sm font-bold text-indigo-600">
+                                      Reference Images ({garment.referenceImages.length})
+                                    </p>
+                                  </div>
+                                  <div className="grid grid-cols-4 gap-2">
+                                    {garment.referenceImages.map((img, idx) => {
+                                      const imgUrl = img instanceof File ? URL.createObjectURL(img) : (img?.url || img);
+                                      return (
+                                        <button
+                                          key={`ref-full-${idx}`}
+                                          onClick={() => handleViewImages(garment.referenceImages, 'reference')}
+                                          className="relative group aspect-square"
+                                        >
+                                          <img
+                                            src={imgUrl}
+                                            alt={`Reference ${idx + 1}`}
+                                            className="w-full h-full object-cover rounded-lg border-2 border-indigo-200 hover:border-indigo-400"
+                                          />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Customer Images Full Gallery */}
+                              {garment.customerImages?.length > 0 && (
+                                <div className="mb-4">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <ImageIcon size={16} className="text-green-600" />
+                                    <p className="text-sm font-bold text-green-600">
+                                      Customer Images ({garment.customerImages.length})
+                                    </p>
+                                  </div>
+                                  <div className="grid grid-cols-4 gap-2">
+                                    {garment.customerImages.map((img, idx) => {
+                                      const imgUrl = img instanceof File ? URL.createObjectURL(img) : (img?.url || img);
+                                      return (
+                                        <button
+                                          key={`cust-full-${idx}`}
+                                          onClick={() => handleViewImages(garment.customerImages, 'customer')}
+                                          className="relative group aspect-square"
+                                        >
+                                          <img
+                                            src={imgUrl}
+                                            alt={`Customer ${idx + 1}`}
+                                            className="w-full h-full object-cover rounded-lg border-2 border-green-200 hover:border-green-400"
+                                          />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Cloth Images Full Gallery */}
+                              {garment.customerClothImages?.length > 0 && (
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Scissors size={16} className="text-orange-600" />
+                                    <p className="text-sm font-bold text-orange-600">
+                                      Cloth Images ({garment.customerClothImages.length})
+                                    </p>
+                                  </div>
+                                  <div className="grid grid-cols-4 gap-2">
+                                    {garment.customerClothImages.map((img, idx) => {
+                                      const imgUrl = img instanceof File ? URL.createObjectURL(img) : (img?.url || img);
+                                      return (
+                                        <button
+                                          key={`cloth-full-${idx}`}
+                                          onClick={() => handleViewImages(garment.customerClothImages, 'cloth')}
+                                          className="relative group aspect-square"
+                                        >
+                                          <img
+                                            src={imgUrl}
+                                            alt={`Cloth ${idx + 1}`}
+                                            className="w-full h-full object-cover rounded-lg border-2 border-orange-200 hover:border-orange-400"
+                                          />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                           
+                          {/* Additional Info */}
                           {garment.additionalInfo && (
                             <p className="text-sm text-slate-500 mt-2 italic">
                               Note: {garment.additionalInfo}
@@ -8032,6 +3638,7 @@ export default function NewOrder() {
                           )}
                         </div>
                         
+                        {/* Action Buttons */}
                         <div className="flex gap-2 ml-4">
                           <button
                             type="button"
@@ -8039,7 +3646,7 @@ export default function NewOrder() {
                             className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
                             title="Edit"
                           >
-                            Edit
+                            <Edit size={16} />
                           </button>
                           <button
                             type="button"
@@ -8056,9 +3663,9 @@ export default function NewOrder() {
                 })}
               </div>
             )}
-          </div>
-
-          {/* Delivery Date with Green Circle Calendar */}
+          </div> 
+          
+          {/* Delivery Date Section */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
             <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
               <Calendar size={20} className="text-blue-600" />
@@ -8099,7 +3706,7 @@ export default function NewOrder() {
                     
                     <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100 text-xs">
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <div className="w-3 h-3 bg-red-500 rounded-full style={{ backgroundColor: '#ef4444' }}"></div>
                         <span className="text-slate-600">Orders exist</span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -8114,12 +3721,7 @@ export default function NewOrder() {
               {formData.deliveryDate && (
                 <div className="mt-3 p-3 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-700">
-                    ✓ Delivery selected: {new Date(formData.deliveryDate).toLocaleDateString('en-IN', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
+                    ✓ Delivery selected: {formatDisplayDate(formData.deliveryDate)}
                   </p>
                 </div>
               )}
@@ -8289,7 +3891,7 @@ export default function NewOrder() {
         </div>
       </form>
 
-      {/* Garment Form Modal with customerId prop */}
+      {/* Garment Form Modal */}
       {showGarmentModal && (
         <GarmentForm
           onClose={() => setShowGarmentModal(false)}

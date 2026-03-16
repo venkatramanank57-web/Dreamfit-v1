@@ -174,7 +174,11 @@ import {
   getRecentWorks,
   getWorkStatusBreakdown,
   recalculateTailorStats,
-  recalculateAllTailorStats
+  recalculateAllTailorStats,
+ getCuttingMasterDashboardStats,
+ getTailorPerformanceForMaster,
+ getCalendarWorkData,
+ getTodaySummaryForMaster
 } from '../controllers/work.controller.js';
 
 const router = express.Router();
@@ -376,5 +380,23 @@ router.delete(
   authorize('ADMIN'), 
   deleteWork
 );
+
+
+
+//Cutting Master Dashbort 
+// ============================================
+// ✅ CUTTING MASTER DASHBOARD ROUTES
+// ============================================
+router.get('/dashboard/master-stats', getCuttingMasterDashboardStats);
+
+router.get('/dashboard/tailors', getTailorPerformanceForMaster);
+
+router.get('/dashboard/calendar', getCalendarWorkData);
+
+router.get('/dashboard/today', getTodaySummaryForMaster);
+
+
+
+
 
 export default router;

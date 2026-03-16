@@ -272,7 +272,7 @@ export default function AppRouter() {
             </ProtectedRoute>
           }
         >
-          <Route path="dashboard" element={<StoreKeeperDashboard />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
           
           {/* Orders Management */}
           <Route path="orders" element={<Orders />} />

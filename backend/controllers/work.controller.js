@@ -5250,6 +5250,86 @@ export const getWorkById = async (req, res) => {
 // @desc    Get works for cutting master (shows both accepted and available)
 // @route   GET /api/works/my-works
 // @access  Private (Cutting Master only)
+// export const getWorksByCuttingMaster = async (req, res) => {
+//   try {
+//     const userId = req.user?._id || req.user?.id;
+
+//     console.log('📋 Getting works for cutting master:', {
+//       userId,
+//       role: req.user?.role
+//     });
+
+//     if (!userId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'User ID not found'
+//       });
+//     }
+
+//     // ✅ OPEN POOL FILTER: Show both:
+//     // 1. Works already accepted by this master
+//     // 2. All pending works (open for acceptance by anyone)
+//     const filter = {
+//       $or: [
+//         { cuttingMaster: userId },                    // Already accepted by this master
+//         { cuttingMaster: null, status: 'pending' }    // ⭐ Open for everyone to accept
+//       ],
+//       isActive: true
+//     };
+
+//     console.log('🔍 Filter:', JSON.stringify(filter));
+
+//     const works = await Work.find(filter)
+//       .populate({
+//         path: 'order',
+//         select: 'orderId customer deliveryDate',
+//         populate: {
+//           path: 'customer',
+//           select: 'name phone'
+//         }
+//       })
+//       .populate({
+//         path: 'garment',
+//         select: 'name garmentId measurements priceRange'
+//       })
+//       .populate('tailor', 'name')
+//       .sort({ createdAt: -1 });
+
+//     console.log(`✅ Found ${works.length} works`);
+
+//     // ✅ Add flags to help frontend know status
+//     const worksWithAcceptanceInfo = works.map(work => {
+//       const workObj = work.toObject();
+//       workObj.isAcceptedByMe = work.cuttingMaster?.toString() === userId?.toString();
+//       workObj.isAvailable = !work.cuttingMaster && work.status === 'pending';
+//       workObj.canAccept = !work.cuttingMaster && work.status === 'pending';
+//       return workObj;
+//     });
+
+//     res.json({
+//       success: true,
+//       data: {
+//         works: worksWithAcceptanceInfo,
+//         total: works.length
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Get cutting master works error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to fetch works',
+//       error: error.message
+//     });
+//   }
+// };
+
+
+
+// ===== OPEN POOL: GET WORKS FOR CUTTING MASTER DASHBOARD =====
+// @desc    Get works for cutting master (shows both accepted and available)
+// @route   GET /api/works/my-works
+// @access  Private (Cutting Master only)
 export const getWorksByCuttingMaster = async (req, res) => {
   try {
     const userId = req.user?._id || req.user?.id;
@@ -5290,7 +5370,8 @@ export const getWorksByCuttingMaster = async (req, res) => {
       })
       .populate({
         path: 'garment',
-        select: 'name garmentId measurements priceRange'
+        // 🔥 FIX: Add priority field here!
+        select: 'name garmentId measurements priceRange priority estimatedDelivery additionalInfo'
       })
       .populate('tailor', 'name')
       .sort({ createdAt: -1 });
@@ -5303,6 +5384,10 @@ export const getWorksByCuttingMaster = async (req, res) => {
       workObj.isAcceptedByMe = work.cuttingMaster?.toString() === userId?.toString();
       workObj.isAvailable = !work.cuttingMaster && work.status === 'pending';
       workObj.canAccept = !work.cuttingMaster && work.status === 'pending';
+      
+      // 🔥 Log garment priority for debugging
+      console.log(`Work ${work.workId}: Garment priority = ${work.garment?.priority || 'not found'}`);
+      
       return workObj;
     });
 
@@ -6353,6 +6438,123 @@ export const getDashboardWorkStats = async (req, res) => {
 // @desc    Get recent works for dashboard
 // @route   GET /api/works/recent
 // @access  Private (Admin, Store Keeper)
+// export const getRecentWorks = async (req, res) => {
+//   try {
+//     const { limit = 5, period, startDate, endDate } = req.query;
+    
+//     console.log('📋 Getting recent works with:', { limit, period, startDate, endDate });
+    
+//     // Build date filter
+//     let dateFilter = {};
+//     const now = new Date();
+    
+//     if (period === 'today') {
+//       const today = new Date(now.setHours(0, 0, 0, 0));
+//       const tomorrow = new Date(today);
+//       tomorrow.setDate(tomorrow.getDate() + 1);
+      
+//       dateFilter = {
+//         createdAt: {
+//           $gte: today,
+//           $lt: tomorrow
+//         }
+//       };
+//     } else if (period === 'week') {
+//       const startOfWeek = new Date(now);
+//       startOfWeek.setDate(now.getDate() - now.getDay());
+//       startOfWeek.setHours(0, 0, 0, 0);
+      
+//       const endOfWeek = new Date(startOfWeek);
+//       endOfWeek.setDate(startOfWeek.getDate() + 7);
+      
+//       dateFilter = {
+//         createdAt: {
+//           $gte: startOfWeek,
+//           $lt: endOfWeek
+//         }
+//       };
+//     } else if (period === 'month') {
+//       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+//       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+//       endOfMonth.setHours(23, 59, 59, 999);
+      
+//       dateFilter = {
+//         createdAt: {
+//           $gte: startOfMonth,
+//           $lte: endOfMonth
+//         }
+//       };
+//     } else if (startDate && endDate) {
+//       dateFilter = {
+//         createdAt: {
+//           $gte: new Date(startDate),
+//           $lte: new Date(endDate + 'T23:59:59.999Z')
+//         }
+//       };
+//     }
+    
+//     const recentWorks = await Work.find(dateFilter)
+//       .populate({
+//         path: 'order',
+//         select: 'orderId customer',
+//         populate: {
+//           path: 'customer',
+//           select: 'name phone'
+//         }
+//       })
+//       .populate({
+//         path: 'garment',
+//         select: 'name garmentId'
+//       })
+//       .populate('cuttingMaster', 'name')
+//       .populate('tailor', 'name')
+//       .sort({ createdAt: -1 })
+//       .limit(parseInt(limit));
+
+//     // Format for dashboard display
+//     const formattedWorks = recentWorks.map(work => ({
+//       _id: work._id,
+//       workId: work.workId,
+//       status: work.status,
+//       garment: work.garment ? {
+//         name: work.garment.name,
+//         id: work.garment.garmentId
+//       } : null,
+//       order: work.order ? {
+//         orderId: work.order.orderId,
+//         customer: work.order.customer
+//       } : null,
+//       cuttingMaster: work.cuttingMaster?.name,
+//       tailor: work.tailor?.name,
+//       createdAt: work.createdAt,
+//       estimatedDelivery: work.estimatedDelivery
+//     }));
+
+//     console.log(`✅ Found ${formattedWorks.length} recent works`);
+
+//     res.json({
+//       success: true,
+//       data: {
+//         works: formattedWorks,
+//         count: formattedWorks.length,
+//         filter: { period, startDate, endDate }
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error('❌ Get recent works error:', error);
+//     res.status(500).json({ 
+//       success: false, 
+//       message: 'Failed to fetch recent works',
+//       error: error.message 
+//     });
+//   }
+// };
+
+
+// ============================================
+// ✅ FIXED: GET RECENT WORKS WITH PRIORITY
+// ============================================
 export const getRecentWorks = async (req, res) => {
   try {
     const { limit = 5, period, startDate, endDate } = req.query;
@@ -6419,21 +6621,22 @@ export const getRecentWorks = async (req, res) => {
       })
       .populate({
         path: 'garment',
-        select: 'name garmentId'
+        select: 'name garmentId priority'  // ✅ FIXED: Added 'priority'
       })
       .populate('cuttingMaster', 'name')
       .populate('tailor', 'name')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
 
-    // Format for dashboard display
+    // Format for dashboard display with priority
     const formattedWorks = recentWorks.map(work => ({
       _id: work._id,
       workId: work.workId,
       status: work.status,
       garment: work.garment ? {
         name: work.garment.name,
-        id: work.garment.garmentId
+        id: work.garment.garmentId,
+        priority: work.garment.priority  // ✅ Added priority
       } : null,
       order: work.order ? {
         orderId: work.order.orderId,
@@ -6604,4 +6807,518 @@ export const getWorkStatusBreakdown = async (req, res) => {
       error: error.message 
     });
   }
+};
+
+
+
+
+// ============================================
+// ✅ CALENDAR WORK DATA
+// ============================================
+// @desc    Get work data for calendar view
+// @route   GET /api/works/calendar
+// @access  Private
+export const getCalendarWorkData = async (req, res) => {
+  try {
+    const { startDate, endDate, cuttingMasterId, tailorId } = req.query;
+    
+    console.log('📅 Getting calendar work data:', { startDate, endDate, cuttingMasterId, tailorId });
+    
+    // Build filter
+    const filter = { isActive: true };
+    
+    // Date range filter (if provided)
+    if (startDate || endDate) {
+      filter.$or = [
+        { createdAt: {} },
+        { estimatedDelivery: {} }
+      ];
+      
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        filter.$or[0].createdAt.$gte = start;
+        filter.$or[1].estimatedDelivery.$gte = start;
+      }
+      
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.$or[0].createdAt.$lte = end;
+        filter.$or[1].estimatedDelivery.$lte = end;
+      }
+    }
+    
+    // Filter by cutting master
+    if (cuttingMasterId) {
+      filter.cuttingMaster = cuttingMasterId;
+    }
+    
+    // Filter by tailor
+    if (tailorId) {
+      filter.tailor = tailorId;
+    }
+    
+    // Get works for calendar
+    const works = await Work.find(filter)
+      .populate({
+        path: 'order',
+        select: 'orderId customer',
+        populate: {
+          path: 'customer',
+          select: 'name'
+        }
+      })
+      .populate({
+        path: 'garment',
+        select: 'name garmentId'
+      })
+      .populate('cuttingMaster', 'name')
+      .populate('tailor', 'name')
+      .select('workId status createdAt estimatedDelivery cuttingMaster tailor order garment');
+    
+    // Format for calendar (FullCalendar or similar)
+    const calendarEvents = works.map(work => {
+      // Determine color based on status
+      let color = '#3788d8'; // default blue
+      if (work.status === 'ready-to-deliver') color = '#10b981'; // green
+      if (work.status === 'pending') color = '#f59e0b'; // orange
+      if (work.status === 'cancelled') color = '#ef4444'; // red
+      
+      return {
+        id: work._id,
+        title: `${work.workId} - ${work.garment?.name || 'Garment'}`,
+        start: work.estimatedDelivery || work.createdAt,
+        allDay: true,
+        backgroundColor: color,
+        borderColor: color,
+        extendedProps: {
+          workId: work.workId,
+          status: work.status,
+          orderId: work.order?.orderId,
+          customer: work.order?.customer?.name,
+          garment: work.garment?.name,
+          cuttingMaster: work.cuttingMaster?.name,
+          tailor: work.tailor?.name,
+          createdAt: work.createdAt
+        }
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        events: calendarEvents,
+        total: calendarEvents.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Get calendar work data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch calendar data',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ CUTTING MASTER DASHBOARD STATS
+// ============================================
+// @desc    Get cutting master dashboard statistics
+// @route   GET /api/works/cutting-master-stats
+// @access  Private (Cutting Master only)
+export const getCuttingMasterDashboardStats = async (req, res) => {
+  try {
+    const cuttingMasterId = req.user?._id || req.user?.id;
+    
+    console.log('📊 Getting cutting master dashboard stats for:', cuttingMasterId);
+
+    if (!cuttingMasterId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User ID not found'
+      });
+    }
+
+    // Get all works for this cutting master
+    const works = await Work.find({
+      cuttingMaster: cuttingMasterId,
+      isActive: true
+    });
+
+    // Calculate statistics
+    const stats = {
+      totalWorks: works.length,
+      pendingWorks: works.filter(w => w.status === 'pending').length,
+      acceptedWorks: works.filter(w => w.status === 'accepted').length,
+      cuttingStarted: works.filter(w => w.status === 'cutting-started').length,
+      cuttingCompleted: works.filter(w => w.status === 'cutting-completed').length,
+      sewingStarted: works.filter(w => w.status === 'sewing-started').length,
+      sewingCompleted: works.filter(w => w.status === 'sewing-completed').length,
+      ironing: works.filter(w => w.status === 'ironing').length,
+      readyToDeliver: works.filter(w => w.status === 'ready-to-deliver').length,
+      completed: works.filter(w => w.status === 'ready-to-deliver').length,
+      inProgress: works.filter(w => 
+        ['cutting-started', 'cutting-completed', 'sewing-started', 'sewing-completed', 'ironing']
+        .includes(w.status)
+      ).length
+    };
+
+    // Get available works in the pool (pending and not assigned to anyone)
+    const availableWorks = await Work.countDocuments({
+      cuttingMaster: null,
+      status: 'pending',
+      isActive: true
+    });
+
+    // Get today's works
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayWorks = works.filter(w => 
+      new Date(w.createdAt) >= today
+    ).length;
+
+    // Get overdue works
+    const overdueWorks = works.filter(w => 
+      w.estimatedDelivery && 
+      new Date(w.estimatedDelivery) < new Date() && 
+      w.status !== 'ready-to-deliver'
+    ).length;
+
+    res.json({
+      success: true,
+      data: {
+        ...stats,
+        availableWorks,
+        todayWorks,
+        overdueWorks,
+        recentActivities: works.slice(0, 5).map(w => ({
+          _id: w._id,
+          workId: w.workId,
+          status: w.status,
+          updatedAt: w.updatedAt
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get cutting master dashboard stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch cutting master statistics',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ TAILOR PERFORMANCE FOR CUTTING MASTER
+// ============================================
+// @desc    Get tailor performance metrics for cutting master dashboard
+// @route   GET /api/works/tailor-performance
+// @access  Private (Cutting Master, Admin)
+export const getTailorPerformanceForMaster = async (req, res) => {
+  try {
+    const { limit = 10, search, sortBy = 'workStats.completed' } = req.query;
+    
+    console.log('📊 Getting tailor performance data with:', { limit, search, sortBy });
+
+    // Build filter for tailors
+    const filter = { isActive: true };
+    
+    // Add search if provided
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { tailorId: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Get tailors with their work stats
+    const tailors = await Tailor.find(filter)
+      .select('name tailorId phone specialization workStats currentLoad isAvailable')
+      .sort({ [sortBy]: -1 })
+      .limit(parseInt(limit));
+
+    // Get currently assigned works for each tailor to calculate current load
+    const tailorPerformance = await Promise.all(tailors.map(async (tailor) => {
+      // Get works currently assigned to this tailor
+      const assignedWorks = await Work.find({
+        tailor: tailor._id,
+        status: { $nin: ['ready-to-deliver', 'cancelled'] },
+        isActive: true
+      }).populate({
+        path: 'garment',
+        select: 'name priority'
+      });
+
+      // Calculate efficiency score (completed vs total assigned)
+      const efficiency = tailor.workStats.totalAssigned > 0 
+        ? Math.round((tailor.workStats.completed / tailor.workStats.totalAssigned) * 100) 
+        : 0;
+
+      // Determine availability status
+      let availability = 'available';
+      if (tailor.currentLoad >= 5) {
+        availability = 'busy';
+      } else if (tailor.currentLoad >= 3) {
+        availability = 'moderate';
+      }
+
+      return {
+        _id: tailor._id,
+        name: tailor.name,
+        tailorId: tailor.tailorId,
+        phone: tailor.phone,
+        specialization: tailor.specialization || 'General',
+        stats: {
+          totalAssigned: tailor.workStats.totalAssigned || 0,
+          completed: tailor.workStats.completed || 0,
+          pending: tailor.workStats.pending || 0,
+          inProgress: tailor.workStats.inProgress || 0,
+          efficiency: `${efficiency}%`
+        },
+        currentLoad: {
+          count: assignedWorks.length,
+          status: availability,
+          maxLoad: 5 // Configurable max load
+        },
+        isAvailable: tailor.isAvailable,
+        currentWorks: assignedWorks.slice(0, 3).map(w => ({
+          workId: w.workId,
+          garment: w.garment?.name,
+          priority: w.garment?.priority || 'normal',
+          status: w.status
+        }))
+      };
+    }));
+
+    // Get summary statistics
+    const summary = {
+      totalTailors: tailors.length,
+      availableTailors: tailorPerformance.filter(t => t.isAvailable && t.currentLoad.count < 5).length,
+      busyTailors: tailorPerformance.filter(t => !t.isAvailable || t.currentLoad.count >= 5).length,
+      totalActiveWorks: tailorPerformance.reduce((sum, t) => sum + t.currentLoad.count, 0),
+      averageEfficiency: Math.round(
+        tailorPerformance.reduce((sum, t) => {
+          const eff = parseInt(t.stats.efficiency) || 0;
+          return sum + eff;
+        }, 0) / (tailorPerformance.length || 1)
+      )
+    };
+
+    res.json({
+      success: true,
+      data: {
+        tailors: tailorPerformance,
+        summary,
+        filters: {
+          search,
+          sortBy,
+          limit: parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get tailor performance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch tailor performance data',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// ✅ TODAY'S SUMMARY FOR MASTER
+// ============================================
+// @desc    Get today's summary for cutting master dashboard
+// @route   GET /api/works/today-summary
+// @access  Private (Cutting Master only)
+export const getTodaySummaryForMaster = async (req, res) => {
+  try {
+    const cuttingMasterId = req.user?._id || req.user?.id;
+    
+    console.log('📅 Getting today\'s summary for master:', cuttingMasterId);
+
+    if (!cuttingMasterId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User ID not found'
+      });
+    }
+
+    // Set date range for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Get works created today for this master
+    const todayWorks = await Work.find({
+      cuttingMaster: cuttingMasterId,
+      createdAt: {
+        $gte: today,
+        $lt: tomorrow
+      },
+      isActive: true
+    }).populate({
+      path: 'garment',
+      select: 'name'
+    });
+
+    // Get works due today
+    const dueToday = await Work.find({
+      cuttingMaster: cuttingMasterId,
+      estimatedDelivery: {
+        $gte: today,
+        $lt: tomorrow
+      },
+      status: { $ne: 'ready-to-deliver' },
+      isActive: true
+    }).populate({
+      path: 'garment',
+      select: 'name'
+    });
+
+    // Get recent status updates today
+    const recentUpdates = await Work.find({
+      cuttingMaster: cuttingMasterId,
+      updatedAt: {
+        $gte: today,
+        $lt: tomorrow
+      },
+      isActive: true
+    })
+    .sort({ updatedAt: -1 })
+    .limit(5)
+    .populate({
+      path: 'garment',
+      select: 'name'
+    });
+
+    // Get priority breakdown
+    const priorityBreakdown = await Work.aggregate([
+      {
+        $match: {
+          cuttingMaster: cuttingMasterId,
+          isActive: true
+        }
+      },
+      {
+        $lookup: {
+          from: 'garments',
+          localField: 'garment',
+          foreignField: '_id',
+          as: 'garmentInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$garmentInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: '$garmentInfo.priority',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Format priority data
+    const priorities = {
+      high: 0,
+      medium: 0,
+      low: 0,
+      normal: 0
+    };
+    
+    priorityBreakdown.forEach(item => {
+      const priority = item._id || 'normal';
+      priorities[priority] = item.count;
+    });
+
+    // Calculate completion rate for today
+    const completedToday = await Work.countDocuments({
+      cuttingMaster: cuttingMasterId,
+      status: 'ready-to-deliver',
+      updatedAt: {
+        $gte: today,
+        $lt: tomorrow
+      },
+      isActive: true
+    });
+
+    const totalActive = await Work.countDocuments({
+      cuttingMaster: cuttingMasterId,
+      status: { $nin: ['ready-to-deliver', 'cancelled'] },
+      isActive: true
+    });
+
+    res.json({
+      success: true,
+      data: {
+        date: today,
+        summary: {
+          newWorks: todayWorks.length,
+          dueToday: dueToday.length,
+          completedToday,
+          totalActive,
+          completionRate: totalActive > 0 ? Math.round((completedToday / totalActive) * 100) : 0
+        },
+        priorities,
+        recentActivity: recentUpdates.map(w => ({
+          _id: w._id,
+          workId: w.workId,
+          garment: w.garment?.name,
+          status: w.status,
+          updatedAt: w.updatedAt,
+          timeAgo: getTimeAgo(w.updatedAt)
+        })),
+        upcomingDeadlines: dueToday.slice(0, 3).map(w => ({
+          _id: w._id,
+          workId: w.workId,
+          garment: w.garment?.name,
+          estimatedDelivery: w.estimatedDelivery
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get today\'s summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch today\'s summary',
+      error: error.message
+    });
+  }
+};
+
+// Helper function for time ago
+const getTimeAgo = (date) => {
+  const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+  
+  let interval = seconds / 31536000;
+  if (interval > 1) return Math.floor(interval) + ' years ago';
+  
+  interval = seconds / 2592000;
+  if (interval > 1) return Math.floor(interval) + ' months ago';
+  
+  interval = seconds / 86400;
+  if (interval > 1) return Math.floor(interval) + ' days ago';
+  
+  interval = seconds / 3600;
+  if (interval > 1) return Math.floor(interval) + ' hours ago';
+  
+  interval = seconds / 60;
+  if (interval > 1) return Math.floor(interval) + ' minutes ago';
+  
+  return Math.floor(seconds) + ' seconds ago';
 };
